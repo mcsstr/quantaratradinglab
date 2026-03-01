@@ -1,0 +1,29 @@
+/* Estilos customizados e Tipografia Premium */
+    html, body { background-color: #09090b; }
+    body { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; touch-action: manipulation; overflow-y: scroll; letter-spacing: -0.01em; }
+    
+    /* Títulos e Elementos de Destaque com Fonte Display */
+    h1, h2, h3, h4, h5, h6, .font-display { font-family: 'Plus Jakarta Sans', sans-serif; letter-spacing: -0.02em; }
+    
+    /* Números de Dados e Tabelas com Fonte Mono Especial */
+    .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: -0.015em; }
+
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Input range de estilo customizado */
+    input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #ffffff; cursor: pointer; margin-top: -6px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: rgba(128,128,128,0.3); border-radius: 2px; }
+
+    /* Animações Nativas de Transição Mobile/Desktop */
+    @keyframes fadeInSlideUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-tab-enter { animation: fadeInSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    
+    /* Proteção da Safe Area do Celular (Notch) e Aumento de Margens */
+    .header-safe { padding-top: calc(1.5rem + env(safe-area-inset-top)); padding-bottom: 1rem; }
+    .pb-safe { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
+    @media (min-width: 1024px) { .header-safe { padding-top: max(0.75rem, env(safe-area-inset-top)); padding-bottom: 0.75rem; } }
