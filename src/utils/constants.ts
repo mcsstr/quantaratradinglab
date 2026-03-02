@@ -1,21 +1,3 @@
-export const COUNTRIES_LIST = [
-  { value: 'US', label: 'United States', locale: 'en-US' },
-  { value: 'BR', label: 'Brazil', locale: 'pt-BR' },
-  { value: 'PT', label: 'Portugal', locale: 'pt-PT' },
-  { value: 'GB', label: 'United Kingdom', locale: 'en-GB' },
-  { value: 'FR', label: 'France', locale: 'fr-FR' },
-  { value: 'DE', label: 'Germany', locale: 'de-DE' },
-  { value: 'ES', label: 'Spain', locale: 'es-ES' },
-  { value: 'IT', label: 'Italy', locale: 'it-IT' },
-  { value: 'CA', label: 'Canada', locale: 'en-CA' },
-  { value: 'AU', label: 'Australia', locale: 'en-AU' },
-  { value: 'JP', label: 'Japan', locale: 'ja-JP' },
-  { value: 'IN', label: 'India', locale: 'en-IN' },
-  { value: 'CN', label: 'China', locale: 'zh-CN' },
-  { value: 'MX', label: 'Mexico', locale: 'es-MX' },
-  { value: 'ZA', label: 'South Africa', locale: 'en-ZA' }
-];
-
 export const CURRENCIES_LIST = [
   { value: 'USD', label: 'USD - US Dollar' },
   { value: 'BRL', label: 'BRL - Brazilian Real' },

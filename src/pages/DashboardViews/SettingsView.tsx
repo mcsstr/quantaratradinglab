@@ -11,7 +11,6 @@ export default function SettingsView({
   activeSettingsTab,
   setActiveSettingsTab,
   SearchableSelect,
-  COUNTRIES_LIST,
   setSettings,
   CURRENCIES_LIST,
   TIMEZONES_LIST,
@@ -27,7 +26,9 @@ export default function SettingsView({
   onCreateAccount,
   onEditAccount,
   onDeleteAccount,
-  onSaveSettings
+  onSaveSettings,
+  t = (k: string, _l?: string) => k,
+  lang = 'en',
 }) {
   const tg = themeGroups || THEME_GROUPS;
 
@@ -36,8 +37,8 @@ export default function SettingsView({
       {!isMobile && (
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
           <div>
-            <h2 className="text-xl md:text-2xl font-bold font-display capitalize flex items-center gap-2" style={{ color: theme.textoPrincipal }}><Settings size={22} style={{ color: theme.textoSecundario }} /> App Settings</h2>
-            <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>Configure layout, currencies, and appearance.</p>
+            <h2 className="text-xl md:text-2xl font-bold font-display capitalize flex items-center gap-2" style={{ color: theme.textoPrincipal }}><Settings size={22} style={{ color: theme.textoSecundario }} /> {t('settings.title', lang)}</h2>
+            <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>{t('settings.subtitle', lang)}</p>
           </div>
         </header>
       )}
@@ -46,10 +47,10 @@ export default function SettingsView({
       {(!isMobile || !settingsHideTabs) && (
         <div className="flex justify-center overflow-x-auto no-scrollbar border-b" style={{ borderColor: theme.contornoGeral }}>
           {[
-            { id: 'account', title: 'Settings Account', icon: Settings },
-            { id: 'theme', title: 'Theme', icon: Palette },
-            { id: 'database', title: 'Database', icon: Folder },
-            { id: 'backup', title: 'Backup & Portable App', icon: Download }
+            { id: 'account', title: t('settings.account', lang), icon: Settings },
+            { id: 'theme', title: t('settings.theme', lang), icon: Palette },
+            { id: 'database', title: t('settings.database', lang), icon: Folder },
+            { id: 'backup', title: t('settings.backup', lang), icon: Download }
           ].map(tab => (
             <button
               key={tab.id}
@@ -75,10 +76,10 @@ export default function SettingsView({
           <div className="space-y-6 animate-opacity-enter">
             {/* General Settings - 4-column grid */}
             <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
-              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>General Settings</h3>
+              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>{t('settings.general', lang)}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>App Language</label>
+                  <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('settings.appLanguage', lang)}</label>
                   <select
                     className="w-full rounded-lg py-2.5 px-3 outline-none text-sm bg-transparent cursor-pointer"
                     style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral || 1, borderStyle: 'solid', color: theme.textoPrincipal }}
@@ -91,7 +92,7 @@ export default function SettingsView({
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>Date Format</label>
+                  <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('settings.dateFormat', lang)}</label>
                   <select
                     className="w-full rounded-lg py-2.5 px-3 outline-none text-sm bg-transparent cursor-pointer"
                     style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral || 1, borderStyle: 'solid', color: theme.textoPrincipal }}
@@ -110,7 +111,7 @@ export default function SettingsView({
                   className="px-6 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all hover:opacity-80 shadow-md"
                   style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
                 >
-                  <CheckCircle2 size={16} /> Save Changes
+                  <CheckCircle2 size={16} /> {t('settings.saveChanges', lang)}
                 </button>
               </div>
             </div>
@@ -119,20 +120,20 @@ export default function SettingsView({
             <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-[15px] font-bold flex items-center gap-2" style={{ color: theme.textoSecundario }}>
-                  <Building2 size={18} /> Manage Accounts
+                  <Building2 size={18} /> {t('settings.manageAccounts', lang)}
                 </h3>
                 <button
                   onClick={onCreateAccount}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all hover:brightness-110 shadow-sm"
                   style={{ backgroundColor: '#facc15', color: '#121C30' }}
                 >
-                  <Plus size={16} /> New Account
+                  <Plus size={16} /> {t('settings.newAccount', lang)}
                 </button>
               </div>
 
               {accounts.length === 0 ? (
                 <div className="text-center py-10 opacity-50 border-2 border-dashed rounded-xl" style={{ borderColor: theme.contornoGeral, color: theme.textoSecundario }}>
-                  <p className="text-sm">No accounts found. Create an account to start importing your trades.</p>
+                  <p className="text-sm">{t('settings.noAccounts', lang)}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -147,7 +148,7 @@ export default function SettingsView({
                       >
                         {isActive && (
                           <div className="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded-full">
-                            <CheckCircle2 size={12} /> Active
+                            <CheckCircle2 size={12} /> {t('settings.active', lang)}
                           </div>
                         )}
                         <h4 className="text-lg font-bold mb-1" style={{ color: isActive ? '#facc15' : theme.textoPrincipal }}>{acc.name}</h4>
@@ -158,7 +159,7 @@ export default function SettingsView({
                             onClick={() => onEditAccount(acc)}
                             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold transition-all text-white/80"
                           >
-                            <Edit2 size={14} /> Edit
+                            <Edit2 size={14} /> {t('settings.edit', lang)}
                           </button>
                           <button
                             onClick={() => onDeleteAccount(acc.id)}
@@ -182,7 +183,7 @@ export default function SettingsView({
 
             {/* Dashboard Layout */}
             <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
-              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>Dashboard Layout</h3>
+              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>{t('settings.dashboardLayout', lang)}</h3>
               <div className="max-w-sm">
                 <select
                   className="w-full rounded-lg py-2.5 px-3 outline-none text-sm bg-transparent cursor-pointer"
@@ -201,10 +202,10 @@ export default function SettingsView({
             <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-[15px] font-bold capitalize flex items-center gap-2" style={{ color: theme.textoSecundario }}>
-                  <Palette size={16} style={{ color: theme.textoSecundario }} /> Background & Glass Effect
+                  <Palette size={16} style={{ color: theme.textoSecundario }} /> {t('settings.backgroundGlass', lang)}
                 </h3>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-xs font-bold" style={{ color: theme.textoSecundario }}>Enable Glass:</span>
+                  <span className="text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('settings.enableGlass', lang)}</span>
                   <button
                     onClick={() => setSettings(prev => ({ ...prev, enableGlassEffect: !prev.enableGlassEffect }))}
                     className={`w-12 h-6 rounded-full transition-all relative ${settings.enableGlassEffect ? 'bg-green-500' : 'bg-gray-600'}`}
@@ -217,7 +218,7 @@ export default function SettingsView({
               <div className="space-y-6">
                 {/* Background Image Upload */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>Background Image Upload</label>
+                  <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('settings.bgImageUpload', lang)}</label>
                   <input
                     type="file"
                     accept="image/*"
@@ -240,7 +241,7 @@ export default function SettingsView({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-bold flex justify-between" style={{ color: theme.textoSecundario }}>
-                      <span>Card Opacity</span>
+                      <span>{t('settings.cardOpacity', lang)}</span>
                       <span className="font-bold">{settings.cardOpacity}%</span>
                     </label>
                     <input
@@ -251,7 +252,7 @@ export default function SettingsView({
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold flex justify-between" style={{ color: theme.textoSecundario }}>
-                      <span>Glass Blur Intensity</span>
+                      <span>{t('settings.glassBlur', lang)}</span>
                       <span className="font-bold">{settings.glassBlur}px</span>
                     </label>
                     <input
@@ -268,10 +269,10 @@ export default function SettingsView({
             <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-[15px] font-bold capitalize flex items-center gap-2" style={{ color: theme.textoSecundario }}>
-                  <Palette size={16} style={{ color: theme.textoSecundario }} /> Background Gradient
+                  <Palette size={16} style={{ color: theme.textoSecundario }} /> {t('settings.bgGradient', lang)}
                 </h3>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-xs font-bold" style={{ color: theme.textoSecundario }}>Enable Gradient:</span>
+                  <span className="text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('settings.enableGradient', lang)}</span>
                   <button
                     onClick={() => setSettings(prev => ({ ...prev, enableGradient: !prev.enableGradient }))}
                     className={`w-12 h-6 rounded-full transition-all relative ${settings.enableGradient ? 'bg-green-500' : 'bg-gray-600'}`}
@@ -284,7 +285,7 @@ export default function SettingsView({
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>Gradient Type</label>
+                    <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('settings.gradientType', lang)}</label>
                     <select
                       className="w-full rounded-lg py-2.5 px-3 outline-none text-sm bg-transparent cursor-pointer"
                       style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
@@ -338,27 +339,27 @@ export default function SettingsView({
             <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <h3 className="text-[15px] font-bold capitalize flex items-center gap-2" style={{ color: theme.textoSecundario }}>
-                  <Palette size={16} style={{ color: theme.textoSecundario }} /> Theme Customization
+                  <Palette size={16} style={{ color: theme.textoSecundario }} /> {t('settings.themeCustomization', lang)}
                 </h3>
                 <button
                   onClick={() => { setTheme(DEFAULT_THEME); setSettings(prev => ({ ...prev, ...DEFAULT_SETTINGS })); }}
                   className="px-4 py-2 rounded-lg text-xs font-bold transition-all hover:opacity-80"
                   style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
                 >
-                  Restore Default Theme
+                  {t('settings.restoreDefault', lang)}
                 </button>
               </div>
 
               {/* Border Thickness */}
               <div className="mb-8">
-                <h4 className="text-sm font-bold mb-4" style={{ color: theme.textoSecundario }}>Border Thickness (px)</h4>
+                <h4 className="text-sm font-bold mb-4" style={{ color: theme.textoSecundario }}>{t('settings.borderThickness', lang)}</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                   {[
-                    { key: 'borderWidthGeral', label: 'General' },
-                    { key: 'borderWidthHoje', label: 'Today' },
-                    { key: 'borderWidthFeriado', label: 'Holiday' },
-                    { key: 'borderWidthPositivo', label: 'Positive' },
-                    { key: 'borderWidthNegativo', label: 'Negative' }
+                    { key: 'borderWidthGeral', label: t('border.general', lang) },
+                    { key: 'borderWidthHoje', label: t('border.today', lang) },
+                    { key: 'borderWidthFeriado', label: t('border.holiday', lang) },
+                    { key: 'borderWidthPositivo', label: t('border.positive', lang) },
+                    { key: 'borderWidthNegativo', label: t('border.negative', lang) }
                   ].map(b => (
                     <div key={b.key} className="space-y-1">
                       <label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>{b.label}</label>
@@ -418,8 +419,8 @@ export default function SettingsView({
                 <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba(theme.linhaGrafico, 0.15) }}>
                   <Download size={28} style={{ color: theme.linhaGrafico }} />
                 </div>
-                <h3 className="text-[15px] font-bold capitalize mb-2" style={{ color: theme.textoSecundario }}>Export JSON Database</h3>
-                <p className="text-xs mb-6 opacity-60" style={{ color: theme.textoSecundario }}>Download a lightweight JSON file containing your settings, theme, trades, and news.</p>
+                <h3 className="text-[15px] font-bold capitalize mb-2" style={{ color: theme.textoSecundario }}>{t('settings.exportJson', lang)}</h3>
+                <p className="text-xs mb-6 opacity-60" style={{ color: theme.textoSecundario }}>{t('settings.exportJsonDesc', lang)}</p>
                 <button className="px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:opacity-80" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>Export JSON</button>
               </div>
               {/* Import */}
@@ -427,8 +428,8 @@ export default function SettingsView({
                 <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: hexToRgba('#EAB308', 0.15) }}>
                   <Folder size={28} style={{ color: '#EAB308' }} />
                 </div>
-                <h3 className="text-[15px] font-bold capitalize mb-2" style={{ color: theme.textoSecundario }}>Import JSON Database</h3>
-                <p className="text-xs mb-6 opacity-60" style={{ color: theme.textoSecundario }}>Restore your data by selecting a previously exported JSON backup file.</p>
+                <h3 className="text-[15px] font-bold capitalize mb-2" style={{ color: theme.textoSecundario }}>{t('settings.importJson', lang)}</h3>
+                <p className="text-xs mb-6 opacity-60" style={{ color: theme.textoSecundario }}>{t('settings.importJsonDesc', lang)}</p>
                 <button className="px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:opacity-80" style={{ backgroundColor: '#EAB308', color: '#000' }}>Upload JSON File</button>
               </div>
             </div>
@@ -439,16 +440,16 @@ export default function SettingsView({
         {activeSettingsTab === 'backup' && (
           <div className="space-y-6 animate-opacity-enter">
             <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
-              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>Backup & Portability</h3>
-              <p className="text-sm opacity-60 mb-6" style={{ color: theme.textoSecundario }}>Protect your trading history by regularly exporting your data to a secure file.</p>
+              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>{t('settings.backupTitle', lang)}</h3>
+              <p className="text-sm opacity-60 mb-6" style={{ color: theme.textoSecundario }}>{t('settings.backupDesc', lang)}</p>
               <div className="flex gap-4">
                 <button className="flex-1 p-4 rounded-xl border transition-all hover:bg-white/5 flex flex-col items-center gap-2" style={{ borderColor: theme.contornoGeral }}>
                   <Download size={24} style={{ color: theme.linhaGrafico }} />
-                  <span className="text-xs font-bold" style={{ color: theme.textoPrincipal }}>Export Data</span>
+                  <span className="text-xs font-bold" style={{ color: theme.textoPrincipal }}>{t('settings.exportData', lang)}</span>
                 </button>
                 <button className="flex-1 p-4 rounded-xl border transition-all hover:bg-white/5 flex flex-col items-center gap-2" style={{ borderColor: theme.contornoGeral }}>
                   <Folder size={24} style={{ color: theme.linhaGrafico }} />
-                  <span className="text-xs font-bold" style={{ color: theme.textoPrincipal }}>Import Backup</span>
+                  <span className="text-xs font-bold" style={{ color: theme.textoPrincipal }}>{t('settings.importBackup', lang)}</span>
                 </button>
               </div>
             </div>
@@ -457,6 +458,6 @@ export default function SettingsView({
 
 
       </div>
-    </div>
+    </div >
   );
 }

@@ -8,9 +8,11 @@ import {
   LayoutDashboard, Import, Settings as SettingsIcon, TrendingUp, DollarSign, Percent, Target, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Trash2, ListIcon, Search, Activity, CalendarDays, Plus, Palette, BarChart2, Sun, ShieldAlert, Layers, Banknote, Edit2, Check, X, Download, FileText, ArrowUp, ArrowDown, Newspaper, Folder, MenuIcon, UserIcon, CreditCardIcon, LogOutIcon, GearIcon2, Building2, Monitor
 } from '../components/Icons';
 import {
-  COUNTRIES_LIST, CURRENCIES_LIST, TIMEZONES_LIST, DEFAULT_SETTINGS, DEFAULT_THEME, DEFAULT_ACCOUNT_SETTINGS, THEME_GROUPS, generateId, hexToRgba
+  CURRENCIES_LIST, TIMEZONES_LIST, DEFAULT_SETTINGS, DEFAULT_THEME, DEFAULT_ACCOUNT_SETTINGS, THEME_GROUPS, generateId, hexToRgba
 } from '../utils/constants';
 import { supabase } from '../utils/supabase';
+import { columnAliases, cleanNumericValue, parseSmartDate } from '../utils/tradeParser';
+import { t } from '../utils/i18n';
 import './Dashboard.css';
 
 // Views
@@ -846,19 +848,7 @@ export default function Dashboard() {
     return { daysData, maxAbsPnl };
   }, [activeTrades, accountSettings.feePerTrade, selectedWeekDate]);
 
-  // Universal CSV column dictionary (keys = internal field, values = possible header aliases)
-  const columnAliases = {
-    symbol: ['symbol', 'Symbol', 'Ativo', 'Ticker', 'contract', 'instrument', 'símbolo'],
-    qty: ['qty', 'Qty', 'Quantity', 'Quantidade', 'contracts', 'size', 'tamanho', 'volume'],
-    buyPrice: ['buyPrice', 'Buy Price', 'Preço Compra', 'entry price', 'open price', 'avg buy price', 'preço de abertura'],
-    buyTime: ['boughtTimestamp', 'Buy Time', 'Data Compra', 'buytime', 'entry time', 'open time', 'entry datetime', 'horário de abertura', 'data de abertura'],
-    duration: ['duration', 'Duration', 'Tempo', 'duração'],
-    sellTime: ['soldTimestamp', 'Sell Time', 'Data Venda', 'selltime', 'exit time', 'close time', 'exit datetime', 'horário de fechamento', 'data de fechamento'],
-    sellPrice: ['sellPrice', 'Sell Price', 'Preço Venda', 'exit price', 'close price', 'avg sell price', 'preço de fechamento'],
-    pnl: ['pnl', 'P&L', 'Net PnL', 'Lucro/Prejuízo', 'p/l', 'profit', 'profit/loss', 'realized pnl', 'lucro líquido', 'resultado'],
-    direction: ['direction', 'side', 'direção', 'lado']
-  };
-
+  // Column aliases imported from tradeParser.ts
   const targetColumns = Object.keys(columnAliases);
 
   const parseTradesFromText = async (text) => {
@@ -1005,20 +995,11 @@ export default function Dashboard() {
           direction = 'Short';
         }
 
-        // Parse Dates
-        const parseDate = (val) => {
-          if (!val) return NaN;
-          if (/^\d{2}\/\d{2}\/\d{4}/.test(val)) { // DD/MM/YYYY
-            const parts = val.split('/');
-            const d = parts[0], m = parts[1], yAndTime = parts[2];
-            const [y, ...time] = yAndTime.split(/\s+/);
-            return new Date(`${y}-${m}-${d}T${time.length ? time.join(' ') : '00:00:00'}`).getTime();
-          }
-          return new Date(val).getTime();
-        };
-
-        const d1 = parseDate(buyTimeRaw);
-        const d2 = parseDate(sellTimeRaw);
+        // Parse Dates using bulletproof parseSmartDate
+        const d1Iso = parseSmartDate(buyTimeRaw);
+        const d2Iso = parseSmartDate(sellTimeRaw);
+        const d1 = d1Iso ? new Date(d1Iso).getTime() : NaN;
+        const d2 = d2Iso ? new Date(d2Iso).getTime() : NaN;
 
         if (!isNaN(d1) && !isNaN(d2)) {
           if (d1 > d2 && direction !== 'Short') { direction = 'Short'; entryTimestamp = d2; }
@@ -1030,13 +1011,14 @@ export default function Dashboard() {
         if (entryTimestamp) {
           const ed = new Date(entryTimestamp);
           dateStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
-        } else {
+        }
+        if (!entryTimestamp) {
           // Fallback date search
           const fallbackIdx = firstLineValues.findIndex(h => h.toLowerCase().includes('date') || h.toLowerCase().includes('data'));
           if (fallbackIdx !== -1 && rowValues[fallbackIdx]) {
-            const fd = parseDate(rowValues[fallbackIdx]);
-            if (!isNaN(fd)) {
-              entryTimestamp = fd;
+            const fdIso = parseSmartDate(rowValues[fallbackIdx]);
+            if (fdIso) {
+              entryTimestamp = new Date(fdIso).getTime();
               const ed = new Date(entryTimestamp);
               dateStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
             }
@@ -1076,9 +1058,9 @@ export default function Dashboard() {
             date: t.date,
             entry_timestamp: t.entryTimestamp ? new Date(t.entryTimestamp).toISOString() : null,
             buy_price: t.buyPrice || 0,
-            buy_time: t.buyTime || '',
+            buy_time: t.buyTime ? (parseSmartDate(t.buyTime) || t.buyTime) : null,
             duration: t.duration || '',
-            sell_time: t.sellTime || '',
+            sell_time: t.sellTime ? (parseSmartDate(t.sellTime) || t.sellTime) : null,
             sell_price: t.sellPrice || 0
           })))
           .select();
@@ -1604,17 +1586,17 @@ export default function Dashboard() {
   // --- DADOS PARA OS NOVOS GRÁFICOS DO ANALYTICS ---
   const symbolData = useMemo(() => {
     const map: any = {};
-    trades.forEach(t => {
+    activeTrades.forEach(t => {
       const sym = t.symbol && t.symbol !== '-' ? t.symbol : 'Other';
       if (!map[sym]) map[sym] = 0;
       map[sym] += t.pnl - (t.qty * accountSettings.feePerTrade);
     });
     return Object.keys(map).map(k => ({ name: k, pnl: map[k] })).sort((a: any, b: any) => b.pnl - a.pnl).slice(0, 10); // Top 10 Symbols
-  }, [trades, accountSettings.feePerTrade]);
+  }, [activeTrades, accountSettings.feePerTrade]);
 
   const directionData = useMemo(() => {
     let longPnl = 0, shortPnl = 0;
-    trades.forEach(t => {
+    activeTrades.forEach(t => {
       const net = t.pnl - (t.qty * accountSettings.feePerTrade);
       if (t.direction === 'Short') shortPnl += net;
       else longPnl += net;
@@ -1623,11 +1605,11 @@ export default function Dashboard() {
       { name: 'Long', pnl: longPnl },
       { name: 'Short', pnl: shortPnl }
     ];
-  }, [trades, accountSettings.feePerTrade]);
+  }, [activeTrades, accountSettings.feePerTrade]);
 
   const monthlyPnlData = useMemo(() => {
     const map: any = {};
-    trades.forEach(t => {
+    activeTrades.forEach(t => {
       const key = t.date.substring(0, 7); // Agrupa por YYYY-MM
       if (!map[key]) map[key] = 0;
       map[key] += t.pnl - (t.qty * accountSettings.feePerTrade);
@@ -1637,7 +1619,7 @@ export default function Dashboard() {
       const monthName = new Date(Number(y), parseInt(m) - 1, 1).toLocaleString(userLocale, { month: 'short' });
       return { name: `${monthName} ${y.substring(2)}`, pnl: map[k] };
     }).slice(-12); // Puxa os últimos 12 meses letivos
-  }, [trades, accountSettings.feePerTrade, userLocale]);
+  }, [activeTrades, accountSettings.feePerTrade, userLocale]);
 
   const winLossData = useMemo(() => {
     return [
@@ -1649,17 +1631,17 @@ export default function Dashboard() {
   // Novos Gráficos: Valores dos Trades & Horários Mais Negociados
   const availableTradePeriods = useMemo(() => {
     const periods = new Set();
-    trades.forEach(t => {
+    activeTrades.forEach(t => {
       if (t.date) {
         periods.add(t.date.substring(0, 4)); // Extrai o Ano (YYYY)
         periods.add(t.date.substring(0, 7)); // Extrai o Ano/Mes (YYYY-MM)
       }
     });
     return Array.from(periods).sort().reverse();
-  }, [trades]);
+  }, [activeTrades]);
 
   const tradeValuesData = useMemo(() => {
-    return [...trades]
+    return [...activeTrades]
       .sort((a, b) => {
         const timeA = a.entryTimestamp || new Date(a.date + 'T00:00:00').getTime();
         const timeB = b.entryTimestamp || new Date(b.date + 'T00:00:00').getTime();
@@ -1671,7 +1653,7 @@ export default function Dashboard() {
         rawDate: t.date,
         pnl: t.pnl - (t.qty * accountSettings.feePerTrade)
       }));
-  }, [trades, accountSettings.feePerTrade]);
+  }, [activeTrades, accountSettings.feePerTrade]);
 
   const filteredTradeValuesData = useMemo(() => {
     const now = new Date();
@@ -1703,7 +1685,7 @@ export default function Dashboard() {
 
   const timeDistributionData = useMemo(() => {
     const bins = {};
-    trades.forEach(t => {
+    activeTrades.forEach(t => {
       if (!t.entryTimestamp) return; // Ignora se não houver tempo válido registrado
       const d = new Date(t.entryTimestamp);
       const h = d.getHours();
@@ -1717,10 +1699,10 @@ export default function Dashboard() {
       const binName = `${String(h).padStart(2, '0')}:${String(binMin).padStart(2, '0')}`;
       if (!bins[binName]) bins[binName] = { name: binName, count: 0, pnl: 0 };
       bins[binName].count += 1;
-      bins[binName].pnl += (t.pnl - (t.qty * settings.feePerTrade));
+      bins[binName].pnl += (t.pnl - (t.qty * accountSettings.feePerTrade));
     });
     return (Object.values(bins) as any[]).sort((a: any, b: any) => a.name.localeCompare(b.name));
-  }, [trades, timeGrouping, settings.feePerTrade]);
+  }, [activeTrades, timeGrouping, accountSettings.feePerTrade]);
 
 
   return (
@@ -1789,13 +1771,13 @@ export default function Dashboard() {
               <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center border-2 border-red-500 mb-2">
                 <AlertTriangle size={40} className="text-red-500" />
               </div>
-              <h3 className="font-black text-2xl uppercase tracking-tighter" style={{ color: theme.textoNegativo }}>STOP TRADING!</h3>
+              <h3 className="font-black text-2xl uppercase tracking-tighter" style={{ color: theme.textoNegativo }}>{t('dash.stopTrading', settings.appLanguage)}</h3>
               <p className="text-sm font-bold leading-relaxed" style={{ color: theme.textoPrincipal }}>
-                You have reached your <span className="underline decoration-red-500 decoration-2">Daily Loss Limit</span>.
-                Consistency is key for long term performance.
+                {t('dash.dailyLimitReached', settings.appLanguage)}
+                {' '}{t('dash.consistencyKey', settings.appLanguage)}
               </p>
               <div className="w-full bg-red-500/10 p-4 rounded-xl border border-red-500/30 mt-2">
-                <p className="text-[10px] uppercase font-bold opacity-60 mb-1" style={{ color: theme.textoSecundario }}>Total Net Loss Today</p>
+                <p className="text-[10px] uppercase font-bold opacity-60 mb-1" style={{ color: theme.textoSecundario }}>{t('dash.totalNetLossToday', settings.appLanguage)}</p>
                 <p className="text-xl font-mono font-black" style={{ color: theme.textoNegativo }}>{formatCurrency(metrics.todayNetPnl)}</p>
               </div>
               <button
@@ -1803,7 +1785,7 @@ export default function Dashboard() {
                 className="mt-6 w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-95 shadow-lg"
                 style={{ backgroundColor: theme.textoNegativo, color: '#fff' }}
               >
-                I Understand & Stopping Now
+                {t('dash.iUnderstand', settings.appLanguage)}
               </button>
             </div>
           </div>
@@ -1860,7 +1842,7 @@ export default function Dashboard() {
       {isPending && (
         <div className="fixed inset-0 z-[40] flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm transition-all pointer-events-none">
           <div className="w-12 h-12 border-4 rounded-full animate-spin" style={{ borderColor: hexToRgba(theme.linhaGrafico, 0.2), borderTopColor: theme.linhaGrafico }}></div>
-          <span className="mt-4 text-[11px] font-bold tracking-widest uppercase" style={{ color: theme.textoPrincipal }}>Loading...</span>
+          <span className="mt-4 text-[11px] font-bold tracking-widest uppercase" style={{ color: theme.textoPrincipal }}>{t('dash.loading', settings.appLanguage)}</span>
         </div>
       )}
 
@@ -2091,16 +2073,16 @@ export default function Dashboard() {
             <div className="p-5 rounded-full mb-6" style={{ backgroundColor: hexToRgba(theme.linhaGrafico, 0.15) }}>
               <Layers size={56} style={{ color: theme.linhaGrafico }} />
             </div>
-            <h2 className="text-2xl md:text-3xl font-bold mb-3 font-display" style={{ color: theme.textoPrincipal }}>No Account Selected</h2>
+            <h2 className="text-2xl md:text-3xl font-bold mb-3 font-display" style={{ color: theme.textoPrincipal }}>{t('dash.noAccount', settings.appLanguage)}</h2>
             <p className="max-w-md opacity-70 text-sm md:text-base leading-relaxed" style={{ color: theme.textoSecundario }}>
-              Please select an active account from the top menu or create a new one to view your data.
+              {t('dash.noAccountDesc', settings.appLanguage)}
             </p>
             <button
               onClick={() => { setActiveTab('settings'); openCreateAccountForm(); }}
               className="mt-8 px-6 py-3 rounded-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg"
               style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
             >
-              Create Account
+              {t('dash.createAccount', settings.appLanguage)}
             </button>
           </div>
         ) : (
@@ -2275,6 +2257,8 @@ export default function Dashboard() {
             accounts={accounts}
             selectedImportAccountId={selectedImportAccountId}
             setSelectedImportAccountId={setSelectedImportAccountId}
+            t={t}
+            lang={settings.appLanguage}
           />
         )}
 
@@ -2303,7 +2287,8 @@ export default function Dashboard() {
             SearchableSelect={SearchableSelect}
             TIMEZONES_LIST={TIMEZONES_LIST}
             CURRENCIES_LIST={CURRENCIES_LIST}
-            COUNTRIES_LIST={COUNTRIES_LIST}
+            t={t}
+            lang={settings.appLanguage}
             isMobile={isMobile}
             settingsHideTabs={settingsHideTabs}
             accounts={accounts}
@@ -2364,7 +2349,7 @@ export default function Dashboard() {
               <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
                 <div className="flex items-center gap-2">
                   <Monitor size={18} className="text-[#00B0F0]" />
-                  <span className="text-base font-bold text-white">Switch Account</span>
+                  <span className="text-base font-bold text-white">{t('switcher.title', settings.appLanguage)}</span>
                 </div>
                 <button onClick={() => setIsAccountSwitcherOpen(false)} className="p-1 rounded-lg hover:bg-white/5 text-white/40"><X size={18} /></button>
               </div>
@@ -2372,7 +2357,7 @@ export default function Dashboard() {
               <div className="p-4 space-y-2 max-h-72 overflow-y-auto hide-scrollbar">
                 {accounts.length === 0 ? (
                   <div className="text-center py-8 text-white/20 text-sm">
-                    No accounts yet. Create one in Settings.
+                    {t('switcher.noAccounts', settings.appLanguage)}
                   </div>
                 ) : accounts.map(acc => (
                   <button
@@ -2401,7 +2386,7 @@ export default function Dashboard() {
                   onClick={() => { setIsAccountSwitcherOpen(false); setActiveTab('settings'); setActiveSettingsTab('account'); }}
                   className="w-full py-2.5 rounded-xl text-sm font-bold transition-all border border-white/10 hover:bg-white/5 text-white/60"
                 >
-                  + Manage Accounts
+                  {t('switcher.manage', settings.appLanguage)}
                 </button>
               </div>
             </div>
@@ -2421,7 +2406,7 @@ export default function Dashboard() {
               onClick={e => e.stopPropagation()}
             >
               <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                <span className="text-base font-bold text-white">{editingAccount ? 'Edit Account' : 'Create New Account'}</span>
+                <span className="text-base font-bold text-white">{editingAccount ? t('accountForm.edit', settings.appLanguage) : t('accountForm.create', settings.appLanguage)}</span>
                 <button onClick={() => setIsAccountFormOpen(false)} className="p-1 rounded-lg hover:bg-white/5 text-white/40"><X size={18} /></button>
               </div>
               <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto hide-scrollbar">
@@ -2430,7 +2415,7 @@ export default function Dashboard() {
                 )}
                 {/* Name */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Account Name *</label>
+                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.name', settings.appLanguage)}</label>
                   <input
                     className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
                     style={{ color: '#fff' }}
@@ -2444,7 +2429,7 @@ export default function Dashboard() {
                 {/* Currencies & Timezone */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Broker Currency</label>
+                    <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.brokerCurrency', settings.appLanguage)}</label>
                     <select
                       className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
                       style={{ color: '#fff' }}
@@ -2455,7 +2440,7 @@ export default function Dashboard() {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Payment Currency</label>
+                    <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.paymentCurrency', settings.appLanguage)}</label>
                     <select
                       className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
                       style={{ color: '#fff' }}
@@ -2467,7 +2452,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Reference Timezone</label>
+                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.timezone', settings.appLanguage)}</label>
                   <select
                     className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
                     style={{ color: '#fff' }}
@@ -2480,11 +2465,11 @@ export default function Dashboard() {
 
                 {/* Financial Fields */}
                 <div className="pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                  <label className="text-[11px] text-[#00B0F0] font-black uppercase tracking-widest mb-4 block">Financial Parameters</label>
+                  <label className="text-[11px] text-[#00B0F0] font-black uppercase tracking-widest mb-4 block">{t('accountForm.financialParams', settings.appLanguage)}</label>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Initial Balance ($)</label>
+                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.initialBalance', settings.appLanguage)}</label>
                       <input
                         type="number"
                         className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
@@ -2494,7 +2479,7 @@ export default function Dashboard() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Consistency (%)</label>
+                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.consistency', settings.appLanguage)}</label>
                       <input
                         type="number"
                         className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
@@ -2504,7 +2489,7 @@ export default function Dashboard() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Profit Split (%)</label>
+                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.profitSplit', settings.appLanguage)}</label>
                       <input
                         type="number"
                         className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
@@ -2518,9 +2503,9 @@ export default function Dashboard() {
                   {/* Fields with Toggles */}
                   <div className="space-y-4 mt-6">
                     {[
-                      { key: 'feePerTrade', label: 'Fee per Contract', toggleKey: 'feeType' },
-                      { key: 'dailyLossLimit', label: 'Daily Loss Limit', toggleKey: 'dailyLossLimitType' },
-                      { key: 'totalStopLoss', label: 'Total Stop Loss', toggleKey: 'totalStopLossType' },
+                      { key: 'feePerTrade', label: t('accountForm.feePerContract', settings.appLanguage), toggleKey: 'feeType' },
+                      { key: 'dailyLossLimit', label: t('accountForm.dailyLossLimit', settings.appLanguage), toggleKey: 'dailyLossLimitType' },
+                      { key: 'totalStopLoss', label: t('accountForm.totalStopLoss', settings.appLanguage), toggleKey: 'totalStopLossType' },
                     ].map(({ key, label, toggleKey }) => (
                       <div key={key}>
                         <div className="flex justify-between items-end mb-2">
@@ -2554,13 +2539,13 @@ export default function Dashboard() {
                 <button
                   onClick={() => setIsAccountFormOpen(false)}
                   className="flex-1 py-3 rounded-xl border border-white/10 text-sm font-bold text-white/40 hover:bg-white/5 transition-all"
-                >Cancel</button>
+                >{t('accountForm.cancel', settings.appLanguage)}</button>
                 <button
                   onClick={handleSaveAccountForm}
                   className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:brightness-110 active:scale-95 shadow-lg flex items-center justify-center gap-2"
                   style={{ backgroundColor: '#00B0F0', color: '#fff' }}
                 >
-                  <Check size={18} /> {editingAccount ? 'Save Changes' : 'Create Account'}
+                  <Check size={18} /> {editingAccount ? t('accountForm.save', settings.appLanguage) : t('accountForm.createBtn', settings.appLanguage)}
                 </button>
               </div>
             </div>
@@ -2583,18 +2568,18 @@ export default function Dashboard() {
                 <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
                   <Trash2 size={24} className="text-red-400" />
                 </div>
-                <p className="text-base font-bold text-white mb-1">Delete Account?</p>
-                <p className="text-sm text-white/40 leading-relaxed">This will permanently remove the account and <span className="text-red-400 font-bold">all its trades</span>. This cannot be undone.</p>
+                <p className="text-base font-bold text-white mb-1">{t('delete.title', settings.appLanguage)}</p>
+                <p className="text-sm text-white/40 leading-relaxed">{t('delete.desc', settings.appLanguage)}</p>
               </div>
               <div className="px-5 pb-5 flex gap-3">
                 <button
                   onClick={() => setConfirmDeleteAccountId(null)}
                   className="flex-1 py-3 rounded-xl border border-white/10 text-sm font-bold text-white/40 hover:bg-white/5 transition-all"
-                >Cancel</button>
+                >{t('delete.cancel', settings.appLanguage)}</button>
                 <button
                   onClick={() => handleDeleteAccount(confirmDeleteAccountId)}
                   className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:bg-red-600 bg-red-500 text-white active:scale-95 shadow-lg"
-                >Delete</button>
+                >{t('delete.confirm', settings.appLanguage)}</button>
               </div>
             </div>
           </div>
