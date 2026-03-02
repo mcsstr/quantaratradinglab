@@ -113,6 +113,7 @@ export const processCSVLogic = (csvText, activeAccount) => {
         value = parseSmartDate(value);
       }
 
+
       const dbKey = supabaseMapping[col];
       dbTrade[dbKey] = value;
     });
