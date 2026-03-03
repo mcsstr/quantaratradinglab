@@ -1,6 +1,6 @@
 import React, { startTransition } from 'react';
 import {
-  Settings, Palette, Folder, Download, LayoutDashboard, ListIcon, ShieldAlert, Layers, Banknote, Target, TrendingUp, Monitor, Braces, User, CreditCard, Building2, Plus, Edit2, Trash2, CheckCircle2
+  Settings, Palette, Folder, Download, LayoutDashboard, ListIcon, ShieldAlert, Layers, Banknote, Target, TrendingUp, Monitor, Braces, User, CreditCard, Building2, Plus, Edit2, Trash2, CheckCircle2, Loader2
 } from 'lucide-react';
 import { hexToRgba, THEME_GROUPS } from '../../utils/constants';
 
@@ -27,6 +27,7 @@ export default function SettingsView({
   onEditAccount,
   onDeleteAccount,
   onSaveSettings,
+  isSyncing = false,
   t = (k: string, _l?: string) => k,
   lang = 'en',
 }) {
@@ -108,10 +109,14 @@ export default function SettingsView({
               <div className="flex justify-end mt-6 pt-4 border-t" style={{ borderColor: theme.contornoGeral }}>
                 <button
                   onClick={onSaveSettings}
-                  className="px-6 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all hover:opacity-80 shadow-md"
+                  disabled={isSyncing}
+                  className="px-6 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all hover:opacity-80 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
                 >
-                  <CheckCircle2 size={16} /> {t('settings.saveChanges', lang)}
+                  {isSyncing
+                    ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
+                    : <><CheckCircle2 size={16} /> {t('settings.saveChanges', lang)}</>
+                  }
                 </button>
               </div>
             </div>
@@ -406,6 +411,21 @@ export default function SettingsView({
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Save Changes button for Theme tab */}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={onSaveSettings}
+                disabled={isSyncing}
+                className="px-6 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all hover:opacity-80 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
+              >
+                {isSyncing
+                  ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
+                  : <><CheckCircle2 size={16} /> {t('settings.saveChanges', lang)}</>
+                }
+              </button>
             </div>
           </div>
         )}

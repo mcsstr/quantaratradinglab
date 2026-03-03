@@ -39,13 +39,76 @@ export default function TradesView({
   isMobile,
   formatCurrency,
   activeAccountId,
-  handleExportCSV
+  handleExportCSV,
+  supabase,
+  session,
+  setToastMessage
 }) {
   const [isConfirmDeleteAllOpen, setIsConfirmDeleteAllOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleDeleteAll = () => {
-    setTrades(prev => prev.filter(t => t.accountId !== activeAccountId));
-    setIsConfirmDeleteAllOpen(false);
+  const handleDeleteAll = async () => {
+    setIsDeleting(true);
+    try {
+      if (session) {
+        const { error } = await supabase
+          .from('trades')
+          .delete()
+          .eq('account_id', activeAccountId);
+        if (error) throw error;
+      }
+      setTrades(prev => prev.filter(t => t.accountId !== activeAccountId));
+      setIsConfirmDeleteAllOpen(false);
+      setToastMessage('All trades deleted successfully.');
+      setTimeout(() => setToastMessage(''), 3000);
+    } catch (err: any) {
+      console.error('Delete All error:', err);
+      setToastMessage(`Error deleting trades: ${err.message}`);
+      setTimeout(() => setToastMessage(''), 4000);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedTrades.length === 0) return;
+    setIsDeleting(true);
+    try {
+      if (session) {
+        const { error } = await supabase
+          .from('trades')
+          .delete()
+          .in('id', selectedTrades);
+        if (error) throw error;
+      }
+      setTrades(prev => prev.filter(t => !selectedTrades.includes(t.id)));
+      setSelectedTrades([]);
+      setToastMessage(`${selectedTrades.length} trade(s) deleted successfully.`);
+      setTimeout(() => setToastMessage(''), 3000);
+    } catch (err: any) {
+      console.error('Delete Selected error:', err);
+      setToastMessage(`Error deleting trades: ${err.message}`);
+      setTimeout(() => setToastMessage(''), 4000);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteSingle = async (tradeId: string) => {
+    try {
+      if (session) {
+        const { error } = await supabase
+          .from('trades')
+          .delete()
+          .eq('id', tradeId);
+        if (error) throw error;
+      }
+      setTrades(prev => prev.filter(t => t.id !== tradeId));
+    } catch (err: any) {
+      console.error('Delete Single error:', err);
+      setToastMessage(`Error deleting trade: ${err.message}`);
+      setTimeout(() => setToastMessage(''), 4000);
+    }
   };
 
   return (
@@ -132,13 +195,11 @@ export default function TradesView({
               )}
               {selectedTrades.length > 0 && (
                 <button
-                  onClick={() => {
-                    setTrades(prev => prev.filter(t => !selectedTrades.includes(t.id)));
-                    setSelectedTrades([]);
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap"
+                  onClick={handleDeleteSelected}
+                  disabled={isDeleting}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap disabled:opacity-40"
                 >
-                  <Trash2 size={14} /> Delete Selected ({selectedTrades.length})
+                  <Trash2 size={14} /> {isDeleting ? 'Deleting...' : `Delete Selected (${selectedTrades.length})`}
                 </button>
               )}
             </div>
@@ -208,7 +269,7 @@ export default function TradesView({
                   </td>
                   <td className="px-2 py-2.5 md:px-4 md:py-3 text-right flex justify-end gap-1">
                     <button onClick={() => { setEditFormData(trade); setIsTradeModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
-                    <button onClick={() => setTrades(prev => prev.filter(t => t.id !== trade.id))} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 14} /></button>
+                    <button onClick={() => handleDeleteSingle(trade.id)} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 14} /></button>
                   </td>
                 </tr>
               ))}
@@ -254,8 +315,9 @@ export default function TradesView({
                 >Cancel</button>
                 <button
                   onClick={handleDeleteAll}
-                  className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:bg-red-600 bg-red-500 text-white active:scale-95 shadow-lg"
-                >Delete All</button>
+                  disabled={isDeleting}
+                  className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:bg-red-600 bg-red-500 text-white active:scale-95 shadow-lg disabled:opacity-40"
+                >{isDeleting ? 'Deleting...' : 'Delete All'}</button>
               </div>
             </div>
           </div>

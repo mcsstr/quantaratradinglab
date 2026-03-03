@@ -851,7 +851,7 @@ export default function Dashboard() {
   // Column aliases imported from tradeParser.ts
   const targetColumns = Object.keys(columnAliases);
 
-  const parseTradesFromText = async (text) => {
+  const parseTradesFromText = async (text, isCSV = false) => {
     if (!selectedImportAccountId) {
       setToastMessage('Please select an account before importing.');
       setTimeout(() => setToastMessage(''), 3000);
@@ -869,12 +869,14 @@ export default function Dashboard() {
       let delimiterRegex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/; // Default CSV comma outside quotes
       let delimiterChar = ',';
 
-      if (headerLine.includes('\t')) {
-        delimiterRegex = /\t/;
-        delimiterChar = '\t';
-      } else if (headerLine.includes(';') && !headerLine.includes(',')) {
-        delimiterRegex = /;(?=(?:(?:[^"]*"){2})*[^"]*$)/;
-        delimiterChar = ';';
+      if (!isCSV) {
+        if (headerLine.includes('\t')) {
+          delimiterRegex = /\t/;
+          delimiterChar = '\t';
+        } else if (headerLine.includes(';') && !headerLine.includes(',')) {
+          delimiterRegex = /;(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+          delimiterChar = ';';
+        }
       }
 
       // Helper to detect if a line looks like headers or data
@@ -939,11 +941,7 @@ export default function Dashboard() {
 
       const newTrades = [];
       const sanitizeNum = (str) => {
-        if (!str) return 0;
-        let s = String(str).replace(/\s/g, '');
-        let isNegative = s.includes('(') || s.includes('-');
-        let num = parseFloat(s.replace(/[^\d.]/g, '')) || 0;
-        return isNegative ? -num : num;
+        return cleanNumericValue(str);
       };
 
       for (let i = startRow; i < lines.length; i++) {
@@ -1113,7 +1111,9 @@ export default function Dashboard() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event: any) => {
-      parseTradesFromText(event.target.result);
+      // O split obrigatório para CSV é aplicado forçando isCSV = true. 
+      // Isso utiliza /,(?=(?:(?:[^"]*"){2})*[^"]*$)/ explicitamente ignorando auto-detect
+      parseTradesFromText(event.target.result, true);
       e.target.value = null;
     };
     reader.readAsText(file);
@@ -2188,6 +2188,9 @@ export default function Dashboard() {
                   setIsTradeModalOpen={setIsTradeModalOpen}
                   isMobile={isMobile}
                   activeAccountId={activeAccountId}
+                  supabase={supabase}
+                  session={session}
+                  setToastMessage={setToastMessage}
                 />
               )
             }
@@ -2590,3 +2593,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
