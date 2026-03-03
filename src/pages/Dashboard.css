@@ -24,6 +24,6 @@
     .animate-tab-enter { animation: fadeInSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     
     /* Proteção da Safe Area do Celular (Notch) e Aumento de Margens */
-    .header-safe { padding-top: calc(1.5rem + env(safe-area-inset-top)); padding-bottom: 1rem; }
-    .pb-safe { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
-    @media (min-width: 1024px) { .header-safe { padding-top: max(0.75rem, env(safe-area-inset-top)); padding-bottom: 0.75rem; } }
+    .header-safe { padding-top: calc(1.5rem + env(safe-area-inset-top)) !important; padding-bottom: 1rem !important; }
+    .pb-safe { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)) !important; }
+    @media (min-width: 1024px) { .header-safe { padding-top: max(0.75rem, env(safe-area-inset-top)) !important; padding-bottom: 0.75rem !important; } }

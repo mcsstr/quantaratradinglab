@@ -6,14 +6,14 @@
 
 // Column aliases: maps a canonical field name to known header variations across brokers
 export const columnAliases: Record<string, string[]> = {
-    symbol: ['symbol', 'Symbol', 'Ativo', 'Ticker', 'contract', 'instrument', 'símbolo'],
-    qty: ['qty', 'Qty', 'Quantity', 'Quantidade', 'contracts', 'size', 'tamanho', 'volume'],
+    symbol: ['symbol', 'Ativo', 'Ticker', 'contract', 'instrument', 'símbolo'],
+    qty: ['qty', 'Quantity', 'Quantidade', 'contracts', 'tamanho', 'volume'],
     buyPrice: ['buyPrice', 'Buy Price', 'Preço Compra', 'entry price', 'open price', 'avg buy price', 'preço de abertura'],
     buyTime: ['boughtTimestamp', 'Buy Time', 'Data Compra', 'buytime', 'entry time', 'open time', 'entry datetime', 'horário de abertura', 'data de abertura'],
     duration: ['duration', 'Duration', 'Tempo', 'duração'],
     sellTime: ['soldTimestamp', 'Sell Time', 'Data Venda', 'selltime', 'exit time', 'close time', 'exit datetime', 'horário de fechamento', 'data de fechamento'],
     sellPrice: ['sellPrice', 'Sell Price', 'Preço Venda', 'exit price', 'close price', 'avg sell price', 'preço de fechamento'],
-    pnl: ['pnl', 'P&L', 'Net PnL', 'Lucro/Prejuízo', 'p/l', 'profit', 'profit/loss', 'realized pnl', 'lucro líquido', 'resultado'],
+    pnl: ['pnl', 'P&L', 'Net PnL', 'Lucro/Prejuízo', 'p/l', 'profit', 'realized pnl', 'lucro líquido', 'resultado'],
     direction: ['direction', 'side', 'direção', 'lado']
 };
 
