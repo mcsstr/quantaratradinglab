@@ -103,7 +103,7 @@ export default function DashboardHomeView({
             <div className="flex items-center gap-1"><div className="w-3 h-[2px] rounded" style={{ backgroundColor: theme.linhaGrafico }}></div> Balance</div>
             <div className="flex items-center gap-1"><div className="w-3 h-0 border-t border-dashed" style={{ borderColor: isTrendUp ? theme.textoPositivo : theme.textoNegativo }}></div> Trend</div>
           </div>
-          <select value={equityFilter} onChange={e => setEquityFilter(e.target.value)} className="text-[10px] outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded-lg hover:bg-white/10 transition-all shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
+          <select value={equityFilter} onChange={e => setEquityFilter(e.target.value)} className="text-[9px] md:text-[10px] outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded-lg hover:bg-white/10 transition-all shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
             <option value="all" className="bg-gray-900">All History</option>
             <option value="daily" className="bg-gray-900">Daily View</option>
             <option value="weekly" className="bg-gray-900">Weekly View</option>
@@ -155,7 +155,7 @@ export default function DashboardHomeView({
             <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
             <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
             <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px', borderWidth: settings.borderWidthGeral }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario, marginBottom: '4px' }} />
-            <Bar dataKey="trades" name="Trades" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="trades" name="Trades" radius={[4, 4, 0, 0]} isAnimationActive={false}>
               <LabelList dataKey="trades" position="top" offset={10} fill="#FFD700" fontSize={14} fontWeight="bold" />
               {performanceWeeklyData.daysData.map((entry, index) => (<Cell key={`cell-${index}`} fill={theme.contornoHoje} />))}
             </Bar>

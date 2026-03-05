@@ -100,7 +100,7 @@ input[type=range]::-webkit-slider-runnable-track {
 
 /* Padding dinâmico do conteúdo principal (main) */
 .pt-safe-main {
-    padding-top: calc(4rem + env(safe-area-inset-top)) !important;
+    padding-top: calc(5.5rem + env(safe-area-inset-top)) !important;
 }
 
 .pb-safe-main {
@@ -109,7 +109,7 @@ input[type=range]::-webkit-slider-runnable-track {
 
 @media (min-width: 1024px) {
     .pt-safe-main {
-        padding-top: calc(4.5rem + env(safe-area-inset-top)) !important;
+        padding-top: calc(6rem + env(safe-area-inset-top)) !important;
     }
 
     .pb-safe-main {

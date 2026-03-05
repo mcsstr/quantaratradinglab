@@ -184,7 +184,7 @@ export default function AnalyticsView({
             <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-[300px] sm:col-span-2" style={getGlassStyle(theme.fundoCards)}>
               <div className="flex justify-between items-center mb-4 gap-2">
                 <SectionTitle icon={CalendarDays} title="Most Traded Hours" theme={theme} />
-                <select value={timeGrouping} onChange={e => setTimeGrouping(e.target.value)} className="text-[10px] md:text-xs outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded hover:bg-white/10" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
+                <select value={timeGrouping} onChange={e => setTimeGrouping(e.target.value)} className="text-[9px] md:text-[10px] outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded hover:bg-white/10" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
                   <option value="60" className="bg-gray-900">1 Hour</option>
                   <option value="30" className="bg-gray-900">30 Mins</option>
                   <option value="15" className="bg-gray-900">15 Mins</option>
@@ -207,7 +207,7 @@ export default function AnalyticsView({
         <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-[300px] md:h-[400px]" style={getGlassStyle(theme.fundoCards)}>
           <div className="flex justify-between items-center mb-4 gap-2 shrink-0">
             <SectionTitle icon={TrendingUp} title="Trade Values" theme={theme} />
-            <select value={tradeValuesFilter} onChange={e => setTradeValuesFilter(e.target.value)} className="text-[10px] md:text-xs outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded hover:bg-white/10" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
+            <select value={tradeValuesFilter} onChange={e => setTradeValuesFilter(e.target.value)} className="text-[9px] md:text-[10px] outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded hover:bg-white/10" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
               <option value="all" className="bg-gray-900">All History</option>
               <option value="today" className="bg-gray-900">Today</option>
               <option value="yesterday" className="bg-gray-900">Yesterday</option>

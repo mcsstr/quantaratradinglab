@@ -121,14 +121,14 @@ export default function NewsView({
 
       <div className="rounded-xl overflow-hidden w-full shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
         <div className="w-full overflow-x-auto">
-          <table className="w-full text-left text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap">
+          <table className="w-full text-left text-[9px] sm:text-[10px] md:text-xs">
             <thead className="text-[9px] md:text-[10px] lg:text-xs tracking-wider font-bold" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), color: theme.textoSecundario, borderBottomWidth: settings.borderWidthGeral, borderColor: theme.contornoGeral, borderBottomStyle: 'solid' }}>
               <tr>
-                <th className="px-3 py-3 md:px-5 md:py-4 w-20 sm:w-32">Date & Time</th>
-                <th className="px-3 py-3 md:px-5 md:py-4 w-12 sm:w-20 text-center">Currency</th>
-                <th className="px-3 py-3 md:px-5 md:py-4 w-10 sm:w-16 text-center">Impact</th>
-                <th className="px-3 py-3 md:px-5 md:py-4">Description</th>
-                <th className="px-3 py-3 md:px-5 md:py-4 text-right w-16 sm:w-20">Action</th>
+                <th className="px-2 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 w-16 sm:w-28">Date & Time</th>
+                <th className="px-1.5 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 w-10 sm:w-16 text-center">Cur.</th>
+                <th className="px-1.5 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 w-8 sm:w-14 text-center">Imp.</th>
+                <th className="px-2 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4">Description</th>
+                <th className="px-1.5 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 text-right w-14 sm:w-20">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -137,25 +137,25 @@ export default function NewsView({
 
                 return (
                   <tr key={n.id} className="transition-colors hover:bg-white/10" style={{ backgroundColor: index % 2 === 0 ? 'transparent' : 'rgba(128, 128, 128, 0.04)' }}>
-                    <td className="px-3 py-3 md:px-5 md:py-4 font-mono text-[9px] md:text-[10px] lg:text-xs">
+                    <td className="px-2 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 font-mono text-[8px] sm:text-[9px] md:text-[10px] lg:text-xs whitespace-nowrap">
                       <div className="flex flex-col">
                         <span style={{ color: theme.textoPrincipal }}>{formatDate(n.date)}</span>
                         <span style={{ color: theme.textoSecundario }}>{timeStr}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-3 md:px-5 md:py-4 text-center font-bold align-middle text-[9px] sm:text-[10px] lg:text-xs" style={{ color: theme.textoPrincipal }}>
+                    <td className="px-1.5 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 text-center font-bold align-middle text-[8px] sm:text-[9px] lg:text-xs" style={{ color: theme.textoPrincipal }}>
                       {n.currency}
                     </td>
-                    <td className="px-3 py-3 md:px-5 md:py-4 text-center align-middle">
+                    <td className="px-1.5 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 text-center align-middle">
                       <div className="flex justify-center items-center w-full h-full" title={n.impact}>
-                        <Folder size={isMobile ? 14 : 18} style={{ color: getImpactColor(n.impact) }} />
+                        <Folder size={isMobile ? 12 : 18} style={{ color: getImpactColor(n.impact) }} />
                       </div>
                     </td>
-                    <td className="px-3 py-3 md:px-5 md:py-4 font-medium whitespace-normal break-words min-w-[120px] sm:min-w-[200px] align-middle text-[9px] sm:text-[10px] lg:text-xs" style={{ color: theme.textoPrincipal }}>
+                    <td className="px-2 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 font-medium whitespace-normal break-words min-w-[80px] sm:min-w-[150px] align-middle text-[8px] sm:text-[9px] lg:text-xs" style={{ color: theme.textoPrincipal }}>
                       {n.description}
                     </td>
-                    <td className="px-3 py-3 md:px-5 md:py-4 text-right align-middle">
-                      <div className="flex justify-end gap-1">
+                    <td className="px-1.5 py-2 sm:px-3 sm:py-3 md:px-5 md:py-4 text-right align-middle">
+                      <div className="flex justify-end gap-0.5 sm:gap-1">
                         <button onClick={() => { setEditNewsData(n); setIsNewsModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20 transition-colors" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 16} /></button>
                         <button onClick={async () => { await deleteNews(n.id); }} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20 transition-colors" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 16} /></button>
                       </div>

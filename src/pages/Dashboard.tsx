@@ -911,6 +911,8 @@ export default function Dashboard() {
       } else {
         // No headers detected, we must guess based on content of first line
         startRow = 0;
+        const decimalCols: number[] = []; // Track columns with decimal values for price/pnl separation
+
         firstLineValues.forEach((val, idx) => {
           const cleanVal = val.replace(/\s/g, '');
 
@@ -919,19 +921,42 @@ export default function Dashboard() {
             if (!headerIndexes['buyTime']) headerIndexes['buyTime'] = idx;
             else if (!headerIndexes['sellTime']) headerIndexes['sellTime'] = idx;
           }
-          // Detect Qty (usually a small integer)
-          else if ((!headerIndexes['qty'] && /^\d+$/.test(cleanVal) && parseInt(cleanVal) < 1000) || (!headerIndexes['qty'] && idx === 1)) {
+          // Detect Qty (usually a small integer, no decimals)
+          else if (!headerIndexes['qty'] && /^\d+$/.test(cleanVal) && parseInt(cleanVal) < 1000) {
             headerIndexes['qty'] = idx;
           }
-          // Detect P&L (usually has $, decimals, or parentheses)
-          else if (cleanVal.includes('$') || cleanVal.includes('(') || cleanVal.includes(')') || (cleanVal.includes('.') && idx > 2)) {
+          // Detect P&L explicitly (has $, or parentheses for negatives)
+          else if (!headerIndexes['pnl'] && (cleanVal.includes('$') || cleanVal.includes('(') || cleanVal.includes(')'))) {
             headerIndexes['pnl'] = idx;
           }
           // Detect Symbol (usually uppercase letters/numbers)
           else if (/^[A-Z0-9]{3,}$/.test(cleanVal) && !headerIndexes['symbol']) {
             headerIndexes['symbol'] = idx;
           }
+          // Collect decimal number columns as candidates for prices/pnl
+          else if (/^-?\d+(\.\d+)?$/.test(cleanVal) || /^\d{1,3}(,\d{3})*(\.\d+)?$/.test(cleanVal)) {
+            decimalCols.push(idx);
+          }
         });
+
+        // Assign decimal columns: first=buyPrice, second=sellPrice, third (or last remaining)=pnl
+        if (decimalCols.length > 0) {
+          if (!headerIndexes['buyPrice'] && decimalCols.length >= 1) {
+            headerIndexes['buyPrice'] = decimalCols[0];
+          }
+          if (!headerIndexes['sellPrice'] && decimalCols.length >= 2) {
+            headerIndexes['sellPrice'] = decimalCols[1];
+          }
+          if (!headerIndexes['pnl'] && decimalCols.length >= 3) {
+            headerIndexes['pnl'] = decimalCols[2];
+          } else if (!headerIndexes['pnl'] && decimalCols.length >= 1) {
+            // If only 1 or 2 decimal columns and no pnl yet, last decimal is pnl
+            headerIndexes['pnl'] = decimalCols[decimalCols.length - 1];
+            // Remove it from prices if it was assigned
+            if (headerIndexes['buyPrice'] === headerIndexes['pnl']) delete headerIndexes['buyPrice'];
+            if (headerIndexes['sellPrice'] === headerIndexes['pnl']) delete headerIndexes['sellPrice'];
+          }
+        }
 
         // Fallback for Tradovate order if detection fails
         if (headerIndexes['qty'] === undefined) headerIndexes['qty'] = 1;
@@ -1331,21 +1356,26 @@ export default function Dashboard() {
     });
     return result.sort((a, b) => {
       const getTime = (t) => {
+        // 1. Use entryTimestamp if available (milliseconds)
         if (t.entryTimestamp && !isNaN(t.entryTimestamp)) return t.entryTimestamp;
 
-        let fallbackTime = 0;
-        if (t.date) {
-          let timeString = t.buyTime || t.buy_time || t.entryTime || '00:00:00';
-          if (timeString.length === 5) timeString += ':00'; // HH:mm -> HH:mm:00
-          fallbackTime = new Date(`${t.date}T${timeString}`).getTime();
-          if (isNaN(fallbackTime)) {
-            fallbackTime = new Date(`${t.date}T00:00:00`).getTime();
+        // 2. Parse buyTime/sellTime as full datetime strings via parseSmartDate
+        const rawTime = t.buyTime || t.buy_time || t.sellTime || t.sell_time || null;
+        if (rawTime) {
+          const iso = parseSmartDate(rawTime);
+          if (iso) {
+            const ms = new Date(iso).getTime();
+            if (!isNaN(ms)) return ms;
           }
         }
-        if (isNaN(fallbackTime)) fallbackTime = 0;
 
-        const idOffset = (parseInt(String(t.id).replace(/\D/g, '').slice(-6)) || 0) / 1000;
-        return fallbackTime + idOffset;
+        // 3. Fallback: date only
+        if (t.date) {
+          const ms = new Date(t.date + 'T00:00:00').getTime();
+          if (!isNaN(ms)) return ms;
+        }
+
+        return 0;
       };
       const timeA = getTime(a);
       const timeB = getTime(b);

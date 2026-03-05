@@ -106,7 +106,7 @@ export default function ImportView({
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.buyTime', lang)}</label>
-                  <input type="datetime-local" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.buyTime} onChange={e => setManualTrade({ ...manualTrade, buyTime: e.target.value })} />
+                  <input type="datetime-local" step="1" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.buyTime} onChange={e => setManualTrade({ ...manualTrade, buyTime: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -116,7 +116,7 @@ export default function ImportView({
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.sellTime', lang)}</label>
-                  <input type="datetime-local" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.sellTime} onChange={e => setManualTrade({ ...manualTrade, sellTime: e.target.value })} />
+                  <input type="datetime-local" step="1" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.sellTime} onChange={e => setManualTrade({ ...manualTrade, sellTime: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
