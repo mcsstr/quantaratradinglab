@@ -27,6 +27,8 @@ import MobileMenuView from './DashboardViews/MobileMenuView';
 
 // Components
 import SearchableSelect from '../components/SearchableSelect';
+import { useNewsRepository } from '../hooks/useNewsRepository';
+import { useHolidaysRepository } from '../hooks/useHolidaysRepository';
 
 
 export default function Dashboard() {
@@ -48,8 +50,6 @@ export default function Dashboard() {
   const [selectedImportAccountId, setSelectedImportAccountId] = useState('');
 
   const [trades, setTrades] = useState([]);
-  const [holidays, setHolidays] = useState([]);
-  const [news, setNews] = useState([]);
   const [importText, setImportText] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [sortOrder, setSortOrder] = useState('recent');
@@ -113,6 +113,9 @@ export default function Dashboard() {
   // Estado das abas de Configurações
   const [activeSettingsTab, setActiveSettingsTab] = useState('account');
   const [session, setSession] = useState<any>(null);
+
+  const { news, saveNews, deleteNews, saveNewsBulk, overrideNews } = useNewsRepository(session);
+  const { holidays, saveHoliday, deleteHoliday, overrideHolidays } = useHolidaysRepository(session);
 
   // --- AUTH SESSION CHECK ---
   useEffect(() => {
@@ -385,8 +388,8 @@ export default function Dashboard() {
         if (data.settings) setSettings(prev => ({ ...prev, ...data.settings }));
         if (data.theme) setTheme(prev => ({ ...prev, ...data.theme }));
         if (data.trades) setTrades(data.trades);
-        if (data.holidays) setHolidays(data.holidays);
-        if (data.news) setNews(data.news);
+        if (data.holidays) overrideHolidays(data.holidays);
+        if (data.news) overrideNews(data.news);
         setToastMessage('Database Imported Successfully!');
       } catch (err) {
         setToastMessage('Error importing JSON. Invalid format.');
@@ -1192,24 +1195,25 @@ export default function Dashboard() {
     }
   };
 
-  const addHoliday = () => {
+  const addHoliday = async () => {
     if (!newHoliday.date || !newHoliday.description) return;
-    setHolidays([...holidays, { ...newHoliday, id: generateId() }]); setNewHoliday({ date: '', description: '' });
+    await saveHoliday({ ...newHoliday });
+    setNewHoliday({ date: '', description: '' });
   };
 
-  const handleAddNews = () => {
+  const handleAddNews = async () => {
     if (!newNewsItem.date || !newNewsItem.description) {
       setToastMessage("Date and Description are required!");
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
-    setNews([...news, { ...newNewsItem, id: generateId() }]);
+    await saveNews({ ...newNewsItem });
     setNewNewsItem({ date: '', time: '', currency: 'USD', impact: 'High', description: '' });
     setToastMessage("News event added!");
     setTimeout(() => setToastMessage(''), 3000);
   };
 
-  const handleImportNews = () => {
+  const handleImportNews = async () => {
     if (!newsImportText.trim()) return;
     const lines = newsImportText.split(/\r?\n/);
     const newNews: any[] = [];
@@ -1271,7 +1275,7 @@ export default function Dashboard() {
     });
 
     if (newNews.length > 0) {
-      setNews(prev => [...prev, ...newNews]);
+      await saveNewsBulk(newNews);
       setNewsImportText('');
       setToastMessage(`${newNews.length} news events imported!`);
     } else {
@@ -1327,12 +1331,29 @@ export default function Dashboard() {
     });
     return result.sort((a, b) => {
       const getTime = (t) => {
-        if (t.entryTimestamp) return t.entryTimestamp;
-        // Fallback: parse date + add trade id as microsecond offset for stable ordering
-        return new Date(t.date + 'T00:00:00').getTime() + (parseInt(String(t.id).replace(/\D/g, '').slice(-6)) || 0) / 1000;
+        if (t.entryTimestamp && !isNaN(t.entryTimestamp)) return t.entryTimestamp;
+
+        let fallbackTime = 0;
+        if (t.date) {
+          let timeString = t.buyTime || t.buy_time || t.entryTime || '00:00:00';
+          if (timeString.length === 5) timeString += ':00'; // HH:mm -> HH:mm:00
+          fallbackTime = new Date(`${t.date}T${timeString}`).getTime();
+          if (isNaN(fallbackTime)) {
+            fallbackTime = new Date(`${t.date}T00:00:00`).getTime();
+          }
+        }
+        if (isNaN(fallbackTime)) fallbackTime = 0;
+
+        const idOffset = (parseInt(String(t.id).replace(/\D/g, '').slice(-6)) || 0) / 1000;
+        return fallbackTime + idOffset;
       };
       const timeA = getTime(a);
       const timeB = getTime(b);
+
+      if (timeA === timeB) {
+        // Stable fallback based on id
+        return sortOrder === 'recent' ? String(b.id).localeCompare(String(a.id)) : String(a.id).localeCompare(String(b.id));
+      }
       return sortOrder === 'recent' ? timeB - timeA : timeA - timeB;
     });
   }, [activeTrades, searchTerm, filterMonth, filterYear, sortOrder]);
@@ -1351,8 +1372,18 @@ export default function Dashboard() {
       return parseInt(y, 10) === year && parseInt(m, 10) - 1 === month;
     });
     return monthTrades.sort((a, b) => {
-      const timeA = a.entryTimestamp || new Date(a.date + 'T00:00:00').getTime();
-      const timeB = b.entryTimestamp || new Date(b.date + 'T00:00:00').getTime();
+      const getTime = (t) => {
+        if (t.entryTimestamp && !isNaN(t.entryTimestamp)) return t.entryTimestamp;
+        let fallbackTime = 0;
+        if (t.date) fallbackTime = new Date(t.date + 'T00:00:00').getTime();
+        return isNaN(fallbackTime) ? 0 : fallbackTime;
+      };
+      const timeA = getTime(a);
+      const timeB = getTime(b);
+
+      if (timeA === timeB) {
+        return miniHistorySort === 'recent' ? String(b.id).localeCompare(String(a.id)) : String(a.id).localeCompare(String(b.id));
+      }
       return miniHistorySort === 'recent' ? timeB - timeA : timeA - timeB;
     });
   }, [activeTrades, miniHistorySort, currentDate]);
@@ -1407,8 +1438,8 @@ export default function Dashboard() {
     setTimeout(() => setToastMessage(''), 3000);
   };
 
-  const saveNewsModal = () => {
-    setNews(news.map(n => n.id === editNewsData.id ? { ...n, ...editNewsData } : n));
+  const saveNewsModal = async () => {
+    await saveNews(editNewsData as any);
     setIsNewsModalOpen(false);
   };
 
@@ -2244,7 +2275,8 @@ export default function Dashboard() {
             getImpactColor={getImpactColor}
             setEditNewsData={setEditNewsData}
             setIsNewsModalOpen={setIsNewsModalOpen}
-            setNews={setNews}
+            saveNews={saveNews}
+            deleteNews={deleteNews}
             news={news}
           />
         )}
@@ -2265,7 +2297,8 @@ export default function Dashboard() {
             editHolidayData={editHolidayData}
             setEditHolidayData={setEditHolidayData}
             formatDate={formatDate}
-            setHolidays={setHolidays}
+            saveHoliday={saveHoliday}
+            deleteHoliday={deleteHoliday}
             isMobile={isMobile}
           />
         )}
@@ -2306,8 +2339,8 @@ export default function Dashboard() {
             handleResetAllData={() => {
               if (window.confirm('Are you sure you want to reset all data and settings?')) {
                 setTrades([]);
-                setHolidays([]);
-                setNews([]);
+                overrideHolidays([]);
+                overrideNews([]);
                 setSettings(DEFAULT_SETTINGS);
                 setTheme(DEFAULT_THEME);
                 localStorage.clear();

@@ -29,7 +29,8 @@ export default function NewsView({
   getImpactColor,
   setEditNewsData,
   setIsNewsModalOpen,
-  setNews,
+  saveNews,
+  deleteNews,
   news
 }) {
   return (
@@ -156,7 +157,7 @@ export default function NewsView({
                     <td className="px-3 py-3 md:px-5 md:py-4 text-right align-middle">
                       <div className="flex justify-end gap-1">
                         <button onClick={() => { setEditNewsData(n); setIsNewsModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20 transition-colors" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 16} /></button>
-                        <button onClick={() => setNews(news.filter(item => item.id !== n.id))} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20 transition-colors" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 16} /></button>
+                        <button onClick={async () => { await deleteNews(n.id); }} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20 transition-colors" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 16} /></button>
                       </div>
                     </td>
                   </tr>

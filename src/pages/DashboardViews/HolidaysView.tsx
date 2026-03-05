@@ -23,7 +23,8 @@ export default function HolidaysView({
   editHolidayData,
   setEditHolidayData,
   formatDate,
-  setHolidays,
+  saveHoliday,
+  deleteHoliday,
   isMobile
 }) {
   return (
@@ -79,13 +80,13 @@ export default function HolidaysView({
                     <td className="px-3 py-3 md:px-5 md:py-4 text-right flex justify-end gap-1">
                       {isEditingHoliday ? (
                         <>
-                          <button onClick={() => { setHolidays(holidays.map(item => item.id === h.id ? editHolidayData : item)); setEditingHoliday(null); }} className="p-1 sm:p-1.5 rounded-md hover:bg-green-500/20 text-green-500"><Check size={isMobile ? 12 : 16} /></button>
+                          <button onClick={async () => { await saveHoliday(editHolidayData); setEditingHoliday(null); }} className="p-1 sm:p-1.5 rounded-md hover:bg-green-500/20 text-green-500"><Check size={isMobile ? 12 : 16} /></button>
                           <button onClick={() => setEditingHoliday(null)} className="p-1 sm:p-1.5 rounded-md hover:bg-red-500/20 text-red-500"><X size={isMobile ? 12 : 16} /></button>
                         </>
                       ) : (
                         <>
                           <button onClick={() => { setEditingHoliday(h.id); setEditHolidayData(h); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
-                          <button onClick={() => setHolidays(holidays.filter(item => item.id !== h.id))} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 16} /></button>
+                          <button onClick={async () => { await deleteHoliday(h.id); }} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 16} /></button>
                         </>
                       )}
                     </td>
