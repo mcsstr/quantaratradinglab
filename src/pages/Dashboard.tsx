@@ -94,6 +94,7 @@ export default function Dashboard() {
 
   const [miniHistorySort, setMiniHistorySort] = useState('recent');
   const [manualTrade, setManualTrade] = useState({ symbol: '', qty: '', buyPrice: '', buyTime: '', duration: '', sellTime: '', sellPrice: '', pnl: '' });
+  const [mobileTooltipContent, setMobileTooltipContent] = useState(null);
 
   // Estado para gerenciar Notícias (News)
   const [newsFilter, setNewsFilter] = useState('today_tomorrow');
@@ -524,9 +525,13 @@ export default function Dashboard() {
 
   // --- TOOLTIP COMPONENT ---
   const IconTooltip = ({ children, content }) => (
-    <div className="group relative flex items-center justify-center cursor-help">
+    <div
+      className="group relative flex items-center justify-center cursor-help"
+      onClick={(e) => { if (isMobile) { e.stopPropagation(); setMobileTooltipContent(content); } }}
+    >
       {children}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col z-[9999] pointer-events-none min-w-[150px] max-w-[280px] p-3 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] text-[10px] md:text-xs font-normal transition-all"
+      {/* Desktop: hover tooltip */}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden lg:group-hover:flex flex-col z-[9999] pointer-events-none min-w-[150px] max-w-[280px] p-3 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] text-[10px] md:text-xs font-normal transition-all"
         style={{ backgroundColor: hexToRgba(theme.fundoCards, 0.98), borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', backdropFilter: 'blur(10px)' }}>
         {content}
         <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent" style={{ borderTopColor: theme.contornoGeral }}></div>
@@ -860,8 +865,8 @@ export default function Dashboard() {
 
     try {
       const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-      if (lines.length < 2) {
-        throw new Error('Not enough data. Ensure there is a header row and trade data rows.');
+      if (lines.length === 0) {
+        throw new Error('No data found. Please paste at least one trade row.');
       }
 
       // Auto-detect delimiter
@@ -1321,8 +1326,13 @@ export default function Dashboard() {
       return matchesSearch && (filterMonth === 'all' || m === filterMonth) && (filterYear === 'all' || y === filterYear);
     });
     return result.sort((a, b) => {
-      const timeA = a.entryTimestamp || new Date(a.date + 'T00:00:00').getTime();
-      const timeB = b.entryTimestamp || new Date(b.date + 'T00:00:00').getTime();
+      const getTime = (t) => {
+        if (t.entryTimestamp) return t.entryTimestamp;
+        // Fallback: parse date + add trade id as microsecond offset for stable ordering
+        return new Date(t.date + 'T00:00:00').getTime() + (parseInt(String(t.id).replace(/\D/g, '').slice(-6)) || 0) / 1000;
+      };
+      const timeA = getTime(a);
+      const timeB = getTime(b);
       return sortOrder === 'recent' ? timeB - timeA : timeA - timeB;
     });
   }, [activeTrades, searchTerm, filterMonth, filterYear, sortOrder]);
@@ -1891,6 +1901,22 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* MOBILE TOOLTIP MODAL (News / Holidays no Calendário) */}
+      {mobileTooltipContent && createPortal(
+        <>
+          <div className="fixed inset-0 z-[9998] bg-black/60" onClick={() => setMobileTooltipContent(null)} />
+          <div className="fixed bottom-0 left-0 right-0 z-[9999] rounded-t-2xl p-5 pb-10 shadow-2xl animate-tab-enter"
+            style={{ backgroundColor: theme.fundoCards, borderColor: theme.contornoGeral, borderWidth: `${settings.borderWidthGeral}px ${settings.borderWidthGeral}px 0`, borderStyle: 'solid' }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
+            <div className="text-sm font-medium" style={{ color: theme.textoPrincipal }}>
+              {mobileTooltipContent}
+            </div>
+            <button onClick={() => setMobileTooltipContent(null)} className="mt-4 w-full py-2.5 rounded-lg text-xs font-bold transition-opacity hover:opacity-80" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>Close</button>
+          </div>
+        </>,
+        document.body
+      )}
+
       {/* HEADER FIXO NO TOPO */}
       <header className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 lg:px-6 py-2.5 lg:py-3 shadow-sm transition-all header-safe"
         style={{
@@ -2047,7 +2073,7 @@ export default function Dashboard() {
       </header>
 
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 overflow-y-auto pt-[100px] lg:pt-[100px] pb-24 lg:pb-8 px-4 lg:px-6 main-container" style={{ scrollBehavior: 'smooth' }}>
+      <main className="flex-1 overflow-y-auto px-4 lg:px-6 pt-safe-main pb-safe-main main-container" style={{ scrollBehavior: 'smooth' }}>
         {activeTab === 'mobile_menu' && isMobile && (
           <MobileMenuView
             theme={theme}

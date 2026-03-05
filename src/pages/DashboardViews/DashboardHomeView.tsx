@@ -103,7 +103,7 @@ export default function DashboardHomeView({
             <div className="flex items-center gap-1"><div className="w-3 h-[2px] rounded" style={{ backgroundColor: theme.linhaGrafico }}></div> Balance</div>
             <div className="flex items-center gap-1"><div className="w-3 h-0 border-t border-dashed" style={{ borderColor: isTrendUp ? theme.textoPositivo : theme.textoNegativo }}></div> Trend</div>
           </div>
-          <select value={equityFilter} onChange={e => setEquityFilter(e.target.value)} className="text-[10px] outline-none bg-transparent cursor-pointer font-bold px-3 py-2 rounded-lg hover:bg-white/10 transition-all shadow-sm" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
+          <select value={equityFilter} onChange={e => setEquityFilter(e.target.value)} className="text-[10px] outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded-lg hover:bg-white/10 transition-all shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
             <option value="all" className="bg-gray-900">All History</option>
             <option value="daily" className="bg-gray-900">Daily View</option>
             <option value="weekly" className="bg-gray-900">Weekly View</option>
@@ -194,13 +194,14 @@ export default function DashboardHomeView({
     <div className="rounded-xl p-4 md:p-6 shadow-sm w-full transition-all h-full flex flex-col" style={getGlassStyle(theme.fundoCards)}>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-4 gap-4 shrink-0">
         <SectionTitle icon={CalendarDays} title="Performance Calendar" theme={theme} />
-        <div className="flex gap-2 md:gap-3 items-center rounded-lg p-1 w-full xl:w-auto justify-between" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100) }}>
+        <div className="flex gap-1 items-center rounded-lg p-1 w-full xl:w-auto justify-between shadow-sm border" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), borderColor: theme.contornoGeral }}>
           <div className="flex items-center">
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-1 md:p-2 rounded hover:opacity-70"><ChevronLeft size={18} /></button>
-            <span className="capitalize font-medium px-2 md:px-4 min-w-[120px] md:min-w-[140px] text-center text-sm md:text-base" style={{ color: theme.textoSecundario }}>{new Intl.DateTimeFormat(userLocale, { month: 'long', year: 'numeric' }).format(currentDate)}</span>
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-1 md:p-2 rounded hover:opacity-70"><ChevronRight size={18} /></button>
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronLeft size={14} /></button>
+            <span className="capitalize font-bold px-2 min-w-[110px] text-center text-[10px]" style={{ color: theme.textoPrincipal }}>{new Intl.DateTimeFormat(userLocale, { month: 'long', year: 'numeric' }).format(currentDate)}</span>
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronRight size={14} /></button>
           </div>
-          <button onClick={() => setCurrentDate(new Date())} className="text-[10px] md:text-xs px-2 md:px-3 py-1 font-bold rounded-md transition-all hover:opacity-80 border" style={{ color: theme.linhaGrafico, backgroundColor: theme.linhaGrafico + '15', borderColor: theme.linhaGrafico + '40' }}>This Month</button>
+          <div className="w-px h-3 opacity-30 mx-1" style={{ backgroundColor: theme.contornoGeral }}></div>
+          <button onClick={() => setCurrentDate(new Date())} className="text-[10px] px-2 py-1 font-bold rounded-md hover:bg-white/10 transition-colors whitespace-nowrap" style={{ color: theme.linhaGrafico }}>This Month</button>
         </div>
       </div>
 
@@ -352,7 +353,7 @@ export default function DashboardHomeView({
           title={`Month Trades: ${new Intl.DateTimeFormat(userLocale, { month: 'long', year: 'numeric' }).format(currentDate)}`}
           theme={theme}
         />
-        <button onClick={() => setMiniHistorySort(prev => prev === 'recent' ? 'oldest' : 'recent')} className="text-[10px] px-3 py-1.5 rounded-lg font-bold transition-all hover:bg-white/10 shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.linhaGrafico + '40' }}>
+        <button onClick={() => setMiniHistorySort(prev => prev === 'recent' ? 'oldest' : 'recent')} className="text-[10px] px-2 py-1 rounded-lg font-bold transition-all hover:bg-white/10 shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
           {miniHistorySort === 'recent' ? 'Recent' : 'Oldest'}
         </button>
       </div>
