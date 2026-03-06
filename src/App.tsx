@@ -9,6 +9,7 @@ import Auth from './pages/Auth';
 import Loading from './pages/Loading';
 import Dashboard from './pages/Dashboard';
 import Account from './pages/Account';
+import Admin from './pages/Admin';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/loading" element={<Loading />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
