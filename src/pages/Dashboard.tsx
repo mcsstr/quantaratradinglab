@@ -1973,33 +1973,46 @@ export default function Dashboard() {
       {/* FAB SPEED DIAL OVERLAY */}
       {isFabOpen && (
         <div
-          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md transition-opacity duration-300"
           onClick={() => setIsFabOpen(false)}
         >
-          <div className="absolute bottom-28 left-1/2 -translate-x-1/2 flex flex-col items-center gap-6">
-            <div className="flex items-center justify-center gap-8 mb-4">
-              {[
-                { id: 'import', icon: Plus, label: '+ Trade', color: '#00B0F0' },
-                { id: 'news', icon: Newspaper, label: 'News', color: '#00B0F0' },
-                { id: 'holidays', icon: CalendarDays, label: 'Holidays', color: '#00B0F0' }
-              ].map((item, idx) => (
-                <div key={item.id} className="flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
+          <div className="absolute bottom-32 left-1/2 -translate-x-1/2 w-full max-w-[300px] h-[200px] flex items-center justify-center pointer-events-none">
+            {[
+              { id: 'import', icon: Plus, label: 'Trade', color: '#00B0F0', angle: -135 },
+              { id: 'news', icon: Newspaper, label: 'News', color: '#00B0F0', angle: -90 },
+              { id: 'holidays', icon: CalendarDays, label: 'Holidays', color: '#00B0F0', angle: -45 }
+            ].map((item, idx) => {
+              const radius = 90;
+              const angleRad = (item.angle * Math.PI) / 180;
+              const x = Math.cos(angleRad) * radius;
+              const y = Math.sin(angleRad) * radius;
+
+              return (
+                <div
+                  key={item.id}
+                  className="absolute flex flex-col items-center gap-1.5 animate-in fade-in zoom-in duration-300 pointer-events-auto"
+                  style={{
+                    animationDelay: `${idx * 50}ms`,
+                    transform: `translate(${x}px, ${y}px)`
+                  }}
+                >
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       startTransition(() => {
                         setPrevTab(activeTab);
                         setActiveTab(item.id);
                       });
                       setIsFabOpen(false);
                     }}
-                    className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-2xl transition-transform active:scale-90"
+                    className="w-14 h-14 rounded-full bg-[#111114] border border-white/10 flex items-center justify-center shadow-2xl transition-all active:scale-90 hover:border-[#00B0F0]/50"
                   >
                     <item.icon size={24} style={{ color: item.color }} />
                   </button>
-                  <span className="text-[11px] font-bold text-white uppercase tracking-wider">{item.label}</span>
+                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">{item.label}</span>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -2466,7 +2479,7 @@ export default function Dashboard() {
       </main >
 
       {/* BARRA DE NAVEGAÇÃO MOBILE */}
-      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 pt-2 shadow-xl transition-all pb-safe"
+      <nav className="flex lg:hidden fixed bottom-1 left-0 w-full z-50 items-center justify-around px-2 py-1 shadow-xl transition-all"
         style={{
           ...(settings.enableGlassEffect ? {
             backgroundColor: hexToRgba(theme.fundoMenu, Math.max(0.95, settings.cardOpacity / 100)),
@@ -2485,16 +2498,16 @@ export default function Dashboard() {
           ].map(item => {
             if (item.isFab) {
               return (
-                <button key={item.id} onClick={() => setIsFabOpen(!isFabOpen)} className={`relative flex items-center justify-center -mt-8 p-3.5 sm:p-4 rounded-full shadow-2xl transition-all duration-300 z-[110] ${isFabOpen ? 'rotate-90' : ''}`} style={{ backgroundColor: isFabOpen ? '#ef4444' : '#00B0F0', color: '#fff', border: `4px solid ${theme.fundoPrincipal}` }}>
-                  <item.icon size={28} />
+                <button key={item.id} onClick={() => setIsFabOpen(!isFabOpen)} className={`relative flex items-center justify-center -mt-6 p-3.5 sm:p-4 rounded-full shadow-2xl transition-all duration-300 z-[110] ${isFabOpen ? 'rotate-90' : ''}`} style={{ backgroundColor: isFabOpen ? '#ef4444' : '#00B0F0', color: '#fff', border: `4px solid ${theme.fundoPrincipal}` }}>
+                  <item.icon size={26} />
                 </button>
               );
             }
             const isActive = activeTab === item.id;
             return (
-              <button key={item.id} onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })} className="flex flex-col items-center justify-center flex-1 gap-1 py-3 transition-all active:scale-90" style={{ color: isActive ? '#00B0F0' : theme.textoSecundario }}>
-                <item.icon size={isActive ? 24 : 22} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">{item.title}</span>
+              <button key={item.id} onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })} className="flex flex-col items-center justify-center flex-1 gap-1 py-1.5 transition-all active:scale-90" style={{ color: isActive ? '#00B0F0' : theme.textoSecundario }}>
+                <item.icon size={isActive ? 22 : 20} />
+                <span className="text-[9px] font-bold uppercase tracking-widest">{item.title}</span>
               </button>
             );
           })

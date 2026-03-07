@@ -57,6 +57,8 @@ export default function Admin() {
         phoneCode: '+1', phone: '', country: '', postalCode: '', howHeard: ''
     });
 
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
     // ---------- SUPABASE: Fetch all profiles ----------
     const fetchProfiles = async () => {
         setIsLoading(true);
@@ -485,12 +487,17 @@ export default function Admin() {
             )}
 
             {/* Sidebar */}
-            <aside className="w-64 border-r border-yellow-500/20 flex flex-col h-screen sticky top-0 bg-[#000000]">
-                <div className="p-6 flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-                    <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center text-black font-bold">
-                        <Activity size={20} />
+            <aside className={`fixed inset-y-0 left-0 z-[150] w-64 border-r border-yellow-500/20 flex flex-col bg-[#000000] transition-transform duration-300 lg:relative lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className="p-6 flex items-center justify-between">
+                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+                        <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center text-black font-bold">
+                            <Activity size={20} />
+                        </div>
+                        <h2 className="text-white text-lg font-black tracking-tighter uppercase font-display">Quantara</h2>
                     </div>
-                    <h2 className="text-white text-lg font-black tracking-tighter uppercase font-display">Quantara</h2>
+                    <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-gray-400">
+                        <X size={24} />
+                    </button>
                 </div>
 
                 <nav className="flex-1 px-4 py-4 space-y-2">
@@ -524,20 +531,30 @@ export default function Admin() {
                 </div>
             </aside>
 
+            {/* Backdrop for Mobile Menu */}
+            {isMobileMenuOpen && (
+                <div className="fixed inset-0 bg-black/60 z-[140] lg:hidden backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+            )}
+
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="py-4 border-b border-yellow-500/20 flex items-center justify-between px-8 bg-[#000000]/50 backdrop-blur-md sticky top-0 z-10 header-safe">
-                    <div className="flex items-center gap-2">
-                        <span className="text-gray-400 text-sm">Admin</span>
-                        <span className="text-gray-400 text-sm">/</span>
-                        <span className="text-yellow-500 text-sm font-semibold">User Management</span>
+                <header className="py-4 border-b border-yellow-500/20 flex items-center justify-between px-4 lg:px-8 bg-[#000000]/50 backdrop-blur-md sticky top-0 z-40 header-safe">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden text-yellow-500 p-1">
+                            <Activity size={24} />
+                        </button>
+                        <div className="hidden sm:flex items-center gap-2">
+                            <span className="text-gray-400 text-sm">Admin</span>
+                            <span className="text-gray-400 text-sm">/</span>
+                            <span className="text-yellow-500 text-sm font-semibold">User Management</span>
+                        </div>
                     </div>
                     <div className="flex items-center gap-4">
                         <button onClick={fetchProfiles} className="p-2 text-gray-400 hover:text-yellow-500 transition-colors" title="Refresh data">
                             <Activity size={20} className={isLoading ? 'animate-spin' : ''} />
                         </button>
-                        <button className="p-2 text-gray-400 hover:text-yellow-500 transition-colors">
+                        <button className="hidden sm:block p-2 text-gray-400 hover:text-yellow-500 transition-colors">
                             <Bell size={20} />
                         </button>
                         <div className="h-8 w-8 rounded-full bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center overflow-hidden">
@@ -546,12 +563,12 @@ export default function Admin() {
                     </div>
                 </header>
 
-                <div className="p-8 max-w-7xl mx-auto w-full">
+                <div className="p-4 lg:p-8 max-w-7xl mx-auto w-full">
                     {/* Title & Add Button */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 text-left">
                         <div>
-                            <h1 className="text-3xl font-black text-white tracking-tight uppercase italic font-display">User Account Administration</h1>
-                            <p className="text-gray-400 mt-1">Manage and monitor your trading platform users. <span className="text-yellow-500 font-bold">({users.length} profiles loaded)</span></p>
+                            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight uppercase italic font-display">User Account Administration</h1>
+                            <p className="text-xs sm:text-sm text-gray-400 mt-1">Manage and monitor your trading platform users. <span className="text-yellow-500 font-bold">({users.length} profiles loaded)</span></p>
                         </div>
                         <button onClick={() => setIsAddModalOpen(true)} className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-black uppercase text-sm flex items-center gap-2 hover:scale-105 transition-transform active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.3)]">
                             <UserPlus size={18} />
@@ -560,21 +577,21 @@ export default function Admin() {
                     </div>
 
                     {/* Filters */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <div className="md:col-span-3 relative">
-                            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <div className="flex flex-col sm:grid sm:grid-cols-4 gap-3 mb-6">
+                        <div className="sm:col-span-3 relative">
+                            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
                                 type="text"
                                 placeholder="Search users by name or email..."
-                                className="w-full bg-transparent border border-yellow-500/30 rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-yellow-500 text-white placeholder:text-gray-500"
+                                className="w-full bg-transparent border border-yellow-500/30 rounded-xl py-2.5 pl-11 pr-4 focus:outline-none focus:border-yellow-500 text-sm text-white placeholder:text-gray-500"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
                         <div className="relative">
-                            <Filter size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <Filter size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                             <select
-                                className="w-full bg-[#09090b] border border-yellow-500/30 rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-yellow-500 text-white appearance-none cursor-pointer"
+                                className="w-full bg-[#09090b] border border-yellow-500/30 rounded-xl py-2.5 pl-11 pr-4 focus:outline-none focus:border-yellow-500 text-sm text-white appearance-none cursor-pointer"
                                 value={planFilter}
                                 onChange={(e) => setPlanFilter(e.target.value)}
                             >
@@ -601,37 +618,40 @@ export default function Admin() {
                                 <table className="w-full text-left border-collapse whitespace-nowrap">
                                     <thead>
                                         <tr className="bg-yellow-500/5 border-b border-yellow-500/20">
-                                            <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-yellow-500/70">Name</th>
-                                            <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-yellow-500/70">Email</th>
-                                            <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-yellow-500/70">Plan</th>
-                                            <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-yellow-500/70">Status</th>
-                                            <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-yellow-500/70 text-right">Actions</th>
+                                            <th className="px-4 lg:px-6 py-4 text-[10px] font-black uppercase tracking-widest text-yellow-500/70">Name</th>
+                                            <th className="hidden md:table-cell px-6 py-4 text-[10px] font-black uppercase tracking-widest text-yellow-500/70">Email</th>
+                                            <th className="hidden sm:table-cell px-6 py-4 text-[10px] font-black uppercase tracking-widest text-yellow-500/70">Plan</th>
+                                            <th className="px-4 lg:px-6 py-4 text-[10px] font-black uppercase tracking-widest text-yellow-500/70">Status</th>
+                                            <th className="px-4 lg:px-6 py-4 text-[10px] font-black uppercase tracking-widest text-yellow-500/70 text-right">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-yellow-500/10">
                                         {filteredUsers.map(user => (
                                             <tr key={user.id} className="hover:bg-yellow-500/5 transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`h-10 w-10 rounded-full border flex items-center justify-center font-bold text-sm
+                                                <td className="px-4 lg:px-6 py-4">
+                                                    <div className="flex items-center gap-2 lg:gap-3">
+                                                        <div className={`h-8 w-8 lg:h-10 lg:w-10 rounded-full border flex items-center justify-center font-bold text-xs lg:text-sm
                                                         ${user.status === 'Active' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500' :
                                                                 user.status === 'Suspended' ? 'bg-red-500/10 border-red-500/20 text-red-500' :
                                                                     'bg-gray-800 border-gray-700 text-gray-400'}`}>
                                                             {user.initials}
                                                         </div>
-                                                        <span className="font-bold text-white">{user.firstName} {user.lastName}</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-white text-sm whitespace-nowrap">{user.firstName} {user.lastName}</span>
+                                                            <span className="md:hidden text-[10px] text-gray-500 truncate max-w-[120px]">{user.email}</span>
+                                                        </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-gray-400">{user.email}</td>
-                                                <td className="px-6 py-4 font-bold text-gray-300">
+                                                <td className="hidden md:table-cell px-6 py-4 text-gray-400 text-sm">{user.email}</td>
+                                                <td className="hidden sm:table-cell px-6 py-4 font-bold text-gray-300 text-sm">
                                                     {user.plan}
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border
+                                                <td className="px-4 lg:px-6 py-4">
+                                                    <span className={`inline-flex items-center gap-1 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full text-[9px] lg:text-xs font-bold border
                                                     ${user.status === 'Active' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
                                                             user.status === 'Suspended' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
                                                                 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
-                                                        <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500' : user.status === 'Suspended' ? 'bg-red-500' : 'bg-gray-400'}`}></span>
+                                                        <span className={`w-1 h-1 lg:w-1.5 lg:h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500' : user.status === 'Suspended' ? 'bg-red-500' : 'bg-gray-400'}`}></span>
                                                         {user.status}
                                                     </span>
                                                 </td>
@@ -669,7 +689,7 @@ export default function Admin() {
                     )}
 
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mt-8 lg:mt-12">
                         <div className="p-6 bg-[#09090b] border border-yellow-500/20 rounded-2xl relative overflow-hidden group">
                             <div className="relative z-10">
                                 <p className="text-gray-500 text-xs font-black uppercase tracking-widest mb-1">Total Profiles</p>
