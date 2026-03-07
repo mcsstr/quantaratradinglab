@@ -50,7 +50,7 @@ export default function TradesView({
   const handleDeleteAll = async () => {
     setIsDeleting(true);
     try {
-      if (session) {
+      if (session && settings?.userPlan !== 'Free') {
         const { error } = await supabase
           .from('trades')
           .delete()
@@ -74,7 +74,7 @@ export default function TradesView({
     if (selectedTrades.length === 0) return;
     setIsDeleting(true);
     try {
-      if (session) {
+      if (session && settings?.userPlan !== 'Free') {
         const { error } = await supabase
           .from('trades')
           .delete()
@@ -96,7 +96,7 @@ export default function TradesView({
 
   const handleDeleteSingle = async (tradeId: string) => {
     try {
-      if (session) {
+      if (session && settings?.userPlan !== 'Free') {
         const { error } = await supabase
           .from('trades')
           .delete()

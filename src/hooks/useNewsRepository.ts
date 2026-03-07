@@ -11,7 +11,7 @@ export interface News {
     description: string;
 }
 
-export function useNewsRepository(session: any) {
+export function useNewsRepository(session: any, isFreePlan: boolean = false) {
     const [news, setNews] = useState<News[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export function useNewsRepository(session: any) {
         setIsLoading(true);
         setError(null);
         try {
-            if (session) {
+            if (session && !isFreePlan) {
                 const { data, error: sbError } = await supabase
                     .from('news')
                     .select('*')
@@ -49,7 +49,7 @@ export function useNewsRepository(session: any) {
         setIsLoading(true);
         setError(null);
         try {
-            if (session) {
+            if (session && !isFreePlan) {
                 const payload = { ...item, user_id: session.user.id };
                 let result;
 
@@ -106,7 +106,7 @@ export function useNewsRepository(session: any) {
         setIsLoading(true);
         setError(null);
         try {
-            if (session) {
+            if (session && !isFreePlan) {
                 const { error: sbError } = await supabase
                     .from('news')
                     .delete()
@@ -139,7 +139,7 @@ export function useNewsRepository(session: any) {
         setIsLoading(true);
         setError(null);
         try {
-            if (session) {
+            if (session && !isFreePlan) {
                 const payload = items.map(i => {
                     const { id, ...rest } = i;
                     return { ...rest, user_id: session.user.id };
@@ -167,7 +167,7 @@ export function useNewsRepository(session: any) {
     }, [session]);
 
     const overrideNews = useCallback((newList: News[]) => {
-        if (!session) {
+        if (!session || isFreePlan) {
             localStorage.setItem('news_list_v1', JSON.stringify(newList));
         }
         setNews(newList);

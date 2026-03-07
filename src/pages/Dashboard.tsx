@@ -114,8 +114,9 @@ export default function Dashboard() {
   const [activeSettingsTab, setActiveSettingsTab] = useState('account');
   const [session, setSession] = useState<any>(null);
 
-  const { news, saveNews, deleteNews, saveNewsBulk, overrideNews } = useNewsRepository(session);
-  const { holidays, saveHoliday, deleteHoliday, overrideHolidays } = useHolidaysRepository(session);
+  const isFreePlan = settings?.userPlan === 'Free';
+  const { news, saveNews, deleteNews, saveNewsBulk, overrideNews } = useNewsRepository(session, isFreePlan);
+  const { holidays, saveHoliday, deleteHoliday, overrideHolidays } = useHolidaysRepository(session, isFreePlan);
 
   // --- AUTH SESSION CHECK ---
   useEffect(() => {
@@ -160,11 +161,15 @@ export default function Dashboard() {
           .eq('id', session.user.id)
           .single();
 
+        let currentPlan = 'Free';
         if (profile) {
+          currentPlan = profile.plan || 'Free';
           const profileSettings = {
             ...DEFAULT_SETTINGS,
             appLanguage: profile.app_language,
             dateFormat: profile.date_format,
+            userName: profile.first_name || 'User',
+            userPlan: currentPlan,
             ...profile.theme_settings
           };
           setSettings(profileSettings);
@@ -196,29 +201,42 @@ export default function Dashboard() {
           })));
         }
 
-        // Fetch Trades
-        const { data: dbTrades } = await supabase
-          .from('trades')
-          .select('*')
-          .eq('user_id', session.user.id);
+        // Fetch Trades — filtra por account_id das contas do usuário (trades não tem user_id)
+        const accountIds = (dbAccounts || []).map(a => a.id);
 
-        if (dbTrades) {
-          setTrades(dbTrades.map(t => ({
-            id: t.id,
-            accountId: t.account_id,
-            symbol: t.symbol,
-            direction: t.direction,
-            qty: t.qty,
-            pnl: Number(t.pnl),
-            date: t.date,
-            entryTimestamp: t.entry_timestamp,
-            buyPrice: Number(t.buy_price),
-            buyTime: t.buy_time,
-            duration: t.duration,
-            sellTime: t.sell_time,
-            sellPrice: Number(t.sell_price),
-            notes: t.notes
-          })));
+        if (currentPlan === 'Free') {
+          const localTrades = localStorage.getItem('tradeJournal_trades');
+          if (localTrades) {
+            setTrades(JSON.parse(localTrades));
+          } else {
+            setTrades([]);
+          }
+        } else {
+          const { data: dbTrades } = accountIds.length > 0
+            ? await supabase
+              .from('trades')
+              .select('*')
+              .in('account_id', accountIds)
+            : { data: [] };
+
+          if (dbTrades) {
+            setTrades(dbTrades.map(t => ({
+              id: t.id,
+              accountId: t.account_id,
+              symbol: t.symbol,
+              direction: t.direction,
+              qty: t.qty,
+              pnl: Number(t.pnl),
+              date: t.date,
+              entryTimestamp: t.entry_timestamp,
+              buyPrice: Number(t.buy_price),
+              buyTime: t.buy_time,
+              duration: t.duration,
+              sellTime: t.sell_time,
+              sellPrice: Number(t.sell_price),
+              notes: t.notes
+            })));
+          }
         }
 
         // Initialize Active Account and Selection if not set
@@ -335,6 +353,13 @@ export default function Dashboard() {
       localStorage.setItem('tradeJournal_activeAccountId', JSON.stringify(activeAccountId));
     }
   }, [activeAccountId]);
+
+  // Auto-save trades to localStorage when on Free Plan
+  useEffect(() => {
+    if (settings.userPlan === 'Free') {
+      localStorage.setItem('tradeJournal_trades', JSON.stringify(trades));
+    }
+  }, [trades, settings.userPlan]);
 
   // Função para Salvar Configurações (Sincroniza com Tabela de Perfis)
   const handleSaveSettings = async () => {
@@ -1080,7 +1105,6 @@ export default function Dashboard() {
         const { data, error: dbError } = await supabase
           .from('trades')
           .insert(newTrades.map(t => ({
-            user_id: session.user.id,
             account_id: t.accountId,
             symbol: t.symbol || '',
             direction: t.direction || 'Long',
@@ -1170,43 +1194,61 @@ export default function Dashboard() {
       const sellT = manualTrade.sellTime || manualTrade.buyTime;
       const dateStr = new Date(buyT).toISOString().split('T')[0];
 
-      const { data, error: dbError } = await supabase
-        .from('trades')
-        .insert([{
-          user_id: session.user.id,
-          account_id: selectedImportAccountId,
+      let newT;
+      if (settings.userPlan === 'Free') {
+        newT = {
+          id: crypto.randomUUID(),
+          accountId: selectedImportAccountId,
           symbol: manualTrade.symbol || '',
           direction: Number(manualTrade.pnl) >= 0 ? 'Long' : 'Short',
           qty: parseInt(manualTrade.qty),
           pnl: parseFloat(manualTrade.pnl),
           date: dateStr,
-          entry_timestamp: new Date(buyT).toISOString(),
-          buy_price: parseFloat(manualTrade.buyPrice) || 0,
-          buy_time: buyT,
+          entryTimestamp: new Date(buyT).getTime(),
+          buyPrice: parseFloat(manualTrade.buyPrice) || 0,
+          buyTime: buyT,
           duration: manualTrade.duration || '',
-          sell_time: sellT,
-          sell_price: parseFloat(manualTrade.sellPrice) || 0
-        }])
-        .select()
-        .single();
+          sellTime: sellT,
+          sellPrice: parseFloat(manualTrade.sellPrice) || 0
+        };
+      } else {
+        const { data, error: dbError } = await supabase
+          .from('trades')
+          .insert([{
+            account_id: selectedImportAccountId,
+            symbol: manualTrade.symbol || '',
+            direction: Number(manualTrade.pnl) >= 0 ? 'Long' : 'Short',
+            qty: parseInt(manualTrade.qty),
+            pnl: parseFloat(manualTrade.pnl),
+            date: dateStr,
+            entry_timestamp: new Date(buyT).toISOString(),
+            buy_price: parseFloat(manualTrade.buyPrice) || 0,
+            buy_time: buyT,
+            duration: manualTrade.duration || '',
+            sell_time: sellT,
+            sell_price: parseFloat(manualTrade.sellPrice) || 0
+          }])
+          .select()
+          .single();
 
-      if (dbError) throw dbError;
+        if (dbError) throw dbError;
 
-      const newT = {
-        id: data.id,
-        accountId: data.account_id,
-        symbol: data.symbol,
-        direction: data.direction,
-        qty: data.qty,
-        pnl: Number(data.pnl),
-        date: data.date,
-        entryTimestamp: new Date(data.entry_timestamp).getTime(),
-        buyPrice: Number(data.buy_price),
-        buyTime: data.buy_time,
-        duration: data.duration,
-        sellTime: data.sell_time,
-        sellPrice: Number(data.sell_price)
-      };
+        newT = {
+          id: data.id,
+          accountId: data.account_id,
+          symbol: data.symbol,
+          direction: data.direction,
+          qty: data.qty,
+          pnl: Number(data.pnl),
+          date: data.date,
+          entryTimestamp: new Date(data.entry_timestamp).getTime(),
+          buyPrice: Number(data.buy_price),
+          buyTime: data.buy_time,
+          duration: data.duration,
+          sellTime: data.sell_time,
+          sellPrice: Number(data.sell_price)
+        };
+      }
 
       setTrades(prev => [...prev, newT]);
       setManualTrade({ symbol: '', qty: '', buyPrice: '', buyTime: '', duration: '', sellTime: '', sellPrice: '', pnl: '' });
@@ -1550,7 +1592,7 @@ export default function Dashboard() {
 
   const handleDeleteAccount = async (accountId) => {
     try {
-      const { error } = await supabase.from('accounts').delete().eq('id', accountId);
+      const { error } = await supabase.from('accounts').delete().eq('id', accountId).eq('user_id', session.user.id); // FILTRO DE ISOLAMENTO OBRIGATÓRIO
       if (error) throw error;
 
       setAccounts(prev => prev.filter(a => a.id !== accountId));
@@ -1937,7 +1979,7 @@ export default function Dashboard() {
           <div className="absolute bottom-28 left-1/2 -translate-x-1/2 flex flex-col items-center gap-6">
             <div className="flex items-center justify-center gap-8 mb-4">
               {[
-                { id: 'import', icon: Plus, label: 'Data', color: '#00B0F0' },
+                { id: 'import', icon: Plus, label: '+ Trade', color: '#00B0F0' },
                 { id: 'news', icon: Newspaper, label: 'News', color: '#00B0F0' },
                 { id: 'holidays', icon: CalendarDays, label: 'Holidays', color: '#00B0F0' }
               ].map((item, idx) => (
@@ -2067,7 +2109,7 @@ export default function Dashboard() {
             </div>
             <div className="flex flex-col items-start mr-1">
               <span className="text-[11px] lg:text-xs font-bold truncate max-w-[80px]" style={{ color: theme.textoPrincipal }}>{settings.userName || 'User'}</span>
-              <span className="text-[9px] lg:text-[10px] font-bold opacity-60 uppercase" style={{ color: theme.textoSecundario }}>PREMIUM</span>
+              <span className="text-[9px] lg:text-[10px] font-bold opacity-60 uppercase" style={{ color: theme.textoSecundario }}>{settings.userPlan || 'FREE'}</span>
             </div>
             <ChevronDown size={14} className={`transition-transform duration-300 opacity-40 group-hover:opacity-100 ${isProfileDropdownOpen ? 'rotate-180' : ''}`} style={{ color: theme.textoPrincipal }} />
           </button>
@@ -2098,7 +2140,7 @@ export default function Dashboard() {
                     )}
                   </div>
                   <p className="text-sm font-bold" style={{ color: theme.textoPrincipal }}>{settings.userName || 'User'}</p>
-                  <p className="text-[11px] font-bold mt-0.5" style={{ color: '#00d4ff' }}>Status: Pro Plan</p>
+                  <p className="text-[11px] font-bold mt-0.5" style={{ color: '#00d4ff' }}>Status: {settings.userPlan || 'Free'} Plan</p>
                 </button>
                 {/* Separador */}
                 <div className="mx-4 border-t" style={{ borderColor: theme.contornoGeral }} />
@@ -2115,6 +2157,20 @@ export default function Dashboard() {
                     <UserIcon size={18} style={{ color: theme.linhaGrafico }} className="group-hover:scale-110 transition-transform" />
                     <span style={{ color: theme.textoPrincipal }}>My Profile</span>
                   </button>
+                  {/* ADMIN LINK — visível apenas para email administrador */}
+                  {session?.user?.email === 'mcsstr@icloud.com' && (
+                    <button
+                      onClick={() => {
+                        setIsProfileDropdownOpen(false);
+                        navigate('/admin');
+                      }}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all hover:bg-white/5 group cursor-pointer block"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <ShieldAlert size={18} style={{ color: '#f59e0b' }} className="group-hover:scale-110 transition-transform" />
+                      <span style={{ color: theme.textoPrincipal }}>Administrador</span>
+                    </button>
+                  )}
                   <button onClick={() => {
                     if (window.confirm('Are you sure you want to sign out?')) {
                       setIsProfileDropdownOpen(false);
@@ -2126,15 +2182,21 @@ export default function Dashboard() {
                     <span style={{ color: theme.textoPrincipal }}>Logout</span>
                   </button>
                 </div>
-              </div>
+              </div >
             </>,
             document.body
           )}
         </div>
-      </header>
+      </header >
 
       {/* CONTEÚDO PRINCIPAL */}
       <main className="flex-1 overflow-y-auto px-4 lg:px-6 pt-safe-main pb-safe-main main-container" style={{ scrollBehavior: 'smooth' }}>
+
+        {settings.userPlan === 'Free' && (
+          <div className="mx-auto max-w-4xl bg-red-900/20 border border-red-500/30 text-red-200 px-4 py-3 rounded-xl mb-1 mt-2 text-xs md:text-sm font-medium flex items-center justify-center text-center shadow-sm animate-fade-in backdrop-blur-md">
+            <span><strong className="text-red-400">⚠️ {settings.appLanguage === 'pt' ? 'Aviso Plano Free' : 'Free Plan Notice'}:</strong> {settings.appLanguage === 'pt' ? 'Seus dados de Trades, Notícias e Feriados estão sendo salvos apenas localmente neste dispositivo. Mude para Premium para Sincronização em Nuvem e Backup.' : 'Your Trades, News, and Holidays data are only saved locally on this device. Upgrade to Premium for Cloud Sync and Backup.'}</span>
+          </div>
+        )}
         {activeTab === 'mobile_menu' && isMobile && (
           <MobileMenuView
             theme={theme}
@@ -2155,246 +2217,256 @@ export default function Dashboard() {
           />
         )}
 
-        {!activeAccountId && ['dashboard', 'analytics', 'trades'].includes(activeTab) ? (
-          <div className="flex flex-col items-center justify-center p-8 mt-12 text-center animate-fade-in">
-            <div className="p-5 rounded-full mb-6" style={{ backgroundColor: hexToRgba(theme.linhaGrafico, 0.15) }}>
-              <Layers size={56} style={{ color: theme.linhaGrafico }} />
+        {
+          !activeAccountId && ['dashboard', 'analytics', 'trades'].includes(activeTab) ? (
+            <div className="flex flex-col items-center justify-center p-8 mt-12 text-center animate-fade-in">
+              <div className="p-5 rounded-full mb-6" style={{ backgroundColor: hexToRgba(theme.linhaGrafico, 0.15) }}>
+                <Layers size={56} style={{ color: theme.linhaGrafico }} />
+              </div>
+              <h2 className="text-2xl md:text-3xl font-bold mb-3 font-display" style={{ color: theme.textoPrincipal }}>{t('dash.noAccount', settings.appLanguage)}</h2>
+              <p className="max-w-md opacity-70 text-sm md:text-base leading-relaxed" style={{ color: theme.textoSecundario }}>
+                {t('dash.noAccountDesc', settings.appLanguage)}
+              </p>
+              <button
+                onClick={() => { setActiveTab('settings'); openCreateAccountForm(); }}
+                className="mt-8 px-6 py-3 rounded-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg"
+                style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
+              >
+                {t('dash.createAccount', settings.appLanguage)}
+              </button>
             </div>
-            <h2 className="text-2xl md:text-3xl font-bold mb-3 font-display" style={{ color: theme.textoPrincipal }}>{t('dash.noAccount', settings.appLanguage)}</h2>
-            <p className="max-w-md opacity-70 text-sm md:text-base leading-relaxed" style={{ color: theme.textoSecundario }}>
-              {t('dash.noAccountDesc', settings.appLanguage)}
-            </p>
-            <button
-              onClick={() => { setActiveTab('settings'); openCreateAccountForm(); }}
-              className="mt-8 px-6 py-3 rounded-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg"
-              style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
-            >
-              {t('dash.createAccount', settings.appLanguage)}
-            </button>
-          </div>
-        ) : (
-          <>
-            {
-              activeTab === 'dashboard' && (
-                <DashboardHomeView
-                  metrics={metrics}
-                  timeMetrics={timeMetrics}
-                  settings={accountSettings}
-                  theme={theme}
-                  formatCurrency={formatCurrency}
-                  formatCurrencyDash={formatCurrencyDash}
-                  formatPaymentDash={formatPaymentDash}
-                  formatPercent={formatPercent}
-                  formatPercentDecimals={formatPercentDecimals}
-                  exchangeRate={exchangeRate}
-                  getGlassStyle={getGlassStyle}
-                  isTrendUp={isTrendUp}
-                  chartData={chartData}
-                  userLocale={userLocale}
-                  equityFilter={equityFilter}
-                  setEquityFilter={setEquityFilter}
-                  selectedWeekDate={selectedWeekDate}
-                  setSelectedWeekDate={setSelectedWeekDate}
-                  getStartOfWeek={getStartOfWeek}
-                  performanceWeeklyData={performanceWeeklyData}
-                  calendarData={calendarData}
-                  currentDate={currentDate}
-                  setCurrentDate={setCurrentDate}
-                  IconTooltip={IconTooltip}
-                  renderHolidaysTooltip={renderHolidaysTooltip}
-                  renderNewsTooltip={renderNewsTooltip}
-                  setDayTradesModalData={setDayTradesModalData}
-                  miniHistorySort={miniHistorySort}
-                  setMiniHistorySort={setMiniHistorySort}
-                  miniSortedTrades={miniSortedTrades}
-                  formatDate={formatDate}
-                  isMobile={isMobile}
-                />
-              )
-            }
-
-            {
-              activeTab === 'analytics' && (
-                <AnalyticsView
-                  theme={theme}
-                  settings={accountSettings}
-                  getGlassStyle={getGlassStyle}
-                  getFullDateString={getFullDateString}
-                  activeAccountDays={activeAccountDays}
-                  exchangeRate={exchangeRate}
-                  metricRows={metricRows}
-                  isEvalTableExpanded={isEvalTableExpanded}
-                  setIsEvalTableExpanded={setIsEvalTableExpanded}
-                  isMobile={isMobile}
-                  monthlyPnlData={monthlyPnlData}
-                  userLocale={userLocale}
-                  formatCurrency={formatCurrency}
-                  symbolData={symbolData}
-                  winLossData={winLossData}
-                  metrics={metrics}
-                  formatPercent={formatPercent}
-                  directionData={directionData}
-                  timeGrouping={timeGrouping}
-                  setTimeGrouping={setTimeGrouping}
-                  timeDistributionData={timeDistributionData}
-                  tradeValuesFilter={tradeValuesFilter}
-                  setTradeValuesFilter={setTradeValuesFilter}
-                  availableTradePeriods={availableTradePeriods}
-                  filteredTradeValuesData={filteredTradeValuesData}
-                />
-              )
-            }
-
-            {
-              activeTab === 'trades' && (
-                <TradesView
-                  theme={theme}
-                  getGlassStyle={getGlassStyle}
-                  settings={accountSettings}
-                  searchTerm={searchTerm}
-                  setSearchTerm={setSearchTerm}
-                  filterMonth={filterMonth}
-                  setFilterMonth={setFilterMonth}
-                  filterYear={filterYear}
-                  setFilterYear={setFilterYear}
-                  sortOrder={sortOrder}
-                  setSortOrder={setSortOrder}
-                  handleExportCSV={handleExportCSV}
-                  selectedTrades={selectedTrades}
-                  setSelectedTrades={setSelectedTrades}
-                  paginatedTrades={paginatedTrades}
-                  formatDate={formatDate}
-                  userLocale={userLocale}
-                  formatCurrency={formatCurrency}
-                  historyPage={historyPage}
-                  setHistoryPage={setHistoryPage}
-                  historyItemsPerPage={historyItemsPerPage}
-                  filteredTrades={filteredTrades}
-                  setTrades={setTrades}
-                  setEditFormData={setEditFormData}
-                  setIsTradeModalOpen={setIsTradeModalOpen}
-                  isMobile={isMobile}
-                  activeAccountId={activeAccountId}
-                  supabase={supabase}
-                  session={session}
-                  setToastMessage={setToastMessage}
-                />
-              )
-            }
-          </>
-        )}
-
-        {activeTab === 'news' && (
-          <NewsView
-            theme={theme}
-            getGlassStyle={getGlassStyle}
-            settings={accountSettings}
-            isMobile={isMobile}
-            newNewsItem={newNewsItem}
-            setNewNewsItem={setNewNewsItem}
-            handleAddNews={handleAddNews}
-            newsImportImpact={newsImportImpact}
-            setNewsImportImpact={setNewsImportImpact}
-            newsImportText={newsImportText}
-            setNewsImportText={setNewsImportText}
-            handleImportNews={handleImportNews}
-            newsFilter={newsFilter}
-            setNewsFilter={setNewsFilter}
-            filteredNewsList={filteredNewsList}
-            formatDate={formatDate}
-            getImpactColor={getImpactColor}
-            setEditNewsData={setEditNewsData}
-            setIsNewsModalOpen={setIsNewsModalOpen}
-            saveNews={saveNews}
-            deleteNews={deleteNews}
-            news={news}
-          />
-        )}
-
-        {activeTab === 'holidays' && (
-          <HolidaysView
-            theme={theme}
-            getGlassStyle={getGlassStyle}
-            settings={accountSettings}
-            holidaySortOrder={holidaySortOrder}
-            setHolidaySortOrder={setHolidaySortOrder}
-            newHoliday={newHoliday}
-            setNewHoliday={setNewHoliday}
-            addHoliday={addHoliday}
-            holidays={holidays}
-            editingHoliday={editingHoliday}
-            setEditingHoliday={setEditingHoliday}
-            editHolidayData={editHolidayData}
-            setEditHolidayData={setEditHolidayData}
-            formatDate={formatDate}
-            saveHoliday={saveHoliday}
-            deleteHoliday={deleteHoliday}
-            isMobile={isMobile}
-          />
-        )}
-
-        {activeTab === 'import' && (
-          <ImportView
-            theme={theme}
-            getGlassStyle={getGlassStyle}
-            settings={accountSettings}
-            importText={importText}
-            setImportText={setImportText}
-            handleImport={handleImport}
-            manualTrade={manualTrade}
-            setManualTrade={setManualTrade}
-            handleManualTradeAdd={handleManualTradeAdd}
-            handleCSVUpload={handleCSVUpload}
-            isMobile={isMobile}
-            accounts={accounts}
-            selectedImportAccountId={selectedImportAccountId}
-            setSelectedImportAccountId={setSelectedImportAccountId}
-            t={t}
-            lang={settings.appLanguage}
-          />
-        )}
-
-        {activeTab === 'settings' && (
-          <SettingsView
-            activeSettingsTab={activeSettingsTab}
-            setActiveSettingsTab={setActiveSettingsTab}
-            theme={theme}
-            setTheme={setTheme}
-            settings={settings}
-            setSettings={setSettings}
-            getGlassStyle={getGlassStyle}
-            DEFAULT_SETTINGS={DEFAULT_SETTINGS}
-            DEFAULT_THEME={DEFAULT_THEME}
-            THEME_GROUPS={THEME_GROUPS}
-            handleResetAllData={() => {
-              if (window.confirm('Are you sure you want to reset all data and settings?')) {
-                setTrades([]);
-                overrideHolidays([]);
-                overrideNews([]);
-                setSettings(DEFAULT_SETTINGS);
-                setTheme(DEFAULT_THEME);
-                localStorage.clear();
+          ) : (
+            <>
+              {
+                activeTab === 'dashboard' && (
+                  <DashboardHomeView
+                    metrics={metrics}
+                    timeMetrics={timeMetrics}
+                    settings={accountSettings}
+                    theme={theme}
+                    formatCurrency={formatCurrency}
+                    formatCurrencyDash={formatCurrencyDash}
+                    formatPaymentDash={formatPaymentDash}
+                    formatPercent={formatPercent}
+                    formatPercentDecimals={formatPercentDecimals}
+                    exchangeRate={exchangeRate}
+                    getGlassStyle={getGlassStyle}
+                    isTrendUp={isTrendUp}
+                    chartData={chartData}
+                    userLocale={userLocale}
+                    equityFilter={equityFilter}
+                    setEquityFilter={setEquityFilter}
+                    selectedWeekDate={selectedWeekDate}
+                    setSelectedWeekDate={setSelectedWeekDate}
+                    getStartOfWeek={getStartOfWeek}
+                    performanceWeeklyData={performanceWeeklyData}
+                    calendarData={calendarData}
+                    currentDate={currentDate}
+                    setCurrentDate={setCurrentDate}
+                    IconTooltip={IconTooltip}
+                    renderHolidaysTooltip={renderHolidaysTooltip}
+                    renderNewsTooltip={renderNewsTooltip}
+                    setDayTradesModalData={setDayTradesModalData}
+                    miniHistorySort={miniHistorySort}
+                    setMiniHistorySort={setMiniHistorySort}
+                    miniSortedTrades={miniSortedTrades}
+                    formatDate={formatDate}
+                    isMobile={isMobile}
+                  />
+                )
               }
-            }}
-            SearchableSelect={SearchableSelect}
-            TIMEZONES_LIST={TIMEZONES_LIST}
-            CURRENCIES_LIST={CURRENCIES_LIST}
-            t={t}
-            lang={settings.appLanguage}
-            isMobile={isMobile}
-            settingsHideTabs={settingsHideTabs}
-            accounts={accounts}
-            activeAccountId={activeAccountId}
-            onCreateAccount={openCreateAccountForm}
-            onEditAccount={openEditAccountForm}
-            onDeleteAccount={(id) => setConfirmDeleteAccountId(id)}
-            onSaveSettings={handleSaveSettings}
-          />
-        )}
-      </main>
+
+              {
+                activeTab === 'analytics' && (
+                  <AnalyticsView
+                    theme={theme}
+                    settings={accountSettings}
+                    getGlassStyle={getGlassStyle}
+                    getFullDateString={getFullDateString}
+                    activeAccountDays={activeAccountDays}
+                    exchangeRate={exchangeRate}
+                    metricRows={metricRows}
+                    isEvalTableExpanded={isEvalTableExpanded}
+                    setIsEvalTableExpanded={setIsEvalTableExpanded}
+                    isMobile={isMobile}
+                    monthlyPnlData={monthlyPnlData}
+                    userLocale={userLocale}
+                    formatCurrency={formatCurrency}
+                    symbolData={symbolData}
+                    winLossData={winLossData}
+                    metrics={metrics}
+                    formatPercent={formatPercent}
+                    directionData={directionData}
+                    timeGrouping={timeGrouping}
+                    setTimeGrouping={setTimeGrouping}
+                    timeDistributionData={timeDistributionData}
+                    tradeValuesFilter={tradeValuesFilter}
+                    setTradeValuesFilter={setTradeValuesFilter}
+                    availableTradePeriods={availableTradePeriods}
+                    filteredTradeValuesData={filteredTradeValuesData}
+                  />
+                )
+              }
+
+              {
+                activeTab === 'trades' && (
+                  <TradesView
+                    theme={theme}
+                    getGlassStyle={getGlassStyle}
+                    settings={accountSettings}
+                    searchTerm={searchTerm}
+                    setSearchTerm={setSearchTerm}
+                    filterMonth={filterMonth}
+                    setFilterMonth={setFilterMonth}
+                    filterYear={filterYear}
+                    setFilterYear={setFilterYear}
+                    sortOrder={sortOrder}
+                    setSortOrder={setSortOrder}
+                    handleExportCSV={handleExportCSV}
+                    selectedTrades={selectedTrades}
+                    setSelectedTrades={setSelectedTrades}
+                    paginatedTrades={paginatedTrades}
+                    formatDate={formatDate}
+                    userLocale={userLocale}
+                    formatCurrency={formatCurrency}
+                    historyPage={historyPage}
+                    setHistoryPage={setHistoryPage}
+                    historyItemsPerPage={historyItemsPerPage}
+                    filteredTrades={filteredTrades}
+                    setTrades={setTrades}
+                    setEditFormData={setEditFormData}
+                    setIsTradeModalOpen={setIsTradeModalOpen}
+                    isMobile={isMobile}
+                    activeAccountId={activeAccountId}
+                    supabase={supabase}
+                    session={session}
+                    setToastMessage={setToastMessage}
+                  />
+                )
+              }
+            </>
+          )
+        }
+
+        {
+          activeTab === 'news' && (
+            <NewsView
+              theme={theme}
+              getGlassStyle={getGlassStyle}
+              settings={accountSettings}
+              isMobile={isMobile}
+              newNewsItem={newNewsItem}
+              setNewNewsItem={setNewNewsItem}
+              handleAddNews={handleAddNews}
+              newsImportImpact={newsImportImpact}
+              setNewsImportImpact={setNewsImportImpact}
+              newsImportText={newsImportText}
+              setNewsImportText={setNewsImportText}
+              handleImportNews={handleImportNews}
+              newsFilter={newsFilter}
+              setNewsFilter={setNewsFilter}
+              filteredNewsList={filteredNewsList}
+              formatDate={formatDate}
+              getImpactColor={getImpactColor}
+              setEditNewsData={setEditNewsData}
+              setIsNewsModalOpen={setIsNewsModalOpen}
+              saveNews={saveNews}
+              deleteNews={deleteNews}
+              news={news}
+            />
+          )
+        }
+
+        {
+          activeTab === 'holidays' && (
+            <HolidaysView
+              theme={theme}
+              getGlassStyle={getGlassStyle}
+              settings={accountSettings}
+              holidaySortOrder={holidaySortOrder}
+              setHolidaySortOrder={setHolidaySortOrder}
+              newHoliday={newHoliday}
+              setNewHoliday={setNewHoliday}
+              addHoliday={addHoliday}
+              holidays={holidays}
+              editingHoliday={editingHoliday}
+              setEditingHoliday={setEditingHoliday}
+              editHolidayData={editHolidayData}
+              setEditHolidayData={setEditHolidayData}
+              formatDate={formatDate}
+              saveHoliday={saveHoliday}
+              deleteHoliday={deleteHoliday}
+              isMobile={isMobile}
+            />
+          )
+        }
+
+        {
+          activeTab === 'import' && (
+            <ImportView
+              theme={theme}
+              getGlassStyle={getGlassStyle}
+              settings={accountSettings}
+              importText={importText}
+              setImportText={setImportText}
+              handleImport={handleImport}
+              manualTrade={manualTrade}
+              setManualTrade={setManualTrade}
+              handleManualTradeAdd={handleManualTradeAdd}
+              handleCSVUpload={handleCSVUpload}
+              isMobile={isMobile}
+              accounts={accounts}
+              selectedImportAccountId={selectedImportAccountId}
+              setSelectedImportAccountId={setSelectedImportAccountId}
+              t={t}
+              lang={settings.appLanguage}
+            />
+          )
+        }
+
+        {
+          activeTab === 'settings' && (
+            <SettingsView
+              activeSettingsTab={activeSettingsTab}
+              setActiveSettingsTab={setActiveSettingsTab}
+              theme={theme}
+              setTheme={setTheme}
+              settings={settings}
+              setSettings={setSettings}
+              getGlassStyle={getGlassStyle}
+              DEFAULT_SETTINGS={DEFAULT_SETTINGS}
+              DEFAULT_THEME={DEFAULT_THEME}
+              THEME_GROUPS={THEME_GROUPS}
+              handleResetAllData={() => {
+                if (window.confirm('Are you sure you want to reset all data and settings?')) {
+                  setTrades([]);
+                  overrideHolidays([]);
+                  overrideNews([]);
+                  setSettings(DEFAULT_SETTINGS);
+                  setTheme(DEFAULT_THEME);
+                  localStorage.clear();
+                }
+              }}
+              SearchableSelect={SearchableSelect}
+              TIMEZONES_LIST={TIMEZONES_LIST}
+              CURRENCIES_LIST={CURRENCIES_LIST}
+              t={t}
+              lang={settings.appLanguage}
+              isMobile={isMobile}
+              settingsHideTabs={settingsHideTabs}
+              accounts={accounts}
+              activeAccountId={activeAccountId}
+              onCreateAccount={openCreateAccountForm}
+              onEditAccount={openEditAccountForm}
+              onDeleteAccount={(id) => setConfirmDeleteAccountId(id)}
+              onSaveSettings={handleSaveSettings}
+            />
+          )
+        }
+      </main >
 
       {/* BARRA DE NAVEGAÇÃO MOBILE */}
-      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 py-3 md:py-4 shadow-xl transition-all pb-safe"
+      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 pt-2 shadow-xl transition-all pb-safe"
         style={{
           ...(settings.enableGlassEffect ? {
             backgroundColor: hexToRgba(theme.fundoMenu, Math.max(0.95, settings.cardOpacity / 100)),
@@ -2403,283 +2475,291 @@ export default function Dashboard() {
           } : { backgroundColor: theme.fundoMenu }),
           borderColor: theme.contornoGeral, borderWidth: `${settings.borderWidthGeral}px 0 0 0`, borderStyle: 'solid'
         }}>
-        {[
-          { id: 'dashboard', icon: LayoutDashboard, title: 'Home' },
-          { id: 'trades', icon: ListIcon, title: 'Trades' },
-          { id: 'fab', icon: isFabOpen ? X : Plus, title: 'Add', isFab: true },
-          { id: 'analytics', icon: BarChart2, title: 'Analytics' },
-          { id: 'mobile_menu', icon: MenuIcon, title: 'Menu' }
-        ].map(item => {
-          if (item.isFab) {
+        {
+          [
+            { id: 'dashboard', icon: LayoutDashboard, title: 'Home' },
+            { id: 'trades', icon: ListIcon, title: 'Trades' },
+            { id: 'fab', icon: isFabOpen ? X : Plus, title: 'Add', isFab: true },
+            { id: 'analytics', icon: BarChart2, title: 'Analytics' },
+            { id: 'mobile_menu', icon: MenuIcon, title: 'Menu' }
+          ].map(item => {
+            if (item.isFab) {
+              return (
+                <button key={item.id} onClick={() => setIsFabOpen(!isFabOpen)} className={`relative flex items-center justify-center -mt-8 p-3.5 sm:p-4 rounded-full shadow-2xl transition-all duration-300 z-[110] ${isFabOpen ? 'rotate-90' : ''}`} style={{ backgroundColor: isFabOpen ? '#ef4444' : '#00B0F0', color: '#fff', border: `4px solid ${theme.fundoPrincipal}` }}>
+                  <item.icon size={28} />
+                </button>
+              );
+            }
+            const isActive = activeTab === item.id;
             return (
-              <button key={item.id} onClick={() => setIsFabOpen(!isFabOpen)} className={`relative flex items-center justify-center -mt-8 p-3.5 sm:p-4 rounded-full shadow-2xl transition-all duration-300 z-[110] ${isFabOpen ? 'rotate-90' : ''}`} style={{ backgroundColor: isFabOpen ? '#ef4444' : '#00B0F0', color: '#fff', border: `4px solid ${theme.fundoPrincipal}` }}>
-                <item.icon size={28} />
+              <button key={item.id} onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })} className="flex flex-col items-center justify-center flex-1 gap-1 py-3 transition-all active:scale-90" style={{ color: isActive ? '#00B0F0' : theme.textoSecundario }}>
+                <item.icon size={isActive ? 24 : 22} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">{item.title}</span>
               </button>
             );
-          }
-          const isActive = activeTab === item.id;
-          return (
-            <button key={item.id} onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })} className="flex flex-col items-center justify-center flex-1 gap-1 transition-all active:scale-90" style={{ color: isActive ? '#00B0F0' : theme.textoSecundario }}>
-              <item.icon size={isActive ? 24 : 22} />
-              <span className="text-[10px] font-bold uppercase tracking-widest">{item.title}</span>
-            </button>
-          );
-        })}
-      </nav>
+          })
+        }
+      </nav >
 
       {/* ===== ACCOUNT SWITCHER MODAL ===== */}
-      {isAccountSwitcherOpen && createPortal(
-        <>
-          <div className="fixed inset-0 z-[199] bg-black/60 backdrop-blur-sm" onClick={() => setIsAccountSwitcherOpen(false)} />
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setIsAccountSwitcherOpen(false)}>
-            <div
-              className="w-full max-w-sm rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] border overflow-hidden"
-              style={{ backgroundColor: '#111114', borderColor: 'rgba(255,255,255,0.08)' }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                <div className="flex items-center gap-2">
-                  <Monitor size={18} className="text-[#00B0F0]" />
-                  <span className="text-base font-bold text-white">{t('switcher.title', settings.appLanguage)}</span>
-                </div>
-                <button onClick={() => setIsAccountSwitcherOpen(false)} className="p-1 rounded-lg hover:bg-white/5 text-white/40"><X size={18} /></button>
-              </div>
-              {/* Account List */}
-              <div className="p-4 space-y-2 max-h-72 overflow-y-auto hide-scrollbar">
-                {accounts.length === 0 ? (
-                  <div className="text-center py-8 text-white/20 text-sm">
-                    {t('switcher.noAccounts', settings.appLanguage)}
+      {
+        isAccountSwitcherOpen && createPortal(
+          <>
+            <div className="fixed inset-0 z-[199] bg-black/60 backdrop-blur-sm" onClick={() => setIsAccountSwitcherOpen(false)} />
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setIsAccountSwitcherOpen(false)}>
+              <div
+                className="w-full max-w-sm rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] border overflow-hidden"
+                style={{ backgroundColor: '#111114', borderColor: 'rgba(255,255,255,0.08)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                  <div className="flex items-center gap-2">
+                    <Monitor size={18} className="text-[#00B0F0]" />
+                    <span className="text-base font-bold text-white">{t('switcher.title', settings.appLanguage)}</span>
                   </div>
-                ) : accounts.map(acc => (
+                  <button onClick={() => setIsAccountSwitcherOpen(false)} className="p-1 rounded-lg hover:bg-white/5 text-white/40"><X size={18} /></button>
+                </div>
+                {/* Account List */}
+                <div className="p-4 space-y-2 max-h-72 overflow-y-auto hide-scrollbar">
+                  {accounts.length === 0 ? (
+                    <div className="text-center py-8 text-white/20 text-sm">
+                      {t('switcher.noAccounts', settings.appLanguage)}
+                    </div>
+                  ) : accounts.map(acc => (
+                    <button
+                      key={acc.id}
+                      onClick={() => { setActiveAccountId(acc.id); setIsAccountSwitcherOpen(false); }}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${acc.id === activeAccountId
+                        ? 'border-[#00B0F0]/50 bg-[#00B0F0]/10'
+                        : 'border-white/5 hover:border-white/20 hover:bg-white/5'
+                        }`}
+                    >
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm ${acc.id === activeAccountId ? 'bg-[#00B0F0] text-white' : 'bg-white/5 text-white/40'
+                        }`}>
+                        {acc.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-bold" style={{ color: acc.id === activeAccountId ? '#00B0F0' : '#fff' }}>{acc.name}</p>
+                        <p className="text-xs text-white/30">Balance: ${Number(acc.initialBalance).toLocaleString()}</p>
+                      </div>
+                      {acc.id === activeAccountId && <Check size={16} className="text-[#00B0F0]" />}
+                    </button>
+                  ))}
+                </div>
+                {/* Footer */}
+                <div className="px-5 py-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
                   <button
-                    key={acc.id}
-                    onClick={() => { setActiveAccountId(acc.id); setIsAccountSwitcherOpen(false); }}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${acc.id === activeAccountId
-                      ? 'border-[#00B0F0]/50 bg-[#00B0F0]/10'
-                      : 'border-white/5 hover:border-white/20 hover:bg-white/5'
-                      }`}
+                    onClick={() => { setIsAccountSwitcherOpen(false); setActiveTab('settings'); setActiveSettingsTab('account'); }}
+                    className="w-full py-2.5 rounded-xl text-sm font-bold transition-all border border-white/10 hover:bg-white/5 text-white/60"
                   >
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm ${acc.id === activeAccountId ? 'bg-[#00B0F0] text-white' : 'bg-white/5 text-white/40'
-                      }`}>
-                      {acc.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p className="text-sm font-bold" style={{ color: acc.id === activeAccountId ? '#00B0F0' : '#fff' }}>{acc.name}</p>
-                      <p className="text-xs text-white/30">Balance: ${Number(acc.initialBalance).toLocaleString()}</p>
-                    </div>
-                    {acc.id === activeAccountId && <Check size={16} className="text-[#00B0F0]" />}
+                    {t('switcher.manage', settings.appLanguage)}
                   </button>
-                ))}
-              </div>
-              {/* Footer */}
-              <div className="px-5 py-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                <button
-                  onClick={() => { setIsAccountSwitcherOpen(false); setActiveTab('settings'); setActiveSettingsTab('account'); }}
-                  className="w-full py-2.5 rounded-xl text-sm font-bold transition-all border border-white/10 hover:bg-white/5 text-white/60"
-                >
-                  {t('switcher.manage', settings.appLanguage)}
-                </button>
+                </div>
               </div>
             </div>
-          </div>
-        </>,
-        document.body
-      )}
+          </>,
+          document.body
+        )
+      }
 
       {/* ===== ACCOUNT FORM MODAL (Create / Edit) ===== */}
-      {isAccountFormOpen && createPortal(
-        <>
-          <div className="fixed inset-0 z-[199] bg-black/60 backdrop-blur-sm" onClick={() => setIsAccountFormOpen(false)} />
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div
-              className="w-full max-w-md rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] border overflow-hidden"
-              style={{ backgroundColor: '#111114', borderColor: 'rgba(255,255,255,0.08)' }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                <span className="text-base font-bold text-white">{editingAccount ? t('accountForm.edit', settings.appLanguage) : t('accountForm.create', settings.appLanguage)}</span>
-                <button onClick={() => setIsAccountFormOpen(false)} className="p-1 rounded-lg hover:bg-white/5 text-white/40"><X size={18} /></button>
-              </div>
-              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto hide-scrollbar">
-                {accountFormError && (
-                  <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">{accountFormError}</div>
-                )}
-                {/* Name */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.name', settings.appLanguage)}</label>
-                  <input
-                    className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
-                    style={{ color: '#fff' }}
-                    placeholder="e.g. Apex Prop, Personal"
-                    value={accountFormData.name}
-                    onChange={e => setAccountFormData(p => ({ ...p, name: e.target.value }))}
-                    autoFocus
-                  />
+      {
+        isAccountFormOpen && createPortal(
+          <>
+            <div className="fixed inset-0 z-[199] bg-black/60 backdrop-blur-sm" onClick={() => setIsAccountFormOpen(false)} />
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <div
+                className="w-full max-w-md rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] border overflow-hidden"
+                style={{ backgroundColor: '#111114', borderColor: 'rgba(255,255,255,0.08)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                  <span className="text-base font-bold text-white">{editingAccount ? t('accountForm.edit', settings.appLanguage) : t('accountForm.create', settings.appLanguage)}</span>
+                  <button onClick={() => setIsAccountFormOpen(false)} className="p-1 rounded-lg hover:bg-white/5 text-white/40"><X size={18} /></button>
                 </div>
-
-                {/* Currencies & Timezone */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto hide-scrollbar">
+                  {accountFormError && (
+                    <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">{accountFormError}</div>
+                  )}
+                  {/* Name */}
                   <div className="space-y-1.5">
-                    <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.brokerCurrency', settings.appLanguage)}</label>
-                    <select
-                      className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
+                    <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.name', settings.appLanguage)}</label>
+                    <input
+                      className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
                       style={{ color: '#fff' }}
-                      value={accountFormData.brokerCurrency}
-                      onChange={e => setAccountFormData(p => ({ ...p, brokerCurrency: e.target.value }))}
-                    >
-                      {CURRENCIES_LIST.map(c => <option key={c.value} value={c.value} className="bg-gray-900">{c.label}</option>)}
-                    </select>
+                      placeholder="e.g. Apex Prop, Personal"
+                      value={accountFormData.name}
+                      onChange={e => setAccountFormData(p => ({ ...p, name: e.target.value }))}
+                      autoFocus
+                    />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.paymentCurrency', settings.appLanguage)}</label>
-                    <select
-                      className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
-                      style={{ color: '#fff' }}
-                      value={accountFormData.paymentCurrency}
-                      onChange={e => setAccountFormData(p => ({ ...p, paymentCurrency: e.target.value }))}
-                    >
-                      {CURRENCIES_LIST.map(c => <option key={c.value} value={c.value} className="bg-gray-900">{c.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.timezone', settings.appLanguage)}</label>
-                  <select
-                    className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
-                    style={{ color: '#fff' }}
-                    value={accountFormData.timezone}
-                    onChange={e => setAccountFormData(p => ({ ...p, timezone: e.target.value }))}
-                  >
-                    {TIMEZONES_LIST.map(c => <option key={c.value} value={c.value} className="bg-gray-900">{c.label}</option>)}
-                  </select>
-                </div>
 
-                {/* Financial Fields */}
-                <div className="pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                  <label className="text-[11px] text-[#00B0F0] font-black uppercase tracking-widest mb-4 block">{t('accountForm.financialParams', settings.appLanguage)}</label>
-
+                  {/* Currencies & Timezone */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.initialBalance', settings.appLanguage)}</label>
-                      <input
-                        type="number"
-                        className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
+                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.brokerCurrency', settings.appLanguage)}</label>
+                      <select
+                        className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
                         style={{ color: '#fff' }}
-                        value={accountFormData.initialBalance === 0 ? '' : accountFormData.initialBalance}
-                        onChange={e => setAccountFormData(p => ({ ...p, initialBalance: e.target.value === '' ? '' : Number(e.target.value) }))}
-                      />
+                        value={accountFormData.brokerCurrency}
+                        onChange={e => setAccountFormData(p => ({ ...p, brokerCurrency: e.target.value }))}
+                      >
+                        {CURRENCIES_LIST.map(c => <option key={c.value} value={c.value} className="bg-gray-900">{c.label}</option>)}
+                      </select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.consistency', settings.appLanguage)}</label>
-                      <input
-                        type="number"
-                        className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
+                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.paymentCurrency', settings.appLanguage)}</label>
+                      <select
+                        className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
                         style={{ color: '#fff' }}
-                        value={accountFormData.consistencyTarget === 0 ? '' : accountFormData.consistencyTarget}
-                        onChange={e => setAccountFormData(p => ({ ...p, consistencyTarget: e.target.value === '' ? '' : Number(e.target.value) }))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.profitSplit', settings.appLanguage)}</label>
-                      <input
-                        type="number"
-                        className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
-                        style={{ color: '#fff' }}
-                        value={accountFormData.profitSplit === 0 ? '' : accountFormData.profitSplit}
-                        onChange={e => setAccountFormData(p => ({ ...p, profitSplit: e.target.value === '' ? '' : Number(e.target.value) }))}
-                      />
+                        value={accountFormData.paymentCurrency}
+                        onChange={e => setAccountFormData(p => ({ ...p, paymentCurrency: e.target.value }))}
+                      >
+                        {CURRENCIES_LIST.map(c => <option key={c.value} value={c.value} className="bg-gray-900">{c.label}</option>)}
+                      </select>
                     </div>
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.timezone', settings.appLanguage)}</label>
+                    <select
+                      className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all cursor-pointer"
+                      style={{ color: '#fff' }}
+                      value={accountFormData.timezone}
+                      onChange={e => setAccountFormData(p => ({ ...p, timezone: e.target.value }))}
+                    >
+                      {TIMEZONES_LIST.map(c => <option key={c.value} value={c.value} className="bg-gray-900">{c.label}</option>)}
+                    </select>
+                  </div>
 
-                  {/* Fields with Toggles */}
-                  <div className="space-y-4 mt-6">
-                    {[
-                      { key: 'feePerTrade', label: t('accountForm.feePerContract', settings.appLanguage), toggleKey: 'feeType' },
-                      { key: 'dailyLossLimit', label: t('accountForm.dailyLossLimit', settings.appLanguage), toggleKey: 'dailyLossLimitType' },
-                      { key: 'totalStopLoss', label: t('accountForm.totalStopLoss', settings.appLanguage), toggleKey: 'totalStopLossType' },
-                    ].map(({ key, label, toggleKey }) => (
-                      <div key={key}>
-                        <div className="flex justify-between items-end mb-2">
-                          <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{label}</label>
-                          <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/10">
-                            <button
-                              type="button"
-                              onClick={() => setAccountFormData(p => ({ ...p, [toggleKey]: '$' }))}
-                              className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${accountFormData[toggleKey] === '$' ? 'bg-[#00B0F0] text-white' : 'text-white/30 hover:text-white'}`}
-                            >$</button>
-                            <button
-                              type="button"
-                              onClick={() => setAccountFormData(p => ({ ...p, [toggleKey]: '%' }))}
-                              className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${accountFormData[toggleKey] === '%' ? 'bg-[#00B0F0] text-white' : 'text-white/30 hover:text-white'}`}
-                            >%</button>
-                          </div>
-                        </div>
+                  {/* Financial Fields */}
+                  <div className="pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                    <label className="text-[11px] text-[#00B0F0] font-black uppercase tracking-widest mb-4 block">{t('accountForm.financialParams', settings.appLanguage)}</label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.initialBalance', settings.appLanguage)}</label>
                         <input
                           type="number"
                           className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
                           style={{ color: '#fff' }}
-                          value={accountFormData[key] === 0 ? '' : accountFormData[key]}
-                          onChange={e => setAccountFormData(p => ({ ...p, [key]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                          value={accountFormData.initialBalance === 0 ? '' : accountFormData.initialBalance}
+                          onChange={e => setAccountFormData(p => ({ ...p, initialBalance: e.target.value === '' ? '' : Number(e.target.value) }))}
                         />
                       </div>
-                    ))}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.consistency', settings.appLanguage)}</label>
+                        <input
+                          type="number"
+                          className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
+                          style={{ color: '#fff' }}
+                          value={accountFormData.consistencyTarget === 0 ? '' : accountFormData.consistencyTarget}
+                          onChange={e => setAccountFormData(p => ({ ...p, consistencyTarget: e.target.value === '' ? '' : Number(e.target.value) }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.profitSplit', settings.appLanguage)}</label>
+                        <input
+                          type="number"
+                          className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
+                          style={{ color: '#fff' }}
+                          value={accountFormData.profitSplit === 0 ? '' : accountFormData.profitSplit}
+                          onChange={e => setAccountFormData(p => ({ ...p, profitSplit: e.target.value === '' ? '' : Number(e.target.value) }))}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Fields with Toggles */}
+                    <div className="space-y-4 mt-6">
+                      {[
+                        { key: 'feePerTrade', label: t('accountForm.feePerContract', settings.appLanguage), toggleKey: 'feeType' },
+                        { key: 'dailyLossLimit', label: t('accountForm.dailyLossLimit', settings.appLanguage), toggleKey: 'dailyLossLimitType' },
+                        { key: 'totalStopLoss', label: t('accountForm.totalStopLoss', settings.appLanguage), toggleKey: 'totalStopLossType' },
+                      ].map(({ key, label, toggleKey }) => (
+                        <div key={key}>
+                          <div className="flex justify-between items-end mb-2">
+                            <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{label}</label>
+                            <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/10">
+                              <button
+                                type="button"
+                                onClick={() => setAccountFormData(p => ({ ...p, [toggleKey]: '$' }))}
+                                className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${accountFormData[toggleKey] === '$' ? 'bg-[#00B0F0] text-white' : 'text-white/30 hover:text-white'}`}
+                              >$</button>
+                              <button
+                                type="button"
+                                onClick={() => setAccountFormData(p => ({ ...p, [toggleKey]: '%' }))}
+                                className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${accountFormData[toggleKey] === '%' ? 'bg-[#00B0F0] text-white' : 'text-white/30 hover:text-white'}`}
+                              >%</button>
+                            </div>
+                          </div>
+                          <input
+                            type="number"
+                            className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
+                            style={{ color: '#fff' }}
+                            value={accountFormData[key] === 0 ? '' : accountFormData[key]}
+                            onChange={e => setAccountFormData(p => ({ ...p, [key]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="px-5 py-5 flex gap-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                <button
-                  onClick={() => setIsAccountFormOpen(false)}
-                  className="flex-1 py-3 rounded-xl border border-white/10 text-sm font-bold text-white/40 hover:bg-white/5 transition-all"
-                >{t('accountForm.cancel', settings.appLanguage)}</button>
-                <button
-                  onClick={handleSaveAccountForm}
-                  className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:brightness-110 active:scale-95 shadow-lg flex items-center justify-center gap-2"
-                  style={{ backgroundColor: '#00B0F0', color: '#fff' }}
-                >
-                  <Check size={18} /> {editingAccount ? t('accountForm.save', settings.appLanguage) : t('accountForm.createBtn', settings.appLanguage)}
-                </button>
+                <div className="px-5 py-5 flex gap-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                  <button
+                    onClick={() => setIsAccountFormOpen(false)}
+                    className="flex-1 py-3 rounded-xl border border-white/10 text-sm font-bold text-white/40 hover:bg-white/5 transition-all"
+                  >{t('accountForm.cancel', settings.appLanguage)}</button>
+                  <button
+                    onClick={handleSaveAccountForm}
+                    className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:brightness-110 active:scale-95 shadow-lg flex items-center justify-center gap-2"
+                    style={{ backgroundColor: '#00B0F0', color: '#fff' }}
+                  >
+                    <Check size={18} /> {editingAccount ? t('accountForm.save', settings.appLanguage) : t('accountForm.createBtn', settings.appLanguage)}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </>,
-        document.body
-      )}
+          </>,
+          document.body
+        )
+      }
 
       {/* ===== DELETE ACCOUNT CONFIRMATION MODAL ===== */}
-      {confirmDeleteAccountId && createPortal(
-        <>
-          <div className="fixed inset-0 z-[199] bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDeleteAccountId(null)} />
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div
-              className="w-full max-sm:max-w-[calc(100%-2rem)] max-w-sm rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] border overflow-hidden"
-              style={{ backgroundColor: '#111114', borderColor: 'rgba(255,255,255,0.08)' }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="p-6 text-center">
-                <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
-                  <Trash2 size={24} className="text-red-400" />
+      {
+        confirmDeleteAccountId && createPortal(
+          <>
+            <div className="fixed inset-0 z-[199] bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDeleteAccountId(null)} />
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <div
+                className="w-full max-sm:max-w-[calc(100%-2rem)] max-w-sm rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] border overflow-hidden"
+                style={{ backgroundColor: '#111114', borderColor: 'rgba(255,255,255,0.08)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="p-6 text-center">
+                  <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
+                    <Trash2 size={24} className="text-red-400" />
+                  </div>
+                  <p className="text-base font-bold text-white mb-1">{t('delete.title', settings.appLanguage)}</p>
+                  <p className="text-sm text-white/40 leading-relaxed">{t('delete.desc', settings.appLanguage)}</p>
                 </div>
-                <p className="text-base font-bold text-white mb-1">{t('delete.title', settings.appLanguage)}</p>
-                <p className="text-sm text-white/40 leading-relaxed">{t('delete.desc', settings.appLanguage)}</p>
-              </div>
-              <div className="px-5 pb-5 flex gap-3">
-                <button
-                  onClick={() => setConfirmDeleteAccountId(null)}
-                  className="flex-1 py-3 rounded-xl border border-white/10 text-sm font-bold text-white/40 hover:bg-white/5 transition-all"
-                >{t('delete.cancel', settings.appLanguage)}</button>
-                <button
-                  onClick={() => handleDeleteAccount(confirmDeleteAccountId)}
-                  className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:bg-red-600 bg-red-500 text-white active:scale-95 shadow-lg"
-                >{t('delete.confirm', settings.appLanguage)}</button>
+                <div className="px-5 pb-5 flex gap-3">
+                  <button
+                    onClick={() => setConfirmDeleteAccountId(null)}
+                    className="flex-1 py-3 rounded-xl border border-white/10 text-sm font-bold text-white/40 hover:bg-white/5 transition-all"
+                  >{t('delete.cancel', settings.appLanguage)}</button>
+                  <button
+                    onClick={() => handleDeleteAccount(confirmDeleteAccountId)}
+                    className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:bg-red-600 bg-red-500 text-white active:scale-95 shadow-lg"
+                  >{t('delete.confirm', settings.appLanguage)}</button>
+                </div>
               </div>
             </div>
-          </div>
-        </>,
-        document.body
-      )}
+          </>,
+          document.body
+        )
+      }
 
-    </div>
+    </div >
   );
 }
 

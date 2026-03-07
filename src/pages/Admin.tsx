@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Activity, LayoutDashboard, Users, TrendingUp, BarChart2, Settings, LogOut,
-    Bell, Search, Filter, UserPlus, Edit2, Trash2, Clock, DollarSign, X, AlertTriangle, Lock, Check
+    Bell, Search, Filter, UserPlus, Edit2, Trash2, Clock, DollarSign, X, AlertTriangle, Lock, Check, Eye, EyeOff
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
@@ -48,6 +48,15 @@ export default function Admin() {
     const [adminPassword, setAdminPassword] = useState('');
     const [toastMessage, setToastMessage] = useState('');
 
+    // Add User Flow State
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isAdding, setIsAdding] = useState(false);
+    const [showAddPassword, setShowAddPassword] = useState(false);
+    const [addForm, setAddForm] = useState({
+        firstName: '', lastName: '', email: '', password: '',
+        phoneCode: '+1', phone: '', country: '', postalCode: '', howHeard: ''
+    });
+
     // ---------- SUPABASE: Fetch all profiles ----------
     const fetchProfiles = async () => {
         setIsLoading(true);
@@ -61,14 +70,14 @@ export default function Admin() {
 
             const mapped = (data || []).map(p => ({
                 id: p.id,
-                firstName: p.first_name || p.full_name?.split(' ')[0] || '',
-                lastName: p.last_name || p.full_name?.split(' ').slice(1).join(' ') || '',
+                firstName: p.first_name || '',
+                lastName: p.last_name || '',
                 email: p.email || '',
                 plan: p.plan || 'Free',
                 status: p.status || 'Active',
-                initials: ((p.first_name || p.full_name?.split(' ')[0] || '?')[0] + (p.last_name || p.full_name?.split(' ')[1] || '?')[0]).toUpperCase(),
+                initials: ((p.first_name || '?')[0] + (p.last_name || '?')[0]).toUpperCase(),
                 phoneCode: p.phone_code || '+1',
-                phone: p.phone || '',
+                phone: p.phone_number || '',
                 country: p.country || '',
                 // Keep raw fields for updates
                 _raw: p
@@ -89,17 +98,19 @@ export default function Admin() {
     // ---------- SUPABASE: Update profile ----------
     const handleUpdateProfile = async (user: any) => {
         try {
+            // Atualiza public.profiles
+            // Nota: Conforme a nova regra, o email não pode ser alterado no modal geral.
+            // Para atualizar o e-mail, deve-se usar a Server Action / Vercel API específica.
             const { error } = await supabase
                 .from('profiles')
                 .update({
                     first_name: user.firstName,
                     last_name: user.lastName,
-                    full_name: `${user.firstName} ${user.lastName}`.trim(),
                     email: user.email,
                     plan: user.plan,
                     status: user.status,
                     phone_code: user.phoneCode,
-                    phone: user.phone,
+                    phone_number: user.phone,
                     country: user.country,
                     updated_at: new Date().toISOString()
                 })
@@ -131,6 +142,48 @@ export default function Admin() {
         } catch (err: any) {
             console.error('Error deleting profile:', err);
             showToast(`Error deleting profile: ${err.message}`);
+        }
+    };
+
+    // ---------- SUPABASE: Add New User ----------
+    const handleAddUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsAdding(true);
+        try {
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: addForm.email,
+                password: addForm.password
+            });
+            if (authError) throw authError;
+
+            if (authData?.user) {
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .upsert({
+                        id: authData.user.id,
+                        first_name: addForm.firstName,
+                        last_name: addForm.lastName,
+                        email: addForm.email,
+                        phone_code: addForm.phoneCode,
+                        phone_number: addForm.phone,
+                        country: addForm.country,
+                        postal_code: addForm.postalCode,
+                        how_heard_about_us: addForm.howHeard,
+                        plan: 'Free',
+                        status: 'Active',
+                        updated_at: new Date().toISOString()
+                    });
+                if (profileError) throw profileError;
+            }
+
+            showToast('User created successfully!');
+            setIsAddModalOpen(false);
+            setAddForm({ firstName: '', lastName: '', email: '', password: '', phoneCode: '+1', phone: '', country: '', postalCode: '', howHeard: '' });
+            await fetchProfiles();
+        } catch (err: any) {
+            showToast(`Error creating user: ${err.message}`);
+        } finally {
+            setIsAdding(false);
         }
     };
 
@@ -206,6 +259,91 @@ export default function Admin() {
                 </div>
             )}
 
+            {/* ADD USER MODAL */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-[#111114] border border-yellow-500/30 rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh]">
+                        <div className="flex justify-between items-center p-6 border-b border-white/10">
+                            <h3 className="text-xl font-bold flex items-center gap-2 font-display">
+                                <UserPlus size={20} className="text-yellow-500" /> Add New User
+                            </h3>
+                            <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-white transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleAddUser} className="flex flex-col overflow-hidden">
+                            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-400">First Name</label>
+                                        <input type="text" required value={addForm.firstName} onChange={e => setAddForm({ ...addForm, firstName: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-400">Last Name</label>
+                                        <input type="text" required value={addForm.lastName} onChange={e => setAddForm({ ...addForm, lastName: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-400">Email</label>
+                                        <input type="email" required value={addForm.email} onChange={e => setAddForm({ ...addForm, email: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-400">Password</label>
+                                        <div className="relative">
+                                            <input type={showAddPassword ? "text" : "password"} required value={addForm.password} onChange={e => setAddForm({ ...addForm, password: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors pr-10" />
+                                            <button type="button" onClick={() => setShowAddPassword(!showAddPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                                                {showAddPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-400">Phone</label>
+                                        <div className="flex gap-2">
+                                            <select value={addForm.phoneCode} onChange={e => setAddForm({ ...addForm, phoneCode: e.target.value })} className="w-[100px] bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer appearance-none">
+                                                {countryCodes.map(c => <option key={`${c.country}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>)}
+                                            </select>
+                                            <input type="text" value={addForm.phone} onChange={e => setAddForm({ ...addForm, phone: e.target.value })} className="flex-1 bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-400">Postal Code</label>
+                                        <input type="text" value={addForm.postalCode} onChange={e => setAddForm({ ...addForm, postalCode: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-400">Country</label>
+                                        <select value={addForm.country} onChange={e => setAddForm({ ...addForm, country: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer">
+                                            <option value="">Select a country</option>
+                                            {countriesList.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-400">How heard about us?</label>
+                                        <select value={addForm.howHeard} onChange={e => setAddForm({ ...addForm, howHeard: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer">
+                                            <option value="">Select an option</option>
+                                            <option value="Google">Google</option>
+                                            <option value="Social Media">Social Media</option>
+                                            <option value="Friend">Friend recommendation</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-6 border-t border-white/10 flex justify-end gap-3">
+                                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-6 py-2.5 rounded-lg font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">Cancel</button>
+                                <button type="submit" disabled={isAdding} className="px-6 py-2.5 rounded-lg font-bold bg-yellow-500 text-black hover:bg-yellow-400 transition-colors shadow-[0_0_15px_rgba(234,179,8,0.2)] disabled:opacity-50">
+                                    {isAdding ? 'Creating...' : 'Create User'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             {/* EDIT MODAL */}
             {isEditModalOpen && editingUser && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -231,7 +369,7 @@ export default function Admin() {
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs font-bold text-gray-400">Email Address</label>
-                                <input type="email" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
+                                <input type="email" disabled value={editingUser.email} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-gray-400 cursor-not-allowed outline-none focus:border-yellow-500 transition-colors" />
                             </div>
                             <div className="space-y-4">
                                 <div className="space-y-1">
@@ -279,11 +417,12 @@ export default function Admin() {
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs font-bold text-gray-400">Status</label>
-                                    <select value={editingUser.status} onChange={e => setEditingUser({ ...editingUser, status: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer">
+                                    <select disabled value={editingUser.status} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-gray-400 cursor-not-allowed outline-none focus:border-yellow-500 transition-colors">
                                         <option value="Active">Active</option>
                                         <option value="Inactive">Inactive</option>
                                         <option value="Suspended">Suspended</option>
                                     </select>
+                                    <p className="text-[10px] text-gray-500">Status gerido automaticamente p/ pagamentos</p>
                                 </div>
                             </div>
                         </div>
@@ -388,7 +527,7 @@ export default function Admin() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="h-16 border-b border-yellow-500/20 flex items-center justify-between px-8 bg-[#000000]/50 backdrop-blur-md sticky top-0 z-10">
+                <header className="py-4 border-b border-yellow-500/20 flex items-center justify-between px-8 bg-[#000000]/50 backdrop-blur-md sticky top-0 z-10 header-safe">
                     <div className="flex items-center gap-2">
                         <span className="text-gray-400 text-sm">Admin</span>
                         <span className="text-gray-400 text-sm">/</span>
@@ -414,7 +553,7 @@ export default function Admin() {
                             <h1 className="text-3xl font-black text-white tracking-tight uppercase italic font-display">User Account Administration</h1>
                             <p className="text-gray-400 mt-1">Manage and monitor your trading platform users. <span className="text-yellow-500 font-bold">({users.length} profiles loaded)</span></p>
                         </div>
-                        <button className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-black uppercase text-sm flex items-center gap-2 hover:scale-105 transition-transform active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.3)]">
+                        <button onClick={() => setIsAddModalOpen(true)} className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-black uppercase text-sm flex items-center gap-2 hover:scale-105 transition-transform active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.3)]">
                             <UserPlus size={18} />
                             Add New User
                         </button>
@@ -484,16 +623,8 @@ export default function Admin() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-gray-400">{user.email}</td>
-                                                <td className="px-6 py-4">
-                                                    <select
-                                                        value={user.plan}
-                                                        onChange={(e) => handlePlanChange(user.id, e.target.value)}
-                                                        className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-yellow-500 text-white cursor-pointer"
-                                                    >
-                                                        <option value="Free">Free</option>
-                                                        <option value="Basic">Basic</option>
-                                                        <option value="Premium">Premium</option>
-                                                    </select>
+                                                <td className="px-6 py-4 font-bold text-gray-300">
+                                                    {user.plan}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border

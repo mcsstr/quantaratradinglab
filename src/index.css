@@ -103,8 +103,8 @@ input[type=range]::-webkit-slider-runnable-track {
 }
 
 .header-safe {
-  padding-top: calc(1.5rem + env(safe-area-inset-top));
-  padding-bottom: 1rem;
+  padding-top: max(0.25rem, env(safe-area-inset-top));
+  padding-bottom: 0.5rem;
 }
 
 .pb-safe {

@@ -1,20 +1,171 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, LogOut, User, CreditCard, Shield, Settings, ArrowLeft, ChevronLeft, ChevronDown } from 'lucide-react';
+import { Activity, LogOut, ChevronLeft, Check, Loader2, Shield } from 'lucide-react';
+import { supabase } from '../utils/supabase';
+
+const countriesList = [
+  'Argentina', 'Australia', 'Brazil', 'Canada', 'Chile', 'China', 'Colombia',
+  'France', 'Germany', 'India', 'Italy', 'Japan', 'Mexico', 'Peru', 'Portugal',
+  'Russia', 'South Africa', 'Spain', 'United Kingdom', 'United States'
+].sort();
+
+const howHeardOptions = [
+  'Google Search', 'Social Media', 'YouTube', 'Friend / Referral',
+  'Blog / Article', 'Advertisement', 'Discord / Telegram', 'Other'
+];
+
+interface ProfileForm {
+  first_name: string;
+  last_name: string;
+  email: string;
+  postal_code: string;
+  phone_number: string;
+  country: string;
+  how_heard_about_us: string;
+}
 
 export default function Account() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('info');
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [session, setSession] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
-  const handleLogout = () => {
-    setShowLogoutModal(false);
-    navigate('/');
+  const [form, setForm] = useState<ProfileForm>({
+    first_name: '',
+    last_name: '',
+    email: '',
+    postal_code: '',
+    phone_number: '',
+    country: '',
+    how_heard_about_us: '',
+  });
+
+  // --- PASSWORD CHANGE ---
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // --- AUTH SESSION CHECK ---
+  useEffect(() => {
+    const init = async () => {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      setSession(s);
+      if (!s) {
+        navigate('/auth');
+        return;
+      }
+      // Fetch profile data
+      await loadProfile(s.user.id, s.user.email);
+    };
+    init();
+  }, []);
+
+  const loadProfile = async (userId: string, email?: string) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setForm({
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
+          email: email || data.email || '',
+          postal_code: data.postal_code || '',
+          phone_number: data.phone_number || '',
+          country: data.country || '',
+          how_heard_about_us: data.how_heard_about_us || '',
+        });
+      } else {
+        setForm(prev => ({ ...prev, email: email || '' }));
+      }
+    } catch (err: any) {
+      console.error('Error loading profile:', err);
+      showToast(`Error loading profile: ${err.message}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const handleSaveProfile = async () => {
+    if (!session) return;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: session.user.id,
+          first_name: form.first_name,
+          last_name: form.last_name,
+          postal_code: form.postal_code,
+          phone_number: form.phone_number,
+          country: form.country,
+          how_heard_about_us: form.how_heard_about_us,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      showToast('Perfil atualizado com sucesso!', 'success');
+    } catch (err: any) {
+      console.error('Error saving profile:', err);
+      showToast(`Erro ao salvar: ${err.message}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (newPassword !== confirmPassword) {
+      showToast('As senhas não coincidem.', 'error');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      showToast('Senha atualizada com sucesso!', 'success');
+    } catch (err: any) {
+      showToast(`Erro: ${err.message}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage(msg);
+    setToastType(type);
+    setTimeout(() => setToastMessage(''), 3500);
+  };
+
+  const inputClass = "w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors text-white";
+  const labelClass = "text-xs font-bold text-gray-400";
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white font-sans flex flex-col">
-      <header className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 lg:px-6 py-2.5 lg:py-3 border-b border-white/10 bg-[#0c0c0e] shadow-sm transition-all">
+      {/* Toast */}
+      {toastMessage && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-lg shadow-lg font-bold flex items-center gap-2 animate-tab-enter ${toastType === 'success' ? 'bg-green-500 text-black' : 'bg-red-500 text-white'}`}>
+          <Check size={18} /> {toastMessage}
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 lg:px-6 py-2.5 lg:py-3 border-b border-white/10 bg-[#0c0c0e] shadow-sm transition-all header-safe">
         <div className="flex items-center gap-2 cursor-pointer md:flex" onClick={() => navigate(-1)}>
           <div className="md:hidden">
             <button onClick={(e) => { e.stopPropagation(); navigate(-1); }} className="flex items-center gap-1.5 py-1 pr-4 active:opacity-70 transition-opacity" style={{ color: '#00B0F0' }}>
@@ -30,22 +181,15 @@ export default function Account() {
           </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
-          <a href="#" className="hover:text-white transition-colors">Resources</a>
-          <a href="#" className="hover:text-white transition-colors">How it Works</a>
-          <a href="#" className="hover:text-white transition-colors">Pricing</a>
-        </nav>
-
         <div className="flex items-center gap-4">
-
           <div className="hidden md:flex items-center gap-4">
             <button onClick={() => navigate('/dashboard')} className="bg-white/5 border border-white/10 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-white/10 transition-colors flex items-center gap-2">
-              <ArrowLeft size={16} /> Voltar
+              <ChevronLeft size={16} /> Voltar
             </button>
             <button onClick={() => {
-              if (window.confirm('Are you sure you want to sign out?')) {
-                localStorage.clear();
-                window.location.href = '/';
+              if (window.confirm('Tem certeza que deseja sair?')) {
+                supabase.auth.signOut();
+                navigate('/');
               }
             }} className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-500/20 transition-colors flex items-center gap-2">
               <LogOut size={16} /> Sair
@@ -60,28 +204,13 @@ export default function Account() {
           <div>
             <h2 className="text-2xl font-bold font-display capitalize mb-6 text-white">Conta</h2>
             <nav className="flex flex-col gap-2">
-              <button
-                onClick={() => setActiveTab('info')}
-                className={`text-left px-4 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === 'info' ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-              >
+              <button onClick={() => setActiveTab('info')} className={`text-left px-4 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === 'info' ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
                 Informações Pessoais
               </button>
-              <button
-                onClick={() => setActiveTab('sub')}
-                className={`text-left px-4 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === 'sub' ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-              >
+              <button onClick={() => setActiveTab('sub')} className={`text-left px-4 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === 'sub' ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
                 Assinatura
               </button>
-              <button
-                onClick={() => setActiveTab('pay')}
-                className={`text-left px-4 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === 'pay' ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-              >
-                Métodos de Pagamento
-              </button>
-              <button
-                onClick={() => setActiveTab('sec')}
-                className={`text-left px-4 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === 'sec' ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-              >
+              <button onClick={() => setActiveTab('sec')} className={`text-left px-4 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === 'sec' ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
                 Segurança
               </button>
             </nav>
@@ -93,139 +222,130 @@ export default function Account() {
           <h1 className="text-3xl font-bold font-display capitalize mb-8 text-white">
             {activeTab === 'info' && 'Informações Pessoais'}
             {activeTab === 'sub' && 'Assinatura'}
-            {activeTab === 'pay' && 'Métodos de Pagamento'}
             {activeTab === 'sec' && 'Segurança'}
           </h1>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column */}
-            <div className="space-y-8">
-              {/* Dados do Usuário */}
-              <div className="bg-[#111114] border border-white/10 rounded-xl p-6">
-                <h3 className="text-lg font-bold font-display capitalize mb-6 text-white">Dados do Usuário</h3>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">Nome Completo</label>
-                    <input type="text" defaultValue="João Silva" className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">E-mail</label>
-                    <input type="email" defaultValue="joao.silva@exemplo.com" className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">Telefone</label>
-                    <input type="tel" defaultValue="+55 11 98765-4321" className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
-                  </div>
-                  <button className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors mt-4">
-                    Salvar Alterações
-                  </button>
-                </div>
-              </div>
-
-              {/* Dados do Usuário (Extra) */}
-              <div className="bg-[#111114] border border-white/10 rounded-xl p-6">
-                <h3 className="text-lg font-bold font-display capitalize mb-4 text-white">Dados do Usuário</h3>
-                <p className="text-sm text-gray-400 mb-6 leading-relaxed">
-                  Descubra os latrs ves onolos o seus erros, empilhas, tores cem aesenovada performance.
-                </p>
-                <div className="space-y-3">
-                  <button className="w-full bg-transparent border border-white/10 text-white font-bold py-3 rounded-lg hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
-                    + Adicionar Novo Cartão
-                  </button>
-                  <button className="w-full bg-transparent border border-white/10 text-white font-bold py-3 rounded-lg hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
-                    Confirmar Nova Senha
-                  </button>
-                </div>
-              </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 size={32} className="animate-spin text-yellow-500" />
+              <span className="ml-3 text-gray-400">Carregando dados...</span>
             </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Column — Personal Info Form */}
+              {activeTab === 'info' && (
+                <div className="space-y-8 lg:col-span-2">
+                  <div className="bg-[#111114] border border-white/10 rounded-xl p-6">
+                    <h3 className="text-lg font-bold font-display capitalize mb-6 text-white">Dados do Usuário</h3>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className={labelClass}>Nome</label>
+                          <input type="text" placeholder="Seu nome" className={inputClass} value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className={labelClass}>Sobrenome</label>
+                          <input type="text" placeholder="Seu sobrenome" className={inputClass} value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} />
+                        </div>
+                      </div>
 
-            {/* Right Column */}
-            <div className="space-y-8">
-              {/* Assinatura Atual */}
-              <div className="bg-[#111114] border border-white/10 rounded-xl p-6">
-                <h3 className="text-lg font-bold font-display capitalize mb-6 text-white">Assinatura Atual</h3>
-                <div className="bg-black/20 border border-white/10 rounded-lg p-5">
-                  <h4 className="font-bold text-lg mb-2">Plano Pro (Mensal)</h4>
-                  <p className="text-sm text-gray-400 mb-4 leading-relaxed">
-                    Plano Pro (Mensal) - Cszse de noutino no trading, ntanatura inteira comepa tataal.
-                  </p>
-                  <p className="text-sm font-bold text-gray-400 mb-6">Destas details: $3 Mensal</p>
-                  <button className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors">
-                    Fazer Upgrade
-                  </button>
-                </div>
-              </div>
+                      <div className="space-y-2">
+                        <label className={labelClass}>E-mail</label>
+                        <input type="email" disabled className={`${inputClass} opacity-50 cursor-not-allowed`} value={form.email} />
+                        <p className="text-[10px] text-gray-500">O e-mail não pode ser alterado por aqui.</p>
+                      </div>
 
-              {/* Métodos de Pagamento Salvos */}
-              <div className="bg-[#111114] border border-white/10 rounded-xl p-6">
-                <h3 className="text-[15px] font-bold capitalize mb-6 text-gray-400">Métodos de Pagamento Salvos</h3>
-                <div className="bg-black/20 border border-white/10 rounded-lg p-4 flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-white px-2 py-1 rounded text-black font-bold text-xs">VISA</div>
-                    <span className="text-sm font-medium">Visa **** 4242</span>
-                  </div>
-                  <div className="w-8 h-5 bg-red-500 rounded-sm relative overflow-hidden">
-                    <div className="absolute w-5 h-5 bg-yellow-500 rounded-full -left-1 opacity-80 mix-blend-multiply"></div>
-                  </div>
-                </div>
-                <button className="w-full bg-transparent border border-white/10 text-white font-bold py-3 rounded-lg hover:bg-white/5 transition-colors">
-                  Adicionar Novo Cartão
-                </button>
-              </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className={labelClass}>Telefone</label>
+                          <input type="tel" placeholder="+55 11 99999-9999" className={inputClass} value={form.phone_number} onChange={e => setForm({ ...form, phone_number: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className={labelClass}>CEP / Código Postal</label>
+                          <input type="text" placeholder="Ex: 01001-000" className={inputClass} value={form.postal_code} onChange={e => setForm({ ...form, postal_code: e.target.value })} />
+                        </div>
+                      </div>
 
-              {/* Segurança */}
-              <div className="bg-[#111114] border border-white/10 rounded-xl p-6">
-                <h3 className="text-[15px] font-bold capitalize mb-6 text-gray-400">Segurança</h3>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">Senha Atual</label>
-                    <input type="password" placeholder="••••••••" className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className={labelClass}>País</label>
+                          <select className={`${inputClass} cursor-pointer`} value={form.country} onChange={e => setForm({ ...form, country: e.target.value })}>
+                            <option value="" className="bg-[#111]">Selecione um país</option>
+                            {countriesList.map(c => <option key={c} value={c} className="bg-[#111]">{c}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className={labelClass}>Como nos conheceu?</label>
+                          <select className={`${inputClass} cursor-pointer`} value={form.how_heard_about_us} onChange={e => setForm({ ...form, how_heard_about_us: e.target.value })}>
+                            <option value="" className="bg-[#111]">Selecione uma opção</option>
+                            {howHeardOptions.map(o => <option key={o} value={o} className="bg-[#111]">{o}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleSaveProfile}
+                        disabled={isSaving}
+                        className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                        {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">Nova Senha</label>
-                    <input type="password" placeholder="••••••••" className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">Confirmar Nova Senha</label>
-                    <input type="password" placeholder="••••••••" className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
-                  </div>
-                  <button className="w-full bg-transparent border border-white/10 text-white font-bold py-3 rounded-lg hover:bg-white/5 transition-colors mt-4">
-                    Atualizar Senha
-                  </button>
                 </div>
-              </div>
+              )}
+
+              {/* Subscription Tab */}
+              {activeTab === 'sub' && (
+                <div className="space-y-8 lg:col-span-2">
+                  <div className="bg-[#111114] border border-white/10 rounded-xl p-6">
+                    <h3 className="text-lg font-bold font-display capitalize mb-6 text-white">Assinatura Atual</h3>
+                    <div className="bg-black/20 border border-white/10 rounded-lg p-5">
+                      <h4 className="font-bold text-lg mb-2">Plano Free</h4>
+                      <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+                        Você está no plano gratuito. Faça upgrade para desbloquear recursos avançados de análise e armazenamento na nuvem.
+                      </p>
+                      <button className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors">
+                        Fazer Upgrade
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Security Tab */}
+              {activeTab === 'sec' && (
+                <div className="space-y-8 lg:col-span-2">
+                  <div className="bg-[#111114] border border-white/10 rounded-xl p-6">
+                    <h3 className="text-lg font-bold font-display capitalize mb-6 text-white flex items-center gap-2">
+                      <Shield size={20} className="text-yellow-500" /> Alterar Senha
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className={labelClass}>Nova Senha</label>
+                        <input type="password" placeholder="••••••••" className={inputClass} value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className={labelClass}>Confirmar Nova Senha</label>
+                        <input type="password" placeholder="••••••••" className={inputClass} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                      </div>
+                      <button
+                        onClick={handlePasswordChange}
+                        disabled={isSaving}
+                        className="w-full bg-transparent border border-white/10 text-white font-bold py-3 rounded-lg hover:bg-white/5 transition-colors mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : null}
+                        {isSaving ? 'Atualizando...' : 'Atualizar Senha'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </main>
       </div>
-
-      {/* Modal de Logout */}
-      {showLogoutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#111114] border border-white/10 rounded-xl p-6 w-full max-w-sm shadow-2xl animate-fade-in">
-            <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-white">
-              <LogOut className="text-red-500" size={24} /> Deseja mesmo sair?
-            </h3>
-            <p className="text-gray-400 text-sm mb-6">
-              Você será desconectado da sua conta e redirecionado para a página inicial.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowLogoutModal(false)}
-                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-300 hover:bg-white/5 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleLogout}
-                className="px-5 py-2 rounded-lg text-sm font-bold bg-red-500 text-white hover:bg-red-600 transition-colors shadow-lg"
-              >
-                Sim, Sair
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -83,8 +83,8 @@ input[type=range]::-webkit-slider-runnable-track {
 
 /* Proteção da Safe Area do Celular (Notch) e Aumento de Margens */
 .header-safe {
-    padding-top: calc(0.625rem + env(safe-area-inset-top)) !important;
-    padding-bottom: 0.625rem !important;
+    padding-top: max(0.25rem, env(safe-area-inset-top)) !important;
+    padding-bottom: 0.5rem !important;
 }
 
 .pb-safe {
@@ -115,4 +115,15 @@ input[type=range]::-webkit-slider-runnable-track {
     .pb-safe-main {
         padding-bottom: 2rem !important;
     }
+}
+
+/* Tamanho de fonte menor para filtros de gráficos (Ignora a trava de iOS) */
+.filter-select {
+    font-size: 0.65rem !important;
+    /* ~10px */
+}
+
+.filter-select option {
+    font-size: 0.75rem !important;
+    /* ~12px */
 }

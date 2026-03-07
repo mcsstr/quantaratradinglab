@@ -8,7 +8,7 @@ export interface Holiday {
     description: string;
 }
 
-export function useHolidaysRepository(session: any) {
+export function useHolidaysRepository(session: any, isFreePlan: boolean = false) {
     const [holidays, setHolidays] = useState<Holiday[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export function useHolidaysRepository(session: any) {
         setIsLoading(true);
         setError(null);
         try {
-            if (session) {
+            if (session && !isFreePlan) {
                 const { data, error: sbError } = await supabase
                     .from('holidays')
                     .select('*')
@@ -46,7 +46,7 @@ export function useHolidaysRepository(session: any) {
         setIsLoading(true);
         setError(null);
         try {
-            if (session) {
+            if (session && !isFreePlan) {
                 const payload = { ...item, user_id: session.user.id };
                 let result;
                 if (payload.id) {
@@ -102,7 +102,7 @@ export function useHolidaysRepository(session: any) {
         setIsLoading(true);
         setError(null);
         try {
-            if (session) {
+            if (session && !isFreePlan) {
                 const { error: sbError } = await supabase
                     .from('holidays')
                     .delete()
@@ -132,7 +132,7 @@ export function useHolidaysRepository(session: any) {
     }, [session]);
 
     const overrideHolidays = useCallback((newList: Holiday[]) => {
-        if (!session) {
+        if (!session || isFreePlan) {
             localStorage.setItem('tradeJournal_holidays', JSON.stringify(newList));
         }
         setHolidays(newList);

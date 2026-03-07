@@ -34,6 +34,50 @@ export default function ImportView({
 
   const hasAccount = !!selectedImportAccountId;
 
+  const CustomDateTimeInput = ({ value, onChange }) => {
+    const [dateStr, timeStr] = value ? value.split('T') : ['', ''];
+    const [h, m, s] = timeStr ? timeStr.split(':') : ['', '', ''];
+
+    const handleDateChange = (e) => {
+      const nd = e.target.value;
+      if (!nd) return onChange('');
+      onChange(`${nd}T${h || '00'}:${m || '00'}:${s || '00'}`);
+    };
+
+    const updateTime = (unit, val) => {
+      if (!dateStr) return; // Needs date first
+      let newH = h || '00';
+      let newM = m || '00';
+      let newS = s || '00';
+      if (unit === 'h') newH = val;
+      if (unit === 'm') newM = val;
+      if (unit === 's') newS = val;
+      onChange(`${dateStr}T${newH}:${newM}:${newS}`);
+    };
+
+    return (
+      <div className="flex flex-col gap-2 w-full">
+        <input type="date" value={dateStr} onChange={handleDateChange} className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={{ ...inputStyle, colorScheme: 'dark' }} />
+        <div className="flex gap-1 justify-between">
+          <select value={h || ""} onChange={(e) => updateTime('h', e.target.value)} className="flex-1 rounded-lg p-2 outline-none text-xs bg-transparent cursor-pointer" style={inputStyle}>
+            <option value="" disabled>HH</option>
+            {Array.from({ length: 24 }).map((_, i) => <option key={i} value={String(i).padStart(2, '0')} className="bg-gray-900">{String(i).padStart(2, '0')}</option>)}
+          </select>
+          <span className="text-white/50 self-center font-bold">:</span>
+          <select value={m || ""} onChange={(e) => updateTime('m', e.target.value)} className="flex-1 rounded-lg p-2 outline-none text-xs bg-transparent cursor-pointer" style={inputStyle}>
+            <option value="" disabled>MM</option>
+            {Array.from({ length: 60 }).map((_, i) => <option key={i} value={String(i).padStart(2, '0')} className="bg-gray-900">{String(i).padStart(2, '0')}</option>)}
+          </select>
+          <span className="text-white/50 self-center font-bold">:</span>
+          <select value={s || ""} onChange={(e) => updateTime('s', e.target.value)} className="flex-1 rounded-lg p-2 outline-none text-xs bg-transparent cursor-pointer" style={inputStyle}>
+            <option value="" disabled>SS</option>
+            {Array.from({ length: 60 }).map((_, i) => <option key={i} value={String(i).padStart(2, '0')} className="bg-gray-900">{String(i).padStart(2, '0')}</option>)}
+          </select>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div key="import" className="max-w-4xl space-y-6 mx-auto w-full animate-tab-enter">
       {!isMobile && (
@@ -106,7 +150,7 @@ export default function ImportView({
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.buyTime', lang)}</label>
-                  <input type="datetime-local" step="1" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.buyTime} onChange={e => setManualTrade({ ...manualTrade, buyTime: e.target.value })} />
+                  <CustomDateTimeInput value={manualTrade.buyTime} onChange={(val) => setManualTrade({ ...manualTrade, buyTime: val })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -116,7 +160,7 @@ export default function ImportView({
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.sellTime', lang)}</label>
-                  <input type="datetime-local" step="1" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.sellTime} onChange={e => setManualTrade({ ...manualTrade, sellTime: e.target.value })} />
+                  <CustomDateTimeInput value={manualTrade.sellTime} onChange={(val) => setManualTrade({ ...manualTrade, sellTime: val })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

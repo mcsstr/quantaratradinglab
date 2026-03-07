@@ -23,7 +23,7 @@ export default function Landing() {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
+      <header className="relative z-10 flex items-center justify-between px-6 py-4 max-w-7xl mx-auto header-safe">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
           <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-xl font-bold font-display">Quantara</span>
