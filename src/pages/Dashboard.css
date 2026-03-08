@@ -127,3 +127,16 @@ input[type=range]::-webkit-slider-runnable-track {
     font-size: 0.75rem !important;
     /* ~12px */
 }
+
+/* FAB Speed Dial Arc Animation */
+@keyframes fabItemIn {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) scale(0.3);
+    }
+
+    100% {
+        opacity: 1;
+        transform: var(--fab-translate, translate(0, 0)) scale(1);
+    }
+}
