@@ -13,6 +13,7 @@ import {
 import { supabase } from '../utils/supabase';
 import { columnAliases, cleanNumericValue, parseSmartDate } from '../utils/tradeParser';
 import { t } from '../utils/i18n';
+import { LAYOUT } from '../utils/layoutConfig';
 import './Dashboard.css';
 
 // Views
@@ -1977,11 +1978,14 @@ export default function Dashboard() {
           onClick={() => setIsFabOpen(false)}
         >
           {/* Buttons in a gentle arc above the FAB */}
-          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 flex items-end gap-6 pointer-events-none" style={{ paddingBottom: '8px' }}>
+          <div
+            className="fixed left-1/2 -translate-x-1/2 flex items-end pointer-events-none"
+            style={{ bottom: `${LAYOUT.fab.bottomOffset}rem`, gap: `${LAYOUT.fab.gap}rem`, paddingBottom: '8px' }}
+          >
             {[
-              { id: 'import', icon: Plus, label: 'Trade', iconColor: '#34d399', bgColor: 'rgba(52,211,153,0.12)', borderColor: 'rgba(52,211,153,0.25)', offsetY: 12 },
-              { id: 'news', icon: Newspaper, label: 'News', iconColor: '#22d3ee', bgColor: 'rgba(34,211,238,0.12)', borderColor: 'rgba(34,211,238,0.25)', offsetY: 40 },
-              { id: 'holidays', icon: CalendarDays, label: 'Holidays', iconColor: '#f472b6', bgColor: 'rgba(244,114,182,0.12)', borderColor: 'rgba(244,114,182,0.25)', offsetY: 12 }
+              { id: 'import', icon: Plus, label: 'Trade', ...LAYOUT.fab.colors.trade, offsetY: LAYOUT.fab.arcOffsets[0] },
+              { id: 'news', icon: Newspaper, label: 'News', ...LAYOUT.fab.colors.news, offsetY: LAYOUT.fab.arcOffsets[1] },
+              { id: 'holidays', icon: CalendarDays, label: 'Holidays', ...LAYOUT.fab.colors.holidays, offsetY: LAYOUT.fab.arcOffsets[2] }
             ].map((item, idx) => (
               <div
                 key={item.id}
@@ -2000,12 +2004,20 @@ export default function Dashboard() {
                     });
                     setIsFabOpen(false);
                   }}
-                  className="w-16 h-16 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200 active:scale-90 hover:brightness-125"
-                  style={{ backgroundColor: item.bgColor, border: `1.5px solid ${item.borderColor}` }}
+                  className="rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200 active:scale-90 hover:brightness-125"
+                  style={{
+                    width: `${LAYOUT.fab.circleSize}rem`,
+                    height: `${LAYOUT.fab.circleSize}rem`,
+                    backgroundColor: item.bg,
+                    border: `1.5px solid ${item.border}`
+                  }}
                 >
-                  <item.icon size={26} style={{ color: item.iconColor }} />
+                  <item.icon size={LAYOUT.fab.iconSize} style={{ color: item.icon }} />
                 </button>
-                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: item.iconColor }}>{item.label}</span>
+                <span
+                  className="font-bold uppercase tracking-widest"
+                  style={{ fontSize: `${LAYOUT.fab.labelFontSize}rem`, color: item.icon }}
+                >{item.label}</span>
               </div>
             ))}
           </div>
@@ -2474,8 +2486,9 @@ export default function Dashboard() {
       </main >
 
       {/* BARRA DE NAVEGAÇÃO MOBILE */}
-      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 pt-1.5 shadow-xl transition-all pb-safe"
+      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 shadow-xl transition-all pb-safe"
         style={{
+          paddingTop: `${LAYOUT.nav.paddingTop}rem`,
           ...(settings.enableGlassEffect ? {
             backgroundColor: hexToRgba(theme.fundoMenu, Math.max(0.95, settings.cardOpacity / 100)),
             backdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`,
@@ -2493,16 +2506,36 @@ export default function Dashboard() {
           ].map(item => {
             if (item.isFab) {
               return (
-                <button key={item.id} onClick={() => setIsFabOpen(!isFabOpen)} className={`relative flex items-center justify-center -mt-7 p-3.5 sm:p-4 rounded-full shadow-2xl transition-all duration-300 z-[110] ${isFabOpen ? 'rotate-90' : ''}`} style={{ backgroundColor: isFabOpen ? '#ef4444' : '#00B0F0', color: '#fff', border: `4px solid ${theme.fundoPrincipal}` }}>
-                  <item.icon size={26} />
+                <button
+                  key={item.id}
+                  onClick={() => setIsFabOpen(!isFabOpen)}
+                  className={`relative flex items-center justify-center rounded-full shadow-2xl transition-all duration-300 z-[110] ${isFabOpen ? 'rotate-90' : ''}`}
+                  style={{
+                    marginTop: `-${LAYOUT.nav.fabNegativeMarginTop}rem`,
+                    padding: `${LAYOUT.nav.fabPadding}rem`,
+                    backgroundColor: isFabOpen ? '#ef4444' : '#00B0F0',
+                    color: '#fff',
+                    border: `${LAYOUT.nav.fabBorderWidth}px solid ${theme.fundoPrincipal}`
+                  }}
+                >
+                  <item.icon size={LAYOUT.nav.fabIconSize} />
                 </button>
               );
             }
             const isActive = activeTab === item.id;
             return (
-              <button key={item.id} onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })} className="flex flex-col items-center justify-center flex-1 gap-1 py-2 transition-all active:scale-90" style={{ color: isActive ? '#00B0F0' : theme.textoSecundario }}>
-                <item.icon size={isActive ? 22 : 20} />
-                <span className="text-[9px] font-bold uppercase tracking-widest">{item.title}</span>
+              <button
+                key={item.id}
+                onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })}
+                className="flex flex-col items-center justify-center flex-1 gap-1 transition-all active:scale-90"
+                style={{
+                  paddingTop: `${LAYOUT.nav.buttonPaddingY}rem`,
+                  paddingBottom: `${LAYOUT.nav.buttonPaddingY}rem`,
+                  color: isActive ? '#00B0F0' : theme.textoSecundario
+                }}
+              >
+                <item.icon size={isActive ? LAYOUT.nav.iconSizeActive : LAYOUT.nav.iconSizeInactive} />
+                <span className="font-bold uppercase tracking-widest" style={{ fontSize: `${LAYOUT.nav.labelFontSize}rem` }}>{item.title}</span>
               </button>
             );
           })
