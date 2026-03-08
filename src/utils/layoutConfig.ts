@@ -74,6 +74,9 @@ export const LAYOUT = {
 
         /** Peso da fonte dos labels ('bold', 'semibold', 'normal', etc.) */
         labelFontWeight: 'bold' as const,
+
+        /** Texto do menu em MAIÚSCULAS? (true = UPPERCASE, false = capitalize normal) */
+        labelUppercase: true,
     },
 
     // ═════════════════════════════════════════════════════════════════
@@ -320,7 +323,7 @@ export const LAYOUT = {
         sidebarPadding: 1,
 
         /** Tamanho dos ícones do sidebar (px) */
-        sidebarIconSize: 198,
+        sidebarIconSize: 18,
 
         /** Tamanho da fonte dos itens do sidebar (rem) */
         sidebarFontSize: 0.875,
@@ -558,7 +561,43 @@ export const LAYOUT = {
     },
 
     // ═════════════════════════════════════════════════════════════════
-    //  ██  15. BREAKPOINTS DE REFERÊNCIA (não alterar a menos que
+    //  ██  15. BOTÕES DE FORMULÁRIOS (Add Trade, Import, Save, etc.)
+    // ═════════════════════════════════════════════════════════════════
+
+    formButton: {
+        /** Cor de fundo dos botões principais de ação (hex) */
+        backgroundColor: '#00B0F0',
+
+        /** Cor do texto dos botões principais */
+        textColor: '#ffffff',
+
+        /** Cor do botão secundário / importação (hex) */
+        secondaryBackgroundColor: '#EAB308',
+
+        /** Cor do texto do botão secundário */
+        secondaryTextColor: '#000000',
+
+        /** Cor do botão de perigo / deletar (hex) */
+        dangerBackgroundColor: '#ef4444',
+
+        /** Cor do texto do botão de perigo */
+        dangerTextColor: '#ffffff',
+
+        /** Border radius dos botões (rem) */
+        borderRadius: 0.5,
+
+        /** Padding vertical dos botões (rem) */
+        paddingY: 0.75,
+
+        /** Tamanho da fonte (rem) */
+        fontSize: 0.875,
+
+        /** Peso da fonte */
+        fontWeight: 'bold' as const,
+    },
+
+    // ═════════════════════════════════════════════════════════════════
+    //  ██  16. BREAKPOINTS DE REFERÊNCIA (não alterar a menos que
     //      saiba o que está fazendo — estes são os breakpoints do
     //      Tailwind usados no código)
     // ═════════════════════════════════════════════════════════════════

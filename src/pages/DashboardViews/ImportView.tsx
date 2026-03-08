@@ -45,7 +45,7 @@ export default function ImportView({
     };
 
     const updateTime = (unit, val) => {
-      if (!dateStr) return; // Needs date first
+      if (!dateStr) return;
       let newH = h || '00';
       let newM = m || '00';
       let newS = s || '00';
@@ -55,21 +55,23 @@ export default function ImportView({
       onChange(`${dateStr}T${newH}:${newM}:${newS}`);
     };
 
+    const selectCls = "min-w-0 w-full rounded-md px-1 py-1.5 outline-none text-[11px] bg-transparent cursor-pointer text-center appearance-none";
+
     return (
-      <div className="flex flex-col gap-2 w-full">
-        <input type="date" value={dateStr} onChange={handleDateChange} className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={{ ...inputStyle, colorScheme: 'dark' }} />
-        <div className="flex gap-1 justify-between">
-          <select value={h || ""} onChange={(e) => updateTime('h', e.target.value)} className="flex-1 rounded-lg p-2 outline-none text-xs bg-transparent cursor-pointer" style={inputStyle}>
+      <div className="flex flex-col gap-1.5 w-full overflow-hidden">
+        <input type="date" value={dateStr} onChange={handleDateChange} className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={{ ...inputStyle, colorScheme: 'dark' }} />
+        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-0.5 w-full">
+          <select value={h || ""} onChange={(e) => updateTime('h', e.target.value)} className={selectCls} style={inputStyle}>
             <option value="" disabled>HH</option>
             {Array.from({ length: 24 }).map((_, i) => <option key={i} value={String(i).padStart(2, '0')} className="bg-gray-900">{String(i).padStart(2, '0')}</option>)}
           </select>
-          <span className="text-white/50 self-center font-bold">:</span>
-          <select value={m || ""} onChange={(e) => updateTime('m', e.target.value)} className="flex-1 rounded-lg p-2 outline-none text-xs bg-transparent cursor-pointer" style={inputStyle}>
+          <span className="text-white/40 text-[10px] font-bold px-0.5">:</span>
+          <select value={m || ""} onChange={(e) => updateTime('m', e.target.value)} className={selectCls} style={inputStyle}>
             <option value="" disabled>MM</option>
             {Array.from({ length: 60 }).map((_, i) => <option key={i} value={String(i).padStart(2, '0')} className="bg-gray-900">{String(i).padStart(2, '0')}</option>)}
           </select>
-          <span className="text-white/50 self-center font-bold">:</span>
-          <select value={s || ""} onChange={(e) => updateTime('s', e.target.value)} className="flex-1 rounded-lg p-2 outline-none text-xs bg-transparent cursor-pointer" style={inputStyle}>
+          <span className="text-white/40 text-[10px] font-bold px-0.5">:</span>
+          <select value={s || ""} onChange={(e) => updateTime('s', e.target.value)} className={selectCls} style={inputStyle}>
             <option value="" disabled>SS</option>
             {Array.from({ length: 60 }).map((_, i) => <option key={i} value={String(i).padStart(2, '0')} className="bg-gray-900">{String(i).padStart(2, '0')}</option>)}
           </select>
@@ -95,7 +97,7 @@ export default function ImportView({
       <div className="rounded-xl p-4 md:p-5 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
         <div className="flex items-center gap-2 mb-3">
           <Building2 size={16} style={{ color: theme.textoAlerta }} />
-          <span className="text-sm font-bold uppercase tracking-wider" style={{ color: theme.textoSecundario }}>
+          <span className="text-sm font-bold capitalize tracking-wider" style={{ color: theme.textoSecundario }}>
             {t('import.step1', lang)}
           </span>
         </div>
@@ -132,45 +134,45 @@ export default function ImportView({
           {/* Manual Trade Entry */}
           <div className="rounded-xl p-4 md:p-6 shadow-xl transition-all flex flex-col" style={getGlassStyle(theme.fundoCards)}>
             <SectionTitle icon={Edit2} title={t('import.manualEntry', lang)} theme={theme} />
-            <div className="space-y-4 flex-1 flex flex-col">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+            <div className="space-y-4 flex-1 flex flex-col overflow-hidden">
+              <div className="grid grid-cols-2 gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.symbol', lang)}</label>
-                  <input type="text" placeholder="Ex: MNQ, MES..." className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent uppercase" style={inputStyle} value={manualTrade.symbol} onChange={e => setManualTrade({ ...manualTrade, symbol: e.target.value.toUpperCase() })} />
+                  <input type="text" placeholder="Ex: MNQ" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent uppercase" style={inputStyle} value={manualTrade.symbol} onChange={e => setManualTrade({ ...manualTrade, symbol: e.target.value.toUpperCase() })} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.qty', lang)}</label>
-                  <input type="number" placeholder="Ex: 1" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.qty === 0 ? '' : manualTrade.qty} onChange={e => setManualTrade({ ...manualTrade, qty: e.target.value === '' ? '' : e.target.value })} />
+                  <input type="number" placeholder="Ex: 1" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.qty === 0 ? '' : manualTrade.qty} onChange={e => setManualTrade({ ...manualTrade, qty: e.target.value === '' ? '' : e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.buyPrice', lang)}</label>
-                  <input type="number" step="0.01" placeholder="Ex: 25393.50" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.buyPrice === 0 ? '' : manualTrade.buyPrice} onChange={e => setManualTrade({ ...manualTrade, buyPrice: e.target.value === '' ? '' : e.target.value })} />
+                  <input type="number" step="0.01" placeholder="Ex: 25393.50" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.buyPrice === 0 ? '' : manualTrade.buyPrice} onChange={e => setManualTrade({ ...manualTrade, buyPrice: e.target.value === '' ? '' : e.target.value })} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.buyTime', lang)}</label>
                   <CustomDateTimeInput value={manualTrade.buyTime} onChange={(val) => setManualTrade({ ...manualTrade, buyTime: val })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.duration', lang)}</label>
-                  <input type="text" placeholder="Ex: 7min 12sec" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.duration} onChange={e => setManualTrade({ ...manualTrade, duration: e.target.value })} />
+                  <input type="text" placeholder="Ex: 7m 12s" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.duration} onChange={e => setManualTrade({ ...manualTrade, duration: e.target.value })} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.sellTime', lang)}</label>
                   <CustomDateTimeInput value={manualTrade.sellTime} onChange={(val) => setManualTrade({ ...manualTrade, sellTime: val })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.sellPrice', lang)}</label>
-                  <input type="number" step="0.01" placeholder="Ex: 25354.25" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.sellPrice === 0 ? '' : manualTrade.sellPrice} onChange={e => setManualTrade({ ...manualTrade, sellPrice: e.target.value === '' ? '' : e.target.value })} />
+                  <input type="number" step="0.01" placeholder="Ex: 25354.25" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.sellPrice === 0 ? '' : manualTrade.sellPrice} onChange={e => setManualTrade({ ...manualTrade, sellPrice: e.target.value === '' ? '' : e.target.value })} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.pnl', lang)}</label>
-                  <input type="number" step="0.01" placeholder="Ex: -78.50" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={inputStyle} value={manualTrade.pnl === 0 ? '' : manualTrade.pnl} onChange={e => setManualTrade({ ...manualTrade, pnl: e.target.value === '' ? '' : e.target.value })} />
+                  <input type="number" step="0.01" placeholder="Ex: -78.50" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.pnl === 0 ? '' : manualTrade.pnl} onChange={e => setManualTrade({ ...manualTrade, pnl: e.target.value === '' ? '' : e.target.value })} />
                 </div>
               </div>
               <button onClick={handleManualTradeAdd} className="w-full py-3 rounded-lg font-bold transition-opacity hover:opacity-80 shadow-md mt-auto" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>{t('import.addTrade', lang)}</button>

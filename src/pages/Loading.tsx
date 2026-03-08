@@ -1,10 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity } from 'lucide-react';
+import { supabase } from '../utils/supabase';
 
 export default function Loading() {
   const navigate = useNavigate();
   const [progress, setProgress] = useState(0);
+  const [userName, setUserName] = useState('');
+
+  // Buscar nome do usuário logado
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Tentar pegar first_name do perfil
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('first_name')
+          .eq('id', user.id)
+          .single();
+        if (profile?.first_name) {
+          setUserName(profile.first_name);
+        } else {
+          // Fallback: usar email antes do @
+          setUserName(user.email?.split('@')[0] || 'Trader');
+        }
+      }
+    };
+    fetchUser();
+  }, []);
 
   useEffect(() => {
     const duration = 2500; // 2.5 seconds
@@ -69,7 +92,9 @@ export default function Loading() {
 
         {/* Text */}
         <div className="text-center space-y-2">
-          <h2 className="text-xl font-medium">Welcome back, Alex.</h2>
+          <h2 className="text-xl font-medium">
+            Welcome back{userName ? `, ${userName}` : ''}.
+          </h2>
           <p className="text-gray-400">We are preparing your trading lab...</p>
         </div>
       </div>

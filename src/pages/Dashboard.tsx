@@ -2489,13 +2489,14 @@ export default function Dashboard() {
       <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 shadow-xl transition-all pb-safe"
         style={{
           paddingTop: `${LAYOUT.nav.paddingTop}rem`,
+          '--nav-pb-extra': `${LAYOUT.nav.paddingBottom}rem`,
           ...(settings.enableGlassEffect ? {
             backgroundColor: hexToRgba(theme.fundoMenu, Math.max(0.95, settings.cardOpacity / 100)),
             backdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`,
             WebkitBackdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`
           } : { backgroundColor: theme.fundoMenu }),
           borderColor: theme.contornoGeral, borderWidth: `${settings.borderWidthGeral}px 0 0 0`, borderStyle: 'solid'
-        }}>
+        } as React.CSSProperties}>
         {
           [
             { id: 'dashboard', icon: LayoutDashboard, title: 'Home' },
@@ -2535,7 +2536,7 @@ export default function Dashboard() {
                 }}
               >
                 <item.icon size={isActive ? LAYOUT.nav.iconSizeActive : LAYOUT.nav.iconSizeInactive} />
-                <span className="font-bold uppercase tracking-widest" style={{ fontSize: `${LAYOUT.nav.labelFontSize}rem` }}>{item.title}</span>
+                <span className={`font-bold tracking-widest ${LAYOUT.nav.labelUppercase ? 'uppercase' : 'capitalize'}`} style={{ fontSize: `${LAYOUT.nav.labelFontSize}rem` }}>{item.title}</span>
               </button>
             );
           })
