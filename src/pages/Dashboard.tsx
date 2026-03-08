@@ -1976,45 +1976,38 @@ export default function Dashboard() {
           className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md transition-opacity duration-300"
           onClick={() => setIsFabOpen(false)}
         >
-          {/* Arc container anchored above the FAB button */}
-          <div className="absolute bottom-28 left-1/2 -translate-x-1/2 w-[320px] h-[220px] flex items-end justify-center pointer-events-none">
+          {/* Buttons in a gentle arc above the FAB */}
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 flex items-end gap-6 pointer-events-none" style={{ paddingBottom: '8px' }}>
             {[
-              { id: 'import', icon: Plus, label: 'Trade', iconColor: '#34d399', bgColor: 'rgba(52,211,153,0.12)', borderColor: 'rgba(52,211,153,0.25)', angle: -135 },
-              { id: 'news', icon: Newspaper, label: 'News', iconColor: '#22d3ee', bgColor: 'rgba(34,211,238,0.12)', borderColor: 'rgba(34,211,238,0.25)', angle: -90 },
-              { id: 'holidays', icon: CalendarDays, label: 'Holidays', iconColor: '#f472b6', bgColor: 'rgba(244,114,182,0.12)', borderColor: 'rgba(244,114,182,0.25)', angle: -45 }
-            ].map((item, idx) => {
-              const radius = 110;
-              const angleRad = (item.angle * Math.PI) / 180;
-              const x = Math.cos(angleRad) * radius;
-              const y = Math.sin(angleRad) * radius;
-
-              return (
-                <div
-                  key={item.id}
-                  className="absolute flex flex-col items-center gap-2 pointer-events-auto"
-                  style={{
-                    transform: `translate(${x}px, ${y}px)`,
-                    animation: `fabItemIn 0.3s ease-out ${idx * 60}ms both`
+              { id: 'import', icon: Plus, label: 'Trade', iconColor: '#34d399', bgColor: 'rgba(52,211,153,0.12)', borderColor: 'rgba(52,211,153,0.25)', offsetY: 12 },
+              { id: 'news', icon: Newspaper, label: 'News', iconColor: '#22d3ee', bgColor: 'rgba(34,211,238,0.12)', borderColor: 'rgba(34,211,238,0.25)', offsetY: 40 },
+              { id: 'holidays', icon: CalendarDays, label: 'Holidays', iconColor: '#f472b6', bgColor: 'rgba(244,114,182,0.12)', borderColor: 'rgba(244,114,182,0.25)', offsetY: 12 }
+            ].map((item, idx) => (
+              <div
+                key={item.id}
+                className="flex flex-col items-center gap-2 pointer-events-auto animate-in fade-in slide-in-from-bottom-4 duration-300"
+                style={{
+                  animationDelay: `${idx * 60}ms`,
+                  marginBottom: `${item.offsetY}px`
+                }}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startTransition(() => {
+                      setPrevTab(activeTab);
+                      setActiveTab(item.id);
+                    });
+                    setIsFabOpen(false);
                   }}
+                  className="w-16 h-16 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200 active:scale-90 hover:brightness-125"
+                  style={{ backgroundColor: item.bgColor, border: `1.5px solid ${item.borderColor}` }}
                 >
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startTransition(() => {
-                        setPrevTab(activeTab);
-                        setActiveTab(item.id);
-                      });
-                      setIsFabOpen(false);
-                    }}
-                    className="w-16 h-16 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200 active:scale-90 hover:brightness-125"
-                    style={{ backgroundColor: item.bgColor, border: `1.5px solid ${item.borderColor}` }}
-                  >
-                    <item.icon size={26} style={{ color: item.iconColor }} />
-                  </button>
-                  <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: item.iconColor }}>{item.label}</span>
-                </div>
-              );
-            })}
+                  <item.icon size={26} style={{ color: item.iconColor }} />
+                </button>
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: item.iconColor }}>{item.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -2481,7 +2474,7 @@ export default function Dashboard() {
       </main >
 
       {/* BARRA DE NAVEGAÇÃO MOBILE */}
-      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 pt-2 shadow-xl transition-all pb-safe"
+      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 pt-1.5 shadow-xl transition-all pb-safe"
         style={{
           ...(settings.enableGlassEffect ? {
             backgroundColor: hexToRgba(theme.fundoMenu, Math.max(0.95, settings.cardOpacity / 100)),
@@ -2507,7 +2500,7 @@ export default function Dashboard() {
             }
             const isActive = activeTab === item.id;
             return (
-              <button key={item.id} onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })} className="flex flex-col items-center justify-center flex-1 gap-1 py-2.5 transition-all active:scale-90" style={{ color: isActive ? '#00B0F0' : theme.textoSecundario }}>
+              <button key={item.id} onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })} className="flex flex-col items-center justify-center flex-1 gap-1 py-2 transition-all active:scale-90" style={{ color: isActive ? '#00B0F0' : theme.textoSecundario }}>
                 <item.icon size={isActive ? 22 : 20} />
                 <span className="text-[9px] font-bold uppercase tracking-widest">{item.title}</span>
               </button>
