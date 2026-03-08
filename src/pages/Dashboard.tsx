@@ -2008,15 +2008,15 @@ export default function Dashboard() {
                   style={{
                     width: `${LAYOUT.fab.circleSize}rem`,
                     height: `${LAYOUT.fab.circleSize}rem`,
-                    backgroundColor: item.bg,
-                    border: `1.5px solid ${item.border}`
+                    backgroundColor: item.bgColor,
+                    border: `${LAYOUT.fab.circleBorderWidth}px solid ${item.borderColor}`
                   }}
                 >
-                  <item.icon size={LAYOUT.fab.iconSize} style={{ color: item.icon }} />
+                  <item.icon size={LAYOUT.fab.iconSize} style={{ color: item.iconColor }} />
                 </button>
                 <span
                   className="font-bold uppercase tracking-widest"
-                  style={{ fontSize: `${LAYOUT.fab.labelFontSize}rem`, color: item.icon }}
+                  style={{ fontSize: `${LAYOUT.fab.labelFontSize}rem`, color: item.iconColor }}
                 >{item.label}</span>
               </div>
             ))}
@@ -2513,7 +2513,7 @@ export default function Dashboard() {
                   style={{
                     marginTop: `-${LAYOUT.nav.fabNegativeMarginTop}rem`,
                     padding: `${LAYOUT.nav.fabPadding}rem`,
-                    backgroundColor: isFabOpen ? '#ef4444' : '#00B0F0',
+                    backgroundColor: isFabOpen ? LAYOUT.nav.fabOpenColor : LAYOUT.nav.fabClosedColor,
                     color: '#fff',
                     border: `${LAYOUT.nav.fabBorderWidth}px solid ${theme.fundoPrincipal}`
                   }}
@@ -2531,7 +2531,7 @@ export default function Dashboard() {
                 style={{
                   paddingTop: `${LAYOUT.nav.buttonPaddingY}rem`,
                   paddingBottom: `${LAYOUT.nav.buttonPaddingY}rem`,
-                  color: isActive ? '#00B0F0' : theme.textoSecundario
+                  color: isActive ? LAYOUT.nav.activeColor : theme.textoSecundario
                 }}
               >
                 <item.icon size={isActive ? LAYOUT.nav.iconSizeActive : LAYOUT.nav.iconSizeInactive} />
