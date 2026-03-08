@@ -32,7 +32,7 @@ export const LAYOUT = {
         paddingTop: 0.05,         // pt-1 = 0.25rem (4px). Aumente para subir o conteúdo.
 
         /** Padding vertical de cada botão do menu (rem) */
-        buttonPaddingY: 0.25,      // py-2 = 0.5rem (8px). Controla a altura dos botões.
+        buttonPaddingY: 0.02,      // py-2 = 0.5rem (8px). Controla a altura dos botões.
 
         /** Margem negativa superior do botão FAB central (rem) — puxa o botão pra cima */
         fabNegativeMarginTop: 1.75, // -mt-7 = -1.75rem. Quanto maior, mais o + sobe.
@@ -164,7 +164,7 @@ export const LAYOUT = {
         borderRadius: 1,          // rounded-2xl ≈ 1rem
 
         /** Padding interno dos cards (rem) */
-        padding: 1.25,            // p-5 = 1.25rem
+        padding: 1,            // p-5 = 1.25rem
 
         /** Padding interno dos modais (rem) */
         modalPadding: 1.25,       // p-5 = 1.25rem
