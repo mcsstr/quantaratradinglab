@@ -189,7 +189,7 @@ export default function SettingsView({
             {/* Dashboard Layout */}
             <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
               <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>{t('settings.dashboardLayout', lang)}</h3>
-              <div className="max-w-sm">
+              <div className="max-w-sm mb-6">
                 <select
                   className="w-full rounded-lg py-2.5 px-3 outline-none text-sm bg-transparent cursor-pointer"
                   style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
@@ -200,6 +200,29 @@ export default function SettingsView({
                   <option value="layout2" className="bg-gray-800">Layout 2 - Compact</option>
                   <option value="layout3" className="bg-gray-800">Layout 3 - Wide</option>
                 </select>
+              </div>
+
+              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>Mobile Table Columns</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Object.keys(settings.mobileTableColumns || DEFAULT_SETTINGS.mobileTableColumns).map(col => (
+                  <label key={col} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.mobileTableColumns?.[col] ?? DEFAULT_SETTINGS.mobileTableColumns[col as keyof typeof DEFAULT_SETTINGS.mobileTableColumns]}
+                      onChange={(e) => setSettings(prev => ({
+                        ...prev,
+                        mobileTableColumns: {
+                          ...(prev.mobileTableColumns || DEFAULT_SETTINGS.mobileTableColumns),
+                          [col]: e.target.checked
+                        }
+                      }))}
+                      className="accent-blue-500 rounded"
+                    />
+                    <span className="text-xs font-bold capitalize" style={{ color: theme.textoSecundario }}>
+                      {col.replace(/([A-Z])/g, ' $1').trim()}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 

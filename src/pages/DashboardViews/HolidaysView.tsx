@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { CalendarDays, Trash2, Edit2, Plus, Search, Check, X } from '../../components/Icons';
 
 const SectionTitle = ({ icon: Icon, title, theme }) => (
@@ -72,32 +73,42 @@ export default function HolidaysView({
                 return (
                   <tr key={h.id} className="transition-colors hover:bg-white/10" style={{ backgroundColor: index % 2 === 0 ? 'transparent' : 'rgba(128, 128, 128, 0.04)' }}>
                     <td className="px-3 py-3 md:px-5 md:py-4 font-mono text-[9px] sm:text-[10px] md:text-xs">
-                      {isEditingHoliday ? <input type="date" className="bg-transparent border-b outline-none text-[9px] sm:text-[10px] md:text-xs w-[90px] md:w-[110px]" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={editHolidayData.date} onChange={e => setEditHolidayData({ ...editHolidayData, date: e.target.value })} /> : formatDate(h.date)}
+                      {formatDate(h.date)}
                     </td>
                     <td className="px-3 py-3 md:px-5 md:py-4 font-medium whitespace-normal break-words min-w-[120px] sm:min-w-[200px] text-[9px] sm:text-[10px] md:text-xs" style={{ color: theme.contornoFeriado }}>
-                      {isEditingHoliday ? <input type="text" className="bg-transparent border-b outline-none w-full text-[9px] sm:text-[10px] md:text-xs" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={editHolidayData.description} onChange={e => setEditHolidayData({ ...editHolidayData, description: e.target.value })} /> : h.description}
+                      {h.description}
                     </td>
                     <td className="px-3 py-3 md:px-5 md:py-4 text-right flex justify-end gap-1">
-                      {isEditingHoliday ? (
-                        <>
-                          <button onClick={async () => { await saveHoliday(editHolidayData); setEditingHoliday(null); }} className="p-1 sm:p-1.5 rounded-md hover:bg-green-500/20 text-green-500"><Check size={isMobile ? 12 : 16} /></button>
-                          <button onClick={() => setEditingHoliday(null)} className="p-1 sm:p-1.5 rounded-md hover:bg-red-500/20 text-red-500"><X size={isMobile ? 12 : 16} /></button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => { setEditingHoliday(h.id); setEditHolidayData(h); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
-                          <button onClick={async () => { await deleteHoliday(h.id); }} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 16} /></button>
-                        </>
-                      )}
+                      <button onClick={() => { setEditingHoliday(h.id); setEditHolidayData(h); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
+                      <button onClick={async () => { await deleteHoliday(h.id); }} className="p-1 sm:p-1.5 md:p-2 rounded-md hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 16} /></button>
                     </td>
                   </tr>
                 )
               })}
-              {holidays.length === 0 && (<tr><td colSpan="4" className="p-8 text-center italic" style={{ color: theme.textoSecundario }}>No holidays added.</td></tr>)}
+              {holidays.length === 0 && (<tr><td colSpan="3" className="p-8 text-center italic" style={{ color: theme.textoSecundario }}>No holidays added.</td></tr>)}
             </tbody>
           </table>
         </div>
       </div>
+
+      {editingHoliday && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all" onClick={() => setEditingHoliday(null)}>
+          <div className="rounded-2xl w-full max-w-md shadow-[0_20px_60px_rgba(0,0,0,0.7)] flex flex-col border" style={{ backgroundColor: '#111114', borderColor: 'rgba(255,255,255,0.08)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+              <h3 className="font-bold text-lg flex items-center gap-2" style={{ color: '#fff' }}><Edit2 size={18} className="text-[#00B0F0]" /> Edit Holiday</h3>
+              <button onClick={() => setEditingHoliday(null)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40"><X size={20} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Date</label><input type="date" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all font-sans" style={{ color: '#fff' }} value={editHolidayData.date} onChange={e => setEditHolidayData({ ...editHolidayData, date: e.target.value })} /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Description</label><input type="text" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} value={editHolidayData.description} onChange={e => setEditHolidayData({ ...editHolidayData, description: e.target.value })} /></div>
+              <div className="pt-4">
+                <button onClick={async () => { await saveHoliday(editHolidayData); setEditingHoliday(null); }} className="w-full py-3.5 rounded-xl font-bold transition-all hover:brightness-110 active:scale-95 shadow-lg flex items-center justify-center gap-2" style={{ backgroundColor: '#00B0F0', color: '#fff' }}><Check size={18} /> Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

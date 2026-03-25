@@ -83,7 +83,21 @@ export const DEFAULT_SETTINGS = {
   enableGradient: false,
   gradientType: 'linear',
   gradientAngle: 180,
-  dashboardLayout: 'layout1'
+  dashboardLayout: 'layout1',
+  mobileTableColumns: {
+    symbol: true,
+    dateTime: true,
+    direction: true,
+    qty: false,
+    buyPrice: false,
+    buyTime: false,
+    duration: false,
+    sellTime: false,
+    sellPrice: false,
+    fees: false,
+    pnl: true,
+    action: true
+  }
 };
 
 export const DEFAULT_THEME = {

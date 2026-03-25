@@ -34,7 +34,7 @@ export const getFieldOptions = (isFixedFee: boolean) =>
         ];
 
 // ─── Dropdown reutilizável ────────────────────────────────────────────────────
-function MapToSelect({ value, onChange, isFixedFee }: { value: string; onChange: (v: string) => void; isFixedFee: boolean }) {
+function MapToSelect({ value, onChange, isFixedFee, selectedValues = [] }: { value: string; onChange: (v: string) => void; isFixedFee: boolean; selectedValues?: string[] }) {
     const options = getFieldOptions(isFixedFee);
     return (
         <select
@@ -43,11 +43,14 @@ function MapToSelect({ value, onChange, isFixedFee }: { value: string; onChange:
             className="flex-1 min-w-0 px-2 py-1.5 rounded-lg bg-white/5 text-xs font-semibold text-white/80 outline-none cursor-pointer border border-white/10 hover:border-white/20 transition-all"
             style={{ colorScheme: 'dark' }}
         >
-            {options.map(o => (
-                <option key={o.value} value={o.value} className="bg-gray-900 text-white">
-                    {o.label}
-                </option>
-            ))}
+            {options.map(o => {
+                const isDisabled = o.value !== 'ignore' && o.value !== 'raw' && o.value !== value && selectedValues.includes(o.value);
+                return (
+                    <option key={o.value} value={o.value} disabled={isDisabled} className={`bg-gray-900 ${isDisabled ? 'text-white/30' : 'text-white'}`}>
+                        {o.label}
+                    </option>
+                );
+            })}
         </select>
     );
 }
@@ -113,7 +116,7 @@ function CsvMappingEditor({ value, onChange, isFixedFee }: CsvMappingEditorProps
                                 {col}
                             </span>
                             <span className="text-white/20 text-xs shrink-0">→</span>
-                            <MapToSelect value={value[col] || 'ignore'} onChange={v => handleSetMap(col, v)} isFixedFee={isFixedFee} />
+                            <MapToSelect value={value[col] || 'ignore'} onChange={v => handleSetMap(col, v)} isFixedFee={isFixedFee} selectedValues={Object.values(value)} />
                         </div>
                     ))}
                 </div>
@@ -174,7 +177,7 @@ function PasteMappingEditor({ value, onChange, isFixedFee }: PasteMappingEditorP
                                 className="w-28 flex-shrink-0 px-2 py-1.5 rounded-lg bg-white/5 text-xs font-mono text-white/80 outline-none border border-white/10 focus:border-white/25 transition-all"
                             />
                             <span className="text-white/20 text-xs shrink-0">→</span>
-                            <MapToSelect value={rule.mapTo} onChange={v => update(i, 'mapTo', v)} isFixedFee={isFixedFee} />
+                            <MapToSelect value={rule.mapTo} onChange={v => update(i, 'mapTo', v)} isFixedFee={isFixedFee} selectedValues={value.map(r => r.mapTo)} />
                             <div className="flex shrink-0 gap-0.5">
                                 <button type="button" onClick={() => move(i, -1)} className="p-1 text-white/20 hover:text-white/60 transition-colors" disabled={i === 0}>
                                     <ArrowUp size={12} />

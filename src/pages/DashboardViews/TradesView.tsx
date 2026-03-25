@@ -47,6 +47,12 @@ export default function TradesView({
   const [isConfirmDeleteAllOpen, setIsConfirmDeleteAllOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const moCol = settings?.mobileTableColumns || {};
+  const getColClass = (key: string, desktopClass: string = '') => {
+    if (!isMobile) return desktopClass;
+    return moCol[key] !== false ? desktopClass.replace(/hidden (md|lg):table-cell/g, '').trim() : 'hidden';
+  };
+
   const handleDeleteAll = async () => {
     setIsDeleting(true);
     try {
@@ -213,18 +219,18 @@ export default function TradesView({
             <thead className="text-[9px] sm:text-[10px] md:text-xs tracking-wider font-bold" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), color: theme.textoSecundario }}>
               <tr>
                 <th className="px-2 py-3 md:px-4 md:py-4 w-6 text-center"><input type="checkbox" className="cursor-pointer" checked={paginatedTrades.length > 0 && selectedTrades.length === paginatedTrades.length} onChange={(e) => { if (e.target.checked) setSelectedTrades(paginatedTrades.map(t => t.id)); else setSelectedTrades([]); }} /></th>
-                <th className="px-2 py-3 md:px-4 md:py-4 text-center">Sym</th>
-                <th className="px-2 py-3 md:px-4 md:py-4">Date & Time</th>
-                <th className="px-2 py-3 md:px-4 md:py-4 text-center w-8 sm:w-12">Dir</th>
-                <th className="hidden md:table-cell px-2 py-3 md:px-4 md:py-4 text-center">Contracts</th>
-                <th className="hidden lg:table-cell px-2 py-3 md:px-4 md:py-4 text-center">Buy Price</th>
-                <th className="hidden lg:table-cell px-2 py-3 md:px-4 md:py-4 text-center">Buy Time</th>
-                <th className="hidden md:table-cell px-2 py-3 md:px-4 md:py-4 text-center">Duration</th>
-                <th className="hidden lg:table-cell px-2 py-3 md:px-4 md:py-4 text-center">Sell Time</th>
-                <th className="hidden lg:table-cell px-2 py-3 md:px-4 md:py-4 text-center">Sell Price</th>
-                <th className="px-2 py-3 md:px-4 md:py-4 text-right md:text-left">Gross P&L</th>
-                <th className="hidden md:table-cell px-2 py-3 md:px-4 md:py-4 text-right">Fees</th>
-                <th className="px-2 py-3 md:px-4 md:py-4 text-right">Action</th>
+                <th className={`${getColClass('symbol')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sym</th>
+                <th className={`${getColClass('dateTime')} px-2 py-3 md:px-4 md:py-4`}>Date & Time</th>
+                <th className={`${getColClass('direction')} px-2 py-3 md:px-4 md:py-4 text-center w-8 sm:w-12`}>Dir</th>
+                <th className={`${getColClass('qty', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Contracts</th>
+                <th className={`${getColClass('buyPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Buy Price</th>
+                <th className={`${getColClass('buyTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Buy Time</th>
+                <th className={`${getColClass('duration', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Duration</th>
+                <th className={`${getColClass('sellTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sell Time</th>
+                <th className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sell Price</th>
+                <th className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-right`}>Fees</th>
+                <th className={`${getColClass('pnl')} px-2 py-3 md:px-4 md:py-4 text-right md:text-left`}>Gross P&L</th>
+                <th className={`${getColClass('action')} px-2 py-3 md:px-4 md:py-4 text-right`}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -233,45 +239,45 @@ export default function TradesView({
                   <td className="px-2 py-2.5 md:px-4 md:py-3 text-center">
                     <input type="checkbox" className="cursor-pointer" checked={selectedTrades.includes(trade.id)} onChange={() => { setSelectedTrades(prev => prev.includes(trade.id) ? prev.filter(id => id !== trade.id) : [...prev, trade.id]); }} />
                   </td>
-                  <td className="px-2 py-2.5 md:px-4 md:py-3 text-center font-bold text-[9px] sm:text-[10px] md:text-xs truncate max-w-[40px] sm:max-w-none">
+                  <td className={`${getColClass('symbol')} px-2 py-2.5 md:px-4 md:py-3 text-center font-bold text-[9px] sm:text-[10px] md:text-xs truncate max-w-[40px] sm:max-w-none`}>
                     {trade.symbol || '-'}
                   </td>
-                  <td className="px-2 py-2.5 md:px-4 md:py-3 font-mono text-[8.5px] sm:text-[10px] md:text-xs leading-tight">
+                  <td className={`${getColClass('dateTime')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-[8.5px] sm:text-[10px] md:text-xs leading-tight`}>
                     <div className="flex flex-col">
                       <span>{formatDate(trade.date)}</span>
                       {trade.entryTimestamp && <span className="opacity-70">{new Date(trade.entryTimestamp).toLocaleTimeString(userLocale, { hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
                     </div>
                   </td>
-                  <td className="px-2 py-2.5 md:px-4 md:py-3 text-center">
+                  <td className={`${getColClass('direction')} px-2 py-2.5 md:px-4 md:py-3 text-center`}>
                     <div className="flex items-center justify-center gap-1 font-bold text-[9px] sm:text-[10px] md:text-xs" style={{ color: trade.direction === 'Short' ? theme.textoNegativo : theme.textoPositivo }}>
                       {trade.direction === 'Short' ? <ArrowDown size={12} className="md:w-[14px] md:h-[14px]" /> : <ArrowUp size={12} className="md:w-[14px] md:h-[14px]" />}
                     </div>
                   </td>
-                  <td className="hidden md:table-cell px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs">
+                  <td className={`${getColClass('qty', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs`}>
                     {trade.qty}
                   </td>
-                  <td className="hidden lg:table-cell px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70">
+                  <td className={`${getColClass('buyPrice', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
                     {trade.buyPrice ? trade.buyPrice.toLocaleString(userLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                   </td>
-                  <td className="hidden lg:table-cell px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70">
+                  <td className={`${getColClass('buyTime', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
                     {trade.buyTime || '-'}
                   </td>
-                  <td className="hidden md:table-cell px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70">
+                  <td className={`${getColClass('duration', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
                     {trade.duration || "00:00"}
                   </td>
-                  <td className="hidden lg:table-cell px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70">
+                  <td className={`${getColClass('sellTime', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
                     {trade.sellTime || '-'}
                   </td>
-                  <td className="hidden lg:table-cell px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70">
+                  <td className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
                     {trade.sellPrice ? trade.sellPrice.toLocaleString(userLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                   </td>
-                  <td className="px-2 py-2.5 md:px-4 md:py-3 font-bold text-right md:text-left text-[10px] md:text-xs" style={{ color: trade.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
-                    {formatCurrency(trade.pnl)}
-                  </td>
-                  <td className="hidden md:table-cell px-2 py-2.5 md:px-4 md:py-3 font-mono text-right text-[10px] md:text-xs" style={{ color: theme.textoNegativo }}>
+                  <td className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-right text-[10px] md:text-xs`} style={{ color: theme.textoSecundario }}>
                     {trade.commission ? `-${formatCurrency(Math.abs(Number(trade.commission)))}` : '$0.00'}
                   </td>
-                  <td className="px-2 py-2.5 md:px-4 md:py-3 text-right flex justify-end gap-1">
+                  <td className={`${getColClass('pnl')} px-2 py-2.5 md:px-4 md:py-3 font-bold text-right md:text-left text-[10px] md:text-xs`} style={{ color: trade.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
+                    {formatCurrency(trade.pnl)}
+                  </td>
+                  <td className={`${getColClass('action')} px-2 py-2.5 md:px-4 md:py-3 text-right flex justify-end gap-1`}>
                     <button onClick={() => { setEditFormData(trade); setIsTradeModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
                     <button onClick={() => handleDeleteSingle(trade.id)} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 14} /></button>
                   </td>

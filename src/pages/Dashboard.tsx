@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef, useTransition } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useTransition, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList, PieChart, Pie, AreaChart, Area
 } from 'recharts';
 import {
-  LayoutDashboard, Import, Settings as SettingsIcon, TrendingUp, DollarSign, Percent, Target, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Trash2, ListIcon, Search, Activity, CalendarDays, Plus, Palette, BarChart2, Sun, ShieldAlert, Layers, Banknote, Edit2, Check, X, Download, FileText, ArrowUp, ArrowDown, Newspaper, Folder, MenuIcon, UserIcon, CreditCardIcon, LogOutIcon, GearIcon2, Building2, Monitor
+  LayoutDashboard, Import, Settings as SettingsIcon, TrendingUp, DollarSign, Percent, Target, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Trash2, ListIcon, Search, Activity, CalendarDays, Plus, Palette, BarChart2, Sun, ShieldAlert, Layers, Banknote, Edit2, Check, X, Download, FileText, ArrowUp, ArrowDown, Newspaper, Folder, MenuIcon, UserIcon, CreditCardIcon, LogOutIcon, GearIcon2, Building2, Monitor, RefreshCcw
 } from '../components/Icons';
 import {
   CURRENCIES_LIST, TIMEZONES_LIST, DEFAULT_SETTINGS, DEFAULT_THEME, DEFAULT_ACCOUNT_SETTINGS, THEME_GROUPS, generateId, hexToRgba
@@ -112,6 +112,12 @@ export default function Dashboard() {
   const [historyPage, setHistoryPage] = useState(1);
   const historyItemsPerPage = 20;
 
+  // Estados Customizados para o Mobile Pull-to-Refresh Interno
+  const [pullDist, setPullDist] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const pullStartY = useRef(0);
+
   // Estado das abas de Configurações
   const [activeSettingsTab, setActiveSettingsTab] = useState('account');
   const [session, setSession] = useState<any>(null);
@@ -150,173 +156,173 @@ export default function Dashboard() {
   }, [historyPage]);
 
   // Leitura inicial do Supabase
-  useEffect(() => {
-    const loadData = async () => {
-      if (!session) return;
-      setIsSyncing(true);
+  const loadData = useCallback(async () => {
+    if (!session) return;
+    setIsSyncing(true);
 
-      try {
-        // Fetch Profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+    try {
+      // Fetch Profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
 
-        let currentPlan = 'Free';
-        if (profile) {
-          currentPlan = profile.plan || 'Free';
-          const profileSettings = {
-            ...DEFAULT_SETTINGS,
-            appLanguage: profile.app_language,
-            dateFormat: profile.date_format,
-            userName: profile.first_name || 'User',
-            userPlan: currentPlan,
-            ...profile.theme_settings
-          };
-          setSettings(profileSettings);
+      let currentPlan = 'Free';
+      if (profile) {
+        currentPlan = profile.plan || 'Free';
+        const profileSettings = {
+          ...DEFAULT_SETTINGS,
+          appLanguage: profile.app_language,
+          dateFormat: profile.date_format,
+          userName: profile.first_name || 'User',
+          userPlan: currentPlan,
+          ...profile.theme_settings
+        };
+        setSettings(profileSettings);
+      }
+
+      // Fetch Accounts
+      const { data: dbAccounts } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('name');
+
+      if (dbAccounts) {
+        setAccounts(dbAccounts.map(a => ({
+          id: a.id,
+          name: a.name,
+          initialBalance: Number(a.initial_balance),
+          brokerCurrency: a.broker_currency,
+          paymentCurrency: a.payment_currency,
+          timezone: a.timezone,
+          consistencyTarget: Number(a.consistency_target),
+          profitSplit: Number(a.profit_split),
+          feePerTrade: Number(a.fee_per_trade),
+          feeType: a.fee_type,
+          dailyLossLimit: Number(a.daily_loss_limit),
+          dailyLossLimitType: a.daily_loss_limit_type,
+          totalStopLoss: Number(a.total_stop_loss),
+          totalStopLossType: a.total_stop_loss_type,
+          enableCsv: a.enable_csv ?? true,
+          enablePaste: a.enable_paste ?? false,
+          csvMapping: (a.csv_mapping && !Array.isArray(a.csv_mapping) ? a.csv_mapping : {}),
+          pasteMapping: Array.isArray(a.paste_mapping) ? a.paste_mapping : [],
+          isFixedFee: a.is_fixed_fee ?? false,
+          feePerContract: Number(a.fee_per_contract ?? 0)
+        })));
+      }
+
+      // Fetch Trades — filtra por account_id das contas do usuário (trades não tem user_id)
+      const accountIds = (dbAccounts || []).map(a => a.id);
+
+      if (currentPlan === 'Free') {
+        const localTrades = localStorage.getItem('tradeJournal_trades');
+        if (localTrades) {
+          setTrades(JSON.parse(localTrades));
+        } else {
+          setTrades([]);
         }
+      } else {
+        const { data: dbTrades } = accountIds.length > 0
+          ? await supabase
+            .from('trades')
+            .select('*')
+            .in('account_id', accountIds)
+          : { data: [] };
 
-        // Fetch Accounts
-        const { data: dbAccounts } = await supabase
-          .from('accounts')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .order('name');
-
-        if (dbAccounts) {
-          setAccounts(dbAccounts.map(a => ({
-            id: a.id,
-            name: a.name,
-            initialBalance: Number(a.initial_balance),
-            brokerCurrency: a.broker_currency,
-            paymentCurrency: a.payment_currency,
-            timezone: a.timezone,
-            consistencyTarget: Number(a.consistency_target),
-            profitSplit: Number(a.profit_split),
-            feePerTrade: Number(a.fee_per_trade),
-            feeType: a.fee_type,
-            dailyLossLimit: Number(a.daily_loss_limit),
-            dailyLossLimitType: a.daily_loss_limit_type,
-            totalStopLoss: Number(a.total_stop_loss),
-            totalStopLossType: a.total_stop_loss_type,
-            enableCsv: a.enable_csv ?? true,
-            enablePaste: a.enable_paste ?? false,
-            csvMapping: (a.csv_mapping && !Array.isArray(a.csv_mapping) ? a.csv_mapping : {}),
-            pasteMapping: Array.isArray(a.paste_mapping) ? a.paste_mapping : [],
-            isFixedFee: a.is_fixed_fee ?? false,
-            feePerContract: Number(a.fee_per_contract ?? 0)
+        if (dbTrades) {
+          setTrades(dbTrades.map(t => ({
+            id: t.id,
+            accountId: t.account_id,
+            symbol: t.symbol,
+            direction: t.direction,
+            qty: t.qty,
+            pnl: Number(t.pnl),
+            date: t.date,
+            entryTimestamp: t.entry_timestamp,
+            buyPrice: Number(t.buy_price),
+            buyTime: t.buy_time,
+            duration: t.duration,
+            sellTime: t.sell_time,
+            sellPrice: Number(t.sell_price),
+            notes: t.notes,
+            commission: t.commission !== null && t.commission !== undefined ? Number(t.commission) : null,
+            rawMetadata: t.raw_metadata || {}
           })));
         }
-
-        // Fetch Trades — filtra por account_id das contas do usuário (trades não tem user_id)
-        const accountIds = (dbAccounts || []).map(a => a.id);
-
-        if (currentPlan === 'Free') {
-          const localTrades = localStorage.getItem('tradeJournal_trades');
-          if (localTrades) {
-            setTrades(JSON.parse(localTrades));
-          } else {
-            setTrades([]);
-          }
-        } else {
-          const { data: dbTrades } = accountIds.length > 0
-            ? await supabase
-              .from('trades')
-              .select('*')
-              .in('account_id', accountIds)
-            : { data: [] };
-
-          if (dbTrades) {
-            setTrades(dbTrades.map(t => ({
-              id: t.id,
-              accountId: t.account_id,
-              symbol: t.symbol,
-              direction: t.direction,
-              qty: t.qty,
-              pnl: Number(t.pnl),
-              date: t.date,
-              entryTimestamp: t.entry_timestamp,
-              buyPrice: Number(t.buy_price),
-              buyTime: t.buy_time,
-              duration: t.duration,
-              sellTime: t.sell_time,
-              sellPrice: Number(t.sell_price),
-              notes: t.notes,
-              commission: t.commission !== null && t.commission !== undefined ? Number(t.commission) : null,
-              rawMetadata: t.raw_metadata || {}
-            })));
-          }
-        }
-
-        // Initialize Active Account and Selection if not set
-        if (dbAccounts && dbAccounts.length > 0) {
-          if (!activeAccountId) setActiveAccountId(dbAccounts[0].id);
-          if (!selectedImportAccountId) setSelectedImportAccountId(dbAccounts[0].id);
-        }
-
-        // Migration from localStorage if Supabase is empty
-        if ((!dbAccounts || dbAccounts.length === 0)) {
-          const savedAccounts = localStorage.getItem('tradeJournal_accounts');
-          if (savedAccounts) {
-            const localAccs = JSON.parse(savedAccounts);
-            const toInsert = localAccs.map(acc => ({
-              user_id: session.user.id,
-              name: acc.name,
-              initial_balance: Number(acc.initialBalance || 0),
-              broker_currency: acc.brokerCurrency || 'USD',
-              payment_currency: acc.paymentCurrency || 'USD',
-              timezone: acc.timezone || 'UTC',
-              consistency_target: Number(acc.consistencyTarget || 0),
-              profit_split: Number(acc.profitSplit || 0),
-              fee_per_trade: Number(acc.feePerTrade || 0),
-              fee_type: acc.feeType || '$',
-              daily_loss_limit: Number(acc.dailyLossLimit || 0),
-              daily_loss_limit_type: acc.dailyLossLimitType || '$',
-              total_stop_loss: Number(acc.totalStopLoss || 0),
-              total_stop_loss_type: acc.totalStopLossType || '$'
-            }));
-
-            const { data: migratedData, error: migrationError } = await supabase
-              .from('accounts')
-              .insert(toInsert)
-              .select();
-
-            if (!migrationError && migratedData) {
-              const newAccounts = migratedData.map(a => ({
-                id: a.id,
-                name: a.name,
-                initialBalance: Number(a.initial_balance),
-                brokerCurrency: a.broker_currency,
-                paymentCurrency: a.payment_currency,
-                timezone: a.timezone,
-                consistencyTarget: Number(a.consistency_target),
-                profitSplit: Number(a.profit_split),
-                feePerTrade: Number(a.fee_per_trade),
-                feeType: a.fee_type,
-                dailyLossLimit: Number(a.daily_loss_limit),
-                dailyLossLimitType: a.daily_loss_limit_type,
-                totalStopLoss: Number(a.total_stop_loss),
-                totalStopLossType: a.total_stop_loss_type
-              }));
-              setAccounts(newAccounts);
-              if (newAccounts.length > 0) {
-                setActiveAccountId(newAccounts[0].id);
-                setSelectedImportAccountId(newAccounts[0].id);
-              }
-              localStorage.removeItem('tradeJournal_accounts');
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error loading data from Supabase:", err);
-      } finally {
-        setIsSyncing(false);
       }
-    };
 
+      // Initialize Active Account and Selection if not set
+      if (dbAccounts && dbAccounts.length > 0) {
+        if (!activeAccountId) setActiveAccountId(dbAccounts[0].id);
+        if (!selectedImportAccountId) setSelectedImportAccountId(dbAccounts[0].id);
+      }
+
+      // Migration from localStorage if Supabase is empty
+      if ((!dbAccounts || dbAccounts.length === 0)) {
+        const savedAccounts = localStorage.getItem('tradeJournal_accounts');
+        if (savedAccounts) {
+          const localAccs = JSON.parse(savedAccounts);
+          const toInsert = localAccs.map(acc => ({
+            user_id: session.user.id,
+            name: acc.name,
+            initial_balance: Number(acc.initialBalance || 0),
+            broker_currency: acc.brokerCurrency || 'USD',
+            payment_currency: acc.paymentCurrency || 'USD',
+            timezone: acc.timezone || 'UTC',
+            consistency_target: Number(acc.consistencyTarget || 0),
+            profit_split: Number(acc.profitSplit || 0),
+            fee_per_trade: Number(acc.feePerTrade || 0),
+            fee_type: acc.feeType || '$',
+            daily_loss_limit: Number(acc.dailyLossLimit || 0),
+            daily_loss_limit_type: acc.dailyLossLimitType || '$',
+            total_stop_loss: Number(acc.totalStopLoss || 0),
+            total_stop_loss_type: acc.totalStopLossType || '$'
+          }));
+
+          const { data: migratedData, error: migrationError } = await supabase
+            .from('accounts')
+            .insert(toInsert)
+            .select();
+
+          if (!migrationError && migratedData) {
+            const newAccounts = migratedData.map(a => ({
+              id: a.id,
+              name: a.name,
+              initialBalance: Number(a.initial_balance),
+              brokerCurrency: a.broker_currency,
+              paymentCurrency: a.payment_currency,
+              timezone: a.timezone,
+              consistencyTarget: Number(a.consistency_target),
+              profitSplit: Number(a.profit_split),
+              feePerTrade: Number(a.fee_per_trade),
+              feeType: a.fee_type,
+              dailyLossLimit: Number(a.daily_loss_limit),
+              dailyLossLimitType: a.daily_loss_limit_type,
+              totalStopLoss: Number(a.total_stop_loss),
+              totalStopLossType: a.total_stop_loss_type
+            }));
+            setAccounts(newAccounts);
+            if (newAccounts.length > 0) {
+              setActiveAccountId(newAccounts[0].id);
+              setSelectedImportAccountId(newAccounts[0].id);
+            }
+            localStorage.removeItem('tradeJournal_accounts');
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error loading data from Supabase:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [session, navigate, activeAccountId, selectedImportAccountId]);
+
+  useEffect(() => {
     loadData();
-  }, [session, navigate]);
+  }, [loadData]);
 
   // --- ACCOUNT DERIVATIONS ---
   const activeAccount = accounts.find(a => a.id === activeAccountId) || null;
@@ -1004,9 +1010,14 @@ export default function Dashboard() {
         dateStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
       }
 
+      let commission = tradeData.commission ? Number(tradeData.commission) : null;
+      if (activeAccount?.feeType === '$' && activeAccount?.feePerTrade) {
+        commission = qty * Number(activeAccount.feePerTrade);
+      }
+
       return {
         qty, pnlValue, symbol, buyPrice, sellPrice, direction, entryTimestamp, dateStr, rawMetadata,
-        buyTime: tradeData.buyTime, sellTime: tradeData.sellTime, duration: tradeData.duration
+        buyTime: tradeData.buyTime, sellTime: tradeData.sellTime, duration: tradeData.duration, commission
       };
     };
 
@@ -1048,7 +1059,12 @@ export default function Dashboard() {
             let finalCommission = 0;
             if (activeAccount.isFixedFee) {
               const defaultFee = Number(activeAccount.feePerContract || 0);
-              finalCommission = Math.abs(Number(t.qty)) * defaultFee;
+              if (activeAccount.feeType === '%') {
+                const volume = Math.abs(Number(t.qty)) * Number(t.buyPrice || t.sellPrice || 0);
+                finalCommission = volume * (defaultFee / 100);
+              } else {
+                finalCommission = Math.abs(Number(t.qty)) * defaultFee;
+              }
             } else if (tradeData.commission !== undefined && tradeData.commission !== null && tradeData.commission !== '') {
               let cleanVal = String(tradeData.commission).replace(/[$\s,]/g, '');
               if (cleanVal.includes('(') && cleanVal.includes(')')) cleanVal = '-' + cleanVal.replace(/[()]/g, '');
@@ -1093,9 +1109,13 @@ export default function Dashboard() {
             // ── Lógica Híbrida de Comissão (Paste) ───────────────────────────
             let finalCommission = 0;
             if (activeAccount.isFixedFee) {
-              // Corretagem fixa: multiplica taxa padrão pela quantidade
               const defaultFee = Number(activeAccount.feePerContract || 0);
-              finalCommission = Math.abs(Number(t.qty)) * defaultFee;
+              if (activeAccount.feeType === '%') {
+                const volume = Math.abs(Number(t.qty)) * Number(t.buyPrice || t.sellPrice || 0);
+                finalCommission = volume * (defaultFee / 100);
+              } else {
+                finalCommission = Math.abs(Number(t.qty)) * defaultFee;
+              }
             } else if (tradeData.commission !== undefined && tradeData.commission !== null && tradeData.commission !== '') {
               // Corretagem variável: lê valor mapeado da coluna 'commission'
               let cleanVal = String(tradeData.commission).replace(/[$\s,]/g, '');
@@ -1511,14 +1531,23 @@ export default function Dashboard() {
           buy_time: editFormData.buyTime,
           duration: editFormData.duration,
           sell_time: editFormData.sellTime,
-          sell_price: parseFloat(editFormData.sellPrice),
+          sell_price: editFormData.sellPrice ? parseFloat(editFormData.sellPrice) : null,
+          commission: editFormData.commission ? parseFloat(editFormData.commission) : null,
           notes: editFormData.notes
         })
         .eq('id', tradeId);
 
       if (error) throw error;
 
-      setTrades(trades.map(t => t.id === tradeId ? { ...t, ...editFormData, qty: parseFloat(editFormData.qty), pnl: parseFloat(editFormData.pnl) } : t));
+      setTrades(trades.map(t => t.id === tradeId ? {
+        ...t,
+        ...editFormData,
+        qty: parseFloat(editFormData.qty),
+        pnl: parseFloat(editFormData.pnl),
+        buyPrice: editFormData.buyPrice ? parseFloat(editFormData.buyPrice) : null,
+        sellPrice: editFormData.sellPrice ? parseFloat(editFormData.sellPrice) : null,
+        commission: editFormData.commission ? parseFloat(editFormData.commission) : null
+      } : t));
       setIsTradeModalOpen(false);
       setToastMessage('Trade updated!');
     } catch (err: any) {
@@ -1858,8 +1887,68 @@ export default function Dashboard() {
   }, [activeTrades, timeGrouping, accountSettings.feePerTrade]);
 
 
+  // ── Pull-to-Refresh Logic (Mobile) ─────────────
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY === 0) {
+      pullStartY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isPulling) return;
+    const y = e.touches[0].clientY;
+    const dist = y - pullStartY.current;
+    if (dist > 0 && window.scrollY === 0) {
+      setPullDist(Math.min(dist * 0.4, 80));
+    } else {
+      setPullDist(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isPulling) {
+      if (pullDist >= 60) {
+        setIsRefreshing(true);
+        setPullDist(0);
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+        loadData().then(() => {
+          setIsRefreshing(false);
+          setToastMessage('Data synchronized');
+          setTimeout(() => setToastMessage(''), 2000);
+        });
+      } else {
+        setPullDist(0);
+      }
+      setIsPulling(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden relative" style={appBackgroundStyle}>
+    <div
+      className="min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden relative"
+      style={appBackgroundStyle}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* INDICADOR DE PULL-TO-REFRESH MOBILE */}
+      <div
+        className="flex items-center justify-center overflow-hidden transition-all duration-300 pointer-events-none w-full"
+        style={{
+          height: isRefreshing ? 60 : (pullDist > 0 ? pullDist : 0),
+          opacity: (pullDist > 0 || isRefreshing) ? 1 : 0,
+          marginTop: '60px' /* Para ficar visível abaixo do header */
+        }}
+      >
+        {isRefreshing ? (
+          <div className="w-6 h-6 border-2 border-[#00B0F0] border-t-transparent rounded-full animate-spin"></div>
+        ) : (
+          <RefreshCcw size={20} className="text-white/50 transition-transform" style={{ transform: `rotate(${pullDist * 2}deg)` }} />
+        )}
+      </div>
       {/* MODAL: EDIT TRADE */}
       {isTradeModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all" onClick={() => setIsTradeModalOpen(false)}>
@@ -1868,13 +1957,29 @@ export default function Dashboard() {
               <h3 className="font-bold text-lg flex items-center gap-2" style={{ color: '#fff' }}><Edit2 size={18} className="text-[#00B0F0]" /> Edit Trade</h3>
               <button onClick={() => setIsTradeModalOpen(false)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-white/40"><X size={20} /></button>
             </div>
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh] hide-scrollbar">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Symbol</label><input type="text" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all uppercase" style={{ color: '#fff' }} value={editFormData.symbol} onChange={e => setEditFormData({ ...editFormData, symbol: e.target.value.toUpperCase() })} /></div>
                 <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Contracts</label><input type="number" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} value={editFormData.qty} onChange={e => setEditFormData({ ...editFormData, qty: e.target.value })} /></div>
               </div>
-              <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">P&L ($)</label><input type="number" step="0.01" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} value={editFormData.pnl} onChange={e => setEditFormData({ ...editFormData, pnl: e.target.value })} /></div>
-              <div className="pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">P&L ($)</label><input type="number" step="0.01" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} value={editFormData.pnl} onChange={e => setEditFormData({ ...editFormData, pnl: e.target.value })} /></div>
+                <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Commission</label><input type="number" step="0.0001" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} value={editFormData.commission || ''} onChange={e => setEditFormData({ ...editFormData, commission: e.target.value })} /></div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Buy Time</label><input type="text" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} placeholder="YYYY/MM/DD HH:MM:SS" value={editFormData.buyTime || ''} onChange={e => setEditFormData({ ...editFormData, buyTime: e.target.value })} /></div>
+                <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Buy Price</label><input type="number" step="0.00001" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} value={editFormData.buyPrice || ''} onChange={e => setEditFormData({ ...editFormData, buyPrice: e.target.value })} /></div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Sell Time</label><input type="text" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} placeholder="YYYY/MM/DD HH:MM:SS" value={editFormData.sellTime || ''} onChange={e => setEditFormData({ ...editFormData, sellTime: e.target.value })} /></div>
+                <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Sell Price</label><input type="number" step="0.00001" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} value={editFormData.sellPrice || ''} onChange={e => setEditFormData({ ...editFormData, sellPrice: e.target.value })} /></div>
+              </div>
+
+              <div className="space-y-1.5"><label className="text-[10px] font-bold uppercase tracking-wider text-white/40">Duration</label><input type="text" className="w-full rounded-xl p-3 border-0 outline-none text-sm bg-white/5 focus:bg-white/10 transition-all" style={{ color: '#fff' }} placeholder="e.g 00:05:30" value={editFormData.duration || ''} onChange={e => setEditFormData({ ...editFormData, duration: e.target.value })} /></div>
+
+              <div className="pt-2">
                 <button onClick={saveTradeModal} className="w-full py-3.5 rounded-xl font-bold transition-all hover:brightness-110 active:scale-95 shadow-lg flex items-center justify-center gap-2" style={{ backgroundColor: '#00B0F0', color: '#fff' }}><Check size={18} /> Save Changes</button>
               </div>
             </div>
@@ -2013,7 +2118,7 @@ export default function Dashboard() {
       {/* FAB SPEED DIAL OVERLAY */}
       {isFabOpen && (
         <div
-          className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md transition-opacity duration-300"
+          className="fixed inset-0 z-[50] bg-black/70 backdrop-blur-md transition-opacity duration-300"
           onClick={() => setIsFabOpen(false)}
         >
           {/* Buttons in a gentle arc above the FAB */}
@@ -2250,7 +2355,7 @@ export default function Dashboard() {
       </header >
 
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 overflow-y-auto px-4 lg:px-6 pt-safe-main pb-safe-main main-container" style={{ scrollBehavior: 'smooth' }}>
+      <main className="flex-1 w-full px-4 lg:px-6 pt-safe-main pb-safe-main main-container" style={{ scrollBehavior: 'smooth' }}>
 
         {settings.userPlan === 'Free' && (
           <div className="mx-auto max-w-4xl bg-red-900/20 border border-red-500/30 text-red-200 px-4 py-3 rounded-xl mb-1 mt-2 text-xs md:text-sm font-medium flex items-center justify-center text-center shadow-sm animate-fade-in backdrop-blur-md">
@@ -2527,7 +2632,7 @@ export default function Dashboard() {
       </main >
 
       {/* BOTTOM NAVIGATION MOBILE FIXO */}
-      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-[90] items-center justify-around px-2 shadow-xl transition-all pb-safe"
+      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-[50] items-center justify-around px-2 shadow-xl transition-all pb-safe"
         style={{
           paddingTop: `${LAYOUT.nav.paddingTop}rem`,
           ...iosNavFix,
@@ -2552,7 +2657,7 @@ export default function Dashboard() {
                 <button
                   key={item.id}
                   onClick={() => setIsFabOpen(!isFabOpen)}
-                  className={`relative flex items-center justify-center rounded-full shadow-2xl transition-all duration-300 z-[110] ${isFabOpen ? 'rotate-90' : ''}`}
+                  className={`relative flex items-center justify-center rounded-full shadow-2xl transition-all duration-300 z-[60] ${isFabOpen ? 'rotate-90' : ''}`}
                   style={{
                     marginTop: `-${LAYOUT.nav.fabNegativeMarginTop}rem`,
                     padding: `${LAYOUT.nav.fabPadding}rem`,
@@ -2801,7 +2906,21 @@ export default function Dashboard() {
                     </label>
                     {(accountFormData.isFixedFee) && (
                       <div className="space-y-1.5 mb-3">
-                        <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Valor da Taxa (Fee) por Contrato</label>
+                        <div className="flex justify-between items-end">
+                          <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Valor da Taxa (Fee) por Contrato</label>
+                          <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/10">
+                            <button
+                              type="button"
+                              onClick={() => setAccountFormData(p => ({ ...p, feeType: '$' }))}
+                              className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${accountFormData.feeType === '$' ? 'bg-[#00B0F0] text-white' : 'text-white/30 hover:text-white'}`}
+                            >$</button>
+                            <button
+                              type="button"
+                              onClick={() => setAccountFormData(p => ({ ...p, feeType: '%' }))}
+                              className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${accountFormData.feeType === '%' ? 'bg-[#00B0F0] text-white' : 'text-white/30 hover:text-white'}`}
+                            >%</button>
+                          </div>
+                        </div>
                         <input
                           type="number"
                           step="0.01"

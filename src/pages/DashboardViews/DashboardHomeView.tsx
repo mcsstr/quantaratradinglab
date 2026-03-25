@@ -601,7 +601,7 @@ export default function DashboardHomeView({
             <div className="w-full h-px sm:w-px sm:h-6 opacity-30 my-2 sm:my-0 sm:mx-1" style={{ backgroundColor: theme.contornoGeral }}></div>
             <div className="flex-1 flex flex-col items-center justify-center text-center w-full">
               <span className="font-bold text-sm lg:text-base leading-tight" style={{ color: theme.textoNegativo }}>{formatCurrency(metrics.maxDrawdown)}</span>
-              <span className="text-[9px] font-medium opacity-80 mt-0.5" style={{ color: theme.textoSecundario }}>{formatPercent(settings.initialBalance > 0 ? (metrics.maxDrawdown / settings.initialBalance) * 100 : 0)}</span>
+              <span className="text-[9px] font-medium opacity-80 mt-0.5" style={{ color: theme.textoSecundario }}>{formatPercent(metrics.peakBalance > 0 ? (metrics.maxDrawdown / metrics.peakBalance) * 100 : 0)}</span>
             </div>
           </div>
         </div>
