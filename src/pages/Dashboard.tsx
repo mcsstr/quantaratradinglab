@@ -2130,6 +2130,13 @@ export default function Dashboard() {
               }}
             >
               <button
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setPrevTab(activeTab);
+                  setActiveTab(item.id);
+                  setIsFabOpen(false);
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   setPrevTab(activeTab);
@@ -2650,7 +2657,8 @@ export default function Dashboard() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setIsFabOpen(!isFabOpen)}
+                  onTouchEnd={(e) => { e.preventDefault(); setIsFabOpen(prev => !prev); }}
+                  onClick={() => setIsFabOpen(prev => !prev)}
                   className={`relative flex items-center justify-center rounded-full shadow-2xl transition-all duration-300 z-[75]`}
                   style={{
                     marginTop: `-${LAYOUT.nav.fabNegativeMarginTop}rem`,
@@ -2667,18 +2675,20 @@ export default function Dashboard() {
               );
             }
             const isActive = activeTab === item.id;
+            const handleNavTap = () => {
+              if (activeTab !== item.id) {
+                startTransition(() => {
+                  setPrevTab(activeTab);
+                  setActiveTab(item.id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+              }
+            };
             return (
               <button
                 key={item.id}
-                onClick={() => {
-                  if (activeTab !== item.id) {
-                    startTransition(() => {
-                      setPrevTab(activeTab);
-                      setActiveTab(item.id);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    });
-                  }
-                }}
+                onTouchEnd={(e) => { e.preventDefault(); handleNavTap(); }}
+                onClick={handleNavTap}
                 className={`flex flex-col items-center justify-start flex-1 gap-1 transition-all duration-300 active:scale-90 touch-manipulation pt-2 ${isFabOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}
                 style={{
                   height: 'var(--nav-bottom-height, 65px)',

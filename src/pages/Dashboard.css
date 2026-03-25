@@ -54,6 +54,13 @@ body {
     letter-spacing: -0.01em;
 }
 
+/* Elimina delay de 300ms em botões e links no mobile */
+button,
+a,
+[role="button"] {
+    touch-action: manipulation;
+}
+
 /* Títulos e Elementos de Destaque com Fonte Display */
 h1,
 h2,
@@ -142,10 +149,10 @@ body {
     -webkit-overflow-scrolling: touch;
 }
 
-/* Bloqueia swipe back gesture no iOS PWA */
+/* Bloqueia swipe back gesture no iOS PWA sem causar delay de 300ms nos toques */
 html {
     overflow-x: hidden;
-    touch-action: pan-y;
+    touch-action: manipulation;
 }
 
 @media (min-width: 1024px) {
