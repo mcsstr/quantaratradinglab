@@ -22,6 +22,7 @@ export default function ImportView({
   accounts,
   selectedImportAccountId,
   setSelectedImportAccountId,
+  activeAccount,
   t = (k: string, _l?: string) => k,
   lang = 'en',
 }) {
@@ -93,7 +94,7 @@ export default function ImportView({
         </header>
       )}
 
-      {/* Step 1: Account Selector */}
+      {/* Step 1: Account — Read-only (usa conta ativa global) */}
       <div className="rounded-xl p-4 md:p-5 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
         <div className="flex items-center gap-2 mb-3">
           <Building2 size={16} style={{ color: theme.textoAlerta }} />
@@ -101,29 +102,20 @@ export default function ImportView({
             {t('import.step1', lang)}
           </span>
         </div>
-        {accounts.length === 0 ? (
-          <div className="text-center py-6 opacity-50 text-sm" style={{ color: theme.textoSecundario }}>
-            {t('import.noAccounts', lang)}
+        {activeAccount ? (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ borderColor: 'rgba(251,191,36,0.4)', backgroundColor: 'rgba(251,191,36,0.08)' }}>
+            <span className="w-8 h-8 rounded-full text-sm flex items-center justify-center font-bold shrink-0" style={{ backgroundColor: 'rgba(251,191,36,0.3)', color: '#fde68a' }}>
+              {activeAccount.name.charAt(0).toUpperCase()}
+            </span>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold" style={{ color: '#fde68a' }}>{activeAccount.name}</span>
+              <span className="text-[10px] font-medium opacity-70" style={{ color: theme.textoSecundario }}>Importing data into this account</span>
+            </div>
+            <div className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(251,191,36,0.2)', color: '#fde68a' }}>ACTIVE</div>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {accounts.map(acc => (
-              <button
-                key={acc.id}
-                onClick={() => setSelectedImportAccountId(acc.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all ${selectedImportAccountId === acc.id
-                  ? 'border-yellow-500/60 bg-yellow-500/15 text-yellow-300'
-                  : 'border-white/15 hover:border-white/30 hover:bg-white/5'
-                  }`}
-                style={{ color: selectedImportAccountId === acc.id ? '#fde68a' : theme.textoSecundario }}
-              >
-                <span className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold ${selectedImportAccountId === acc.id ? 'bg-yellow-500 text-[#121C30]' : 'bg-white/10'
-                  }`}>
-                  {acc.name.charAt(0).toUpperCase()}
-                </span>
-                {acc.name}
-              </button>
-            ))}
+          <div className="text-center py-6 opacity-50 text-sm" style={{ color: theme.textoSecundario }}>
+            {t('import.noAccounts', lang)}
           </div>
         )}
       </div>

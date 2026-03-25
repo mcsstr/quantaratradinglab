@@ -55,7 +55,11 @@ export const DEFAULT_ACCOUNT_SETTINGS = {
   referenceTimezone: 'America/New_York',
   feeType: '$',
   dailyLossLimitType: '$',
-  totalStopLossType: '$'
+  totalStopLossType: '$',
+  enableCsv: true,
+  enablePaste: false,
+  csvMapping: '', // kept as string for the textarea state, converted to array on save
+  pasteMapping: ''
 };
 
 export const DEFAULT_SETTINGS = {

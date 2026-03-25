@@ -2,30 +2,21 @@
 // ATUALIZAÇÃO DEFINITIVA: Desconstrução manual de datas para evitar perda de segundos 
 // e confusões de formato (MM/DD/YYYY vs DD/MM/YYYY) quando o dia é < 12.
 
-export const columnAliases = {
-  Symbol: ['symbol', 'Symbol', 'Ativo', 'Ticker'],
-  Qty: ['qty', 'Qty', 'Quantity', 'Quantidade'],
-  'Buy Price': ['buyPrice', 'Buy Price', 'Preço Compra', 'Entry Price'],
-  'Buy Time': ['boughtTimestamp', 'Buy Time', 'Data Compra'],
-  Duration: ['duration', 'Duration', 'Tempo'],
-  'Sell Time': ['soldTimestamp', 'Sell Time', 'Data Venda', 'Exit Time'],
-  'Sell Price': ['sellPrice', 'Sell Price', 'Preço Venda'],
-  'P&L': ['pnl', 'P&L', 'Net PnL', 'Lucro/Prejuízo']
-};
-
-export const supabaseMapping = {
-  'Symbol': 'symbol',
-  'Qty': 'qty',
-  'Buy Price': 'buy_price',
-  'Buy Time': 'buy_time',
-  'Duration': 'duration',
-  'Sell Time': 'sell_time',
-  'Sell Price': 'sell_price',
-  'P&L': 'pnl'
-};
-
 // SANITIZADOR INTELIGENTE DE DATAS (À PROVA DE BALAS)
 // Recorta cada componente exato da string para garantir que os segundos nunca se percam.
+
+export const columnAliases = {
+  symbol: ['symbol', 'Ativo', 'Ticker', 'contract', 'instrument', 'símbolo', 'ativo'],
+  qty: ['qty', 'Quantity', 'Quantidade', 'contracts', 'tamanho', 'volume', 'lotes'],
+  buyPrice: ['buyPrice', 'Buy Price', 'Preço Compra', 'entry price', 'open price', 'avg buy price', 'preço de abertura'],
+  buyTime: ['boughtTimestamp', 'Buy Time', 'Data Compra', 'buytime', 'entry time', 'open time', 'entry datetime', 'horário de abertura', 'data de abertura'],
+  duration: ['duration', 'Duration', 'Tempo', 'duração'],
+  sellTime: ['soldTimestamp', 'Sell Time', 'Data Venda', 'selltime', 'exit time', 'close time', 'exit datetime', 'horário de fechamento', 'data de fechamento'],
+  sellPrice: ['sellPrice', 'Sell Price', 'Preço Venda', 'exit price', 'close price', 'avg sell price', 'preço de fechamento'],
+  pnl: ['pnl', 'P&L', 'Net PnL', 'Lucro/Prejuízo', 'p/l', 'profit', 'realized pnl', 'lucro líquido', 'resultado'],
+  direction: ['direction', 'side', 'direção', 'lado', 'tipo']
+};
+
 const parseSmartDate = (dateStr) => {
   if (!dateStr) return null;
 
@@ -73,59 +64,125 @@ const parseSmartDate = (dateStr) => {
   return null;
 };
 
-export const processCSVLogic = (csvText, activeAccount) => {
-  const targetColumns = Object.keys(columnAliases);
-  const lines = csvText.split('\n').map(line => line.trim()).filter(line => line);
+export const processCSVLogic = (csvText, activeAccount, importSource = 'paste') => {
+  // 1. Identificação do Array de Mapeamento
+  const mapping = importSource === 'csv' ? activeAccount.csv_mapping : activeAccount.paste_mapping;
 
-  if (lines.length < 2) throw new Error("Ficheiro vazio ou inválido.");
-
-  const headers = lines[0].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(h => h.replace(/(^"|"$)/g, '').trim());
-
-  const headerIndexes = {};
-  targetColumns.forEach(targetCol => {
-    const aliases = columnAliases[targetCol];
-    const foundIndex = headers.findIndex(header => aliases.includes(header));
-    if (foundIndex !== -1) headerIndexes[targetCol] = foundIndex;
-  });
-
-  if (headerIndexes['Symbol'] === undefined) {
-    throw new Error("Não foi possível identificar as colunas padrão neste ficheiro.");
+  // 2. Validação Exigente (Evita Importações Erradas)
+  if (!mapping || !Array.isArray(mapping) || mapping.length === 0) {
+    throw new Error(`Sem configuração de Cabeçalhos para ${importSource.toUpperCase()}. Atualize a conta '${activeAccount.name}' e defina a ordem das colunas.`);
   }
 
+  const lines = csvText.split('\n').map(line => line.trim()).filter(line => line);
+  if (lines.length === 0) throw new Error("Ficheiro vazio ou inválido.");
+
+  // Regex para CSV e identificação passiva de delimitador TSV no Paste
+  let delimiterRegex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+  if (lines[0].includes('\t') && importSource === 'paste') {
+    delimiterRegex = /\t/;
+  }
+
+  let startRow = importSource === 'csv' ? 1 : 0;
+
   const dbTrades = [];
-  for (let i = 1; i < lines.length; i++) {
-    const rowValues = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(val => val.replace(/(^"|"$)/g, '').trim());
-    const dbTrade = {};
 
-    targetColumns.forEach(col => {
-      const index = headerIndexes[col];
-      let value = index !== undefined ? rowValues[index] : '';
+  // 3. Tratamento Financeiro Independente Seguro
+  const sanitizeNum = (str) => {
+    let cleanStr = String(str || '').replace(/[$,\s]/g, '');
+    let val = parseFloat(cleanStr);
 
-      if ((col.includes('Price') || col === 'P&L' || col === 'Qty') && value) {
-        let cleanValue = value.replace(/[$\s,]/g, '');
-        if (cleanValue.includes('(') && cleanValue.includes(')')) {
-          cleanValue = '-' + cleanValue.replace(/[()]/g, '');
-        }
-        value = cleanValue;
-      }
+    // Suporte rigoroso para notações de dívida (100) -> -100
+    if ((cleanStr.includes('(') && cleanStr.includes(')')) || cleanStr.includes('-')) {
+      if (val > 0) val = -val;
+    }
+    return isNaN(val) ? 0 : val;
+  };
 
-      if (col === 'Buy Time' || col === 'Sell Time') {
-        value = parseSmartDate(value);
-      }
+  // 4. Processamento estritamente Baseado por Índice
+  for (let i = startRow; i < lines.length; i++) {
+    const rowValues = lines[i].split(delimiterRegex).map(val => val.replace(/(^"|"$)/g, '').trim());
 
+    let tradeData = {};
+    let rawMetadata = {};
 
-      const dbKey = supabaseMapping[col];
-      dbTrade[dbKey] = value;
+    mapping.forEach((colName, idx) => {
+      if (!colName || colName.toLowerCase() === 'ignore') return;
+      const val = rowValues[idx] !== undefined ? rowValues[idx] : '';
+
+      const key = colName.trim().toLowerCase();
+      const checkAlias = (aliasList) => aliasList.some(s => s.toLowerCase() === key);
+
+      if (checkAlias(columnAliases.symbol)) tradeData.symbol = val;
+      else if (checkAlias(columnAliases.qty)) tradeData.qty = val;
+      else if (checkAlias(columnAliases.buyPrice)) tradeData.buyPrice = val;
+      else if (checkAlias(columnAliases.buyTime)) tradeData.buyTime = val;
+      else if (checkAlias(columnAliases.sellTime)) tradeData.sellTime = val;
+      else if (checkAlias(columnAliases.sellPrice)) tradeData.sellPrice = val;
+      else if (checkAlias(columnAliases.duration)) tradeData.duration = val;
+      else if (checkAlias(columnAliases.pnl)) tradeData.pnl = val;
+      else if (checkAlias(columnAliases.direction)) tradeData.direction = val;
+      else rawMetadata[colName.trim()] = val; // Extra fields stored separately
     });
 
-    dbTrade['account_id'] = activeAccount?.id || 'default_account';
+    let pnlRaw = tradeData.pnl || '';
+    if (pnlRaw) {
+      pnlRaw = pnlRaw.replace(/\s/g, '');
+      if (pnlRaw.startsWith('$(') && pnlRaw.endsWith(')')) pnlRaw = '-' + pnlRaw.replace('$(', '').replace(')', '');
+      else if (pnlRaw.startsWith('($') && pnlRaw.endsWith(')')) pnlRaw = '-' + pnlRaw.replace('($', '').replace(')', '');
+      else if (pnlRaw.startsWith('(') && pnlRaw.endsWith(')')) pnlRaw = '-' + pnlRaw.replace('(', '').replace(')', '');
+      else if (pnlRaw.startsWith('$')) pnlRaw = pnlRaw.replace('$', '');
+    }
 
-    const qtyLotes = parseFloat(dbTrade['qty']) || 0;
-    const feePorContrato = parseFloat(activeAccount?.feePerContract) || 0;
+    const qty = sanitizeNum(tradeData.qty);
+    let pnlValue = sanitizeNum(pnlRaw);
+    if ((String(pnlRaw).includes('-') || String(pnlRaw).includes('(')) && pnlValue > 0) pnlValue = -pnlValue;
 
-    dbTrade['commission'] = (Math.abs(qtyLotes) * feePorContrato).toFixed(2);
+    const symbol = tradeData.symbol ? tradeData.symbol.toUpperCase() : '-';
+    const buyPrice = tradeData.buyPrice ? sanitizeNum(tradeData.buyPrice) : 0;
+    const sellPrice = tradeData.sellPrice ? sanitizeNum(tradeData.sellPrice) : 0;
+    const duration = tradeData.duration || '00:00';
 
-    dbTrades.push(dbTrade);
+    let direction = 'Long', entryTimestamp = null, dateStr = null;
+
+    if (tradeData.direction && (tradeData.direction.toLowerCase().includes('short') || tradeData.direction.toLowerCase().includes('venda'))) {
+      direction = 'Short';
+    }
+
+    const d1Iso = parseSmartDate(tradeData.buyTime);
+    const d2Iso = parseSmartDate(tradeData.sellTime);
+    const d1 = d1Iso ? new Date(d1Iso).getTime() : NaN;
+    const d2 = d2Iso ? new Date(d2Iso).getTime() : NaN;
+
+    if (!isNaN(d1) && !isNaN(d2)) {
+      if (d1 > d2 && direction !== 'Short') { direction = 'Short'; entryTimestamp = d2; }
+      else { entryTimestamp = d1; }
+    } else {
+      entryTimestamp = !isNaN(d1) ? d1 : (!isNaN(d2) ? d2 : null);
+    }
+
+    if (entryTimestamp) {
+      const ed = new Date(entryTimestamp);
+      dateStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
+    }
+
+    // Apenas insere se Qty e PnL estiverem presentes (Requisito Mínimo Vital)
+    if (!isNaN(qty) && qty > 0 && !isNaN(pnlValue) && dateStr) {
+      dbTrades.push({
+        account_id: activeAccount?.id || 'default_account',
+        date: dateStr,
+        qty,
+        pnl: pnlValue,
+        duration: duration,
+        direction,
+        entry_timestamp: entryTimestamp ? new Date(entryTimestamp).toISOString() : null,
+        symbol,
+        buy_price: buyPrice,
+        sell_price: sellPrice,
+        buy_time: tradeData.buyTime ? (parseSmartDate(tradeData.buyTime) || tradeData.buyTime) : null,
+        sell_time: tradeData.sellTime ? (parseSmartDate(tradeData.sellTime) || tradeData.sellTime) : null,
+        raw_metadata: rawMetadata
+      });
+    }
   }
 
   return dbTrades;

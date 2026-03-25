@@ -12,6 +12,7 @@ import {
 } from '../utils/constants';
 import { supabase } from '../utils/supabase';
 import { columnAliases, cleanNumericValue, parseSmartDate } from '../utils/tradeParser';
+import AccountMappingPanel, { type PasteRule } from '../components/AccountMappingPanel';
 import { t } from '../utils/i18n';
 import { LAYOUT } from '../utils/layoutConfig';
 import './Dashboard.css';
@@ -198,7 +199,13 @@ export default function Dashboard() {
             dailyLossLimit: Number(a.daily_loss_limit),
             dailyLossLimitType: a.daily_loss_limit_type,
             totalStopLoss: Number(a.total_stop_loss),
-            totalStopLossType: a.total_stop_loss_type
+            totalStopLossType: a.total_stop_loss_type,
+            enableCsv: a.enable_csv ?? true,
+            enablePaste: a.enable_paste ?? false,
+            csvMapping: (a.csv_mapping && !Array.isArray(a.csv_mapping) ? a.csv_mapping : {}),
+            pasteMapping: Array.isArray(a.paste_mapping) ? a.paste_mapping : [],
+            isFixedFee: a.is_fixed_fee ?? false,
+            feePerContract: Number(a.fee_per_contract ?? 0)
           })));
         }
 
@@ -235,7 +242,9 @@ export default function Dashboard() {
               duration: t.duration,
               sellTime: t.sell_time,
               sellPrice: Number(t.sell_price),
-              notes: t.notes
+              notes: t.notes,
+              commission: t.commission !== null && t.commission !== undefined ? Number(t.commission) : null,
+              rawMetadata: t.raw_metadata || {}
             })));
           }
         }
@@ -629,7 +638,12 @@ export default function Dashboard() {
 
     sortedChronological.forEach(trade => {
       grossPnl += trade.pnl; totalQty += trade.qty;
-      const netTradePnl = trade.pnl - (trade.qty * feeAmount);
+      // Lógica Híbrida de Comissão: usa commission do trade (importado) ou feePerTrade como fallback
+      const rawPnl = Number(trade.pnl || 0);
+      const fee = trade.commission !== undefined && trade.commission !== null && trade.commission !== 0
+        ? Math.abs(Number(trade.commission))
+        : trade.qty * feeAmount;
+      const netTradePnl = rawPnl - fee;
 
       if (trade.pnl >= 0) {
         winningTrades++; totalGrossProfit += trade.pnl;
@@ -659,7 +673,10 @@ export default function Dashboard() {
       if (currentDrawdown > maxDrawdown) maxDrawdown = currentDrawdown;
     });
 
-    const totalFees = totalQty * feeAmount;
+    const totalFees = activeTrades.reduce((acc, t) => {
+      if (t.commission !== undefined && t.commission !== null && t.commission !== 0) return acc + Math.abs(Number(t.commission));
+      return acc + (t.qty * feeAmount);
+    }, 0);
     const netPnl = grossPnl - totalFees;
     const currentBalance = accountSettings.initialBalance + netPnl;
     const totalTrades = activeTrades.length;
@@ -719,7 +736,13 @@ export default function Dashboard() {
 
     activeTrades.forEach(t => {
       const [y, m, d] = t.date.split('-'); const tDate = new Date(y, m - 1, d).getTime();
-      const net = t.pnl - (t.qty * (accountSettings.feeType === '%' ? (accountSettings.initialBalance * accountSettings.feePerTrade) / 100 : accountSettings.feePerTrade));
+      // Lógica Híbrida de Comissão idêntica à de metrics
+      const rawPnl = Number(t.pnl || 0);
+      const baseFee = accountSettings.feeType === '%' ? (accountSettings.initialBalance * accountSettings.feePerTrade) / 100 : accountSettings.feePerTrade;
+      const fee = t.commission !== undefined && t.commission !== null && t.commission !== 0
+        ? Math.abs(Number(t.commission))
+        : t.qty * baseFee;
+      const net = rawPnl - fee;
       if (tDate === startOfToday) profitToday += net;
       if (tDate === startOfYesterday) profitYesterday += net;
       if (tDate === startOfDayBefore) profitDayBefore += net;
@@ -764,7 +787,12 @@ export default function Dashboard() {
     let runningBalance = accountSettings.initialBalance;
 
     const tradePoints = sortedTrades.map((t) => {
-      runningBalance += t.pnl - (t.qty * accountSettings.feePerTrade);
+      // Lógica Híbrida de Comissão para a curva de equity
+      const rawPnl = Number(t.pnl || 0);
+      const fee = t.commission !== undefined && t.commission !== null && t.commission !== 0
+        ? Math.abs(Number(t.commission))
+        : t.qty * accountSettings.feePerTrade;
+      runningBalance += rawPnl - fee;
       return { date: t.date, balance: runningBalance };
     });
 
@@ -885,219 +913,206 @@ export default function Dashboard() {
   // Column aliases imported from tradeParser.ts
   const targetColumns = Object.keys(columnAliases);
 
-  const parseTradesFromText = async (text, isCSV = false) => {
+  const parseTradesFromText = async (text: string, importSource: 'csv' | 'paste' = 'paste') => {
     if (!selectedImportAccountId) {
       setToastMessage('Please select an account before importing.');
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
-    try {
-      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-      if (lines.length === 0) {
-        throw new Error('No data found. Please paste at least one trade row.');
-      }
+    let activeAccount: any = accounts.find(a => a.id === selectedImportAccountId);
+    if (!activeAccount) return;
 
-      // Auto-detect delimiter
-      const headerLine = lines[0];
-      let delimiterRegex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/; // Default CSV comma outside quotes
-      let delimiterChar = ',';
+    // Re-fetch do banco para garantir mapeamentos atualizados
+    if (settings.userPlan !== 'Free') {
+      try {
+        const { data: dbAccount } = await supabase
+          .from('accounts')
+          .select('csv_mapping, paste_mapping')
+          .eq('id', selectedImportAccountId)
+          .single();
 
-      if (!isCSV) {
-        if (headerLine.includes('\t')) {
-          delimiterRegex = /\t/;
-          delimiterChar = '\t';
-        } else if (headerLine.includes(';') && !headerLine.includes(',')) {
-          delimiterRegex = /;(?=(?:(?:[^"]*"){2})*[^"]*$)/;
-          delimiterChar = ';';
+        if (dbAccount) {
+          activeAccount = {
+            ...activeAccount,
+            csvMapping: (dbAccount.csv_mapping && !Array.isArray(dbAccount.csv_mapping)) ? dbAccount.csv_mapping : activeAccount.csvMapping,
+            pasteMapping: Array.isArray(dbAccount.paste_mapping) ? dbAccount.paste_mapping : activeAccount.pasteMapping
+          };
         }
+      } catch (err) {
+        console.error('Erro ao sincronizar mapeamentos da conta', err);
+      }
+    }
+
+    const sanitizeNum = (str: any) => cleanNumericValue(String(str || ''));
+
+    const applyField = (tradeData: any, rawMetadata: any, fieldKey: string, fieldName: string, val: string) => {
+      switch (fieldKey) {
+        case 'symbol': tradeData.symbol = val; break;
+        case 'qty': tradeData.qty = val; break;
+        case 'buy_price': tradeData.buyPrice = val; break;
+        case 'buy_time': tradeData.buyTime = val; break;
+        case 'sell_price': tradeData.sellPrice = val; break;
+        case 'sell_time': tradeData.sellTime = val; break;
+        case 'duration': tradeData.duration = val; break;
+        case 'pnl': tradeData.pnl = val; break;
+        case 'direction': tradeData.direction = val; break;
+        case 'commission': tradeData.commission = val; break;
+        case 'raw': rawMetadata[fieldName] = val; break;
+        case 'ignore': break;
+        default: rawMetadata[fieldName] = val; break;
+      }
+    };
+
+    const buildTrade = (tradeData: any, rawMetadata: any) => {
+      // P&L sanitization
+      let pnlRaw = String(tradeData.pnl || '').replace(/\s/g, '');
+      if (pnlRaw.startsWith('$(') && pnlRaw.endsWith(')')) pnlRaw = '-' + pnlRaw.replace('$(', '').replace(')', '');
+      else if (pnlRaw.startsWith('($') && pnlRaw.endsWith(')')) pnlRaw = '-' + pnlRaw.replace('($', '').replace(')', '');
+      else if (pnlRaw.startsWith('(') && pnlRaw.endsWith(')')) pnlRaw = '-' + pnlRaw.replace('(', '').replace(')', '');
+      else if (pnlRaw.startsWith('$')) pnlRaw = pnlRaw.replace('$', '');
+
+      const qty = sanitizeNum(tradeData.qty);
+      let pnlValue = sanitizeNum(pnlRaw);
+      if ((pnlRaw.includes('-') || pnlRaw.includes('(')) && pnlValue > 0) pnlValue = -pnlValue;
+
+      const symbol = tradeData.symbol ? tradeData.symbol.toUpperCase() : '-';
+      const buyPrice = sanitizeNum(tradeData.buyPrice);
+      const sellPrice = sanitizeNum(tradeData.sellPrice);
+
+      let direction = 'Long';
+      if (tradeData.direction && (tradeData.direction.toLowerCase().includes('short') || tradeData.direction.toLowerCase().includes('venda'))) {
+        direction = 'Short';
       }
 
-      // Helper to detect if a line looks like headers or data
-      const isHeaderLine = (lineArr) => {
-        const headerKeywords = ['symbol', 'qty', 'pnl', 'price', 'time', 'date', 'venda', 'compra', 'ativo', 'ticker'];
-        return lineArr.some(h => headerKeywords.some(kw => String(h).toLowerCase().includes(kw)));
-      };
+      const d1Iso = parseSmartDate(tradeData.buyTime);
+      const d2Iso = parseSmartDate(tradeData.sellTime);
+      const d1 = d1Iso ? new Date(d1Iso).getTime() : NaN;
+      const d2 = d2Iso ? new Date(d2Iso).getTime() : NaN;
 
-      const firstLineValues = headerLine.split(delimiterRegex).map(h => h.replace(/(^"|"$)/g, '').trim());
-      const hasHeaders = isHeaderLine(firstLineValues);
-
-      const headerIndexes: { [key: string]: number } = {};
-      let startRow = 1;
-
-      if (hasHeaders) {
-        const headers = firstLineValues.map(h => h.toLowerCase());
-        targetColumns.forEach(targetCol => {
-          const aliases = columnAliases[targetCol].map(a => a.toLowerCase());
-          const foundIndex = headers.findIndex(header => aliases.some(alias => header.includes(alias) || alias.includes(header)));
-          if (foundIndex !== -1) {
-            headerIndexes[targetCol] = foundIndex;
-          }
-        });
+      let entryTimestamp: number | null = null;
+      if (!isNaN(d1) && !isNaN(d2)) {
+        if (d1 > d2 && direction !== 'Short') { direction = 'Short'; entryTimestamp = d2; }
+        else { entryTimestamp = d1; }
       } else {
-        // No headers detected, we must guess based on content of first line
-        startRow = 0;
-        const decimalCols: number[] = []; // Track columns with decimal values for price/pnl separation
-
-        firstLineValues.forEach((val, idx) => {
-          const cleanVal = val.replace(/\s/g, '');
-
-          // Detect Date/Time (contains / or :)
-          if (cleanVal.includes('/') || cleanVal.includes(':') || /^\d{4}-\d{2}-\d{2}/.test(cleanVal)) {
-            if (!headerIndexes['buyTime']) headerIndexes['buyTime'] = idx;
-            else if (!headerIndexes['sellTime']) headerIndexes['sellTime'] = idx;
-          }
-          // Detect Qty (usually a small integer, no decimals)
-          else if (!headerIndexes['qty'] && /^\d+$/.test(cleanVal) && parseInt(cleanVal) < 1000) {
-            headerIndexes['qty'] = idx;
-          }
-          // Detect P&L explicitly (has $, or parentheses for negatives)
-          else if (!headerIndexes['pnl'] && (cleanVal.includes('$') || cleanVal.includes('(') || cleanVal.includes(')'))) {
-            headerIndexes['pnl'] = idx;
-          }
-          // Detect Symbol (usually uppercase letters/numbers)
-          else if (/^[A-Z0-9]{3,}$/.test(cleanVal) && !headerIndexes['symbol']) {
-            headerIndexes['symbol'] = idx;
-          }
-          // Collect decimal number columns as candidates for prices/pnl
-          else if (/^-?\d+(\.\d+)?$/.test(cleanVal) || /^\d{1,3}(,\d{3})*(\.\d+)?$/.test(cleanVal)) {
-            decimalCols.push(idx);
-          }
-        });
-
-        // Assign decimal columns: first=buyPrice, second=sellPrice, third (or last remaining)=pnl
-        if (decimalCols.length > 0) {
-          if (!headerIndexes['buyPrice'] && decimalCols.length >= 1) {
-            headerIndexes['buyPrice'] = decimalCols[0];
-          }
-          if (!headerIndexes['sellPrice'] && decimalCols.length >= 2) {
-            headerIndexes['sellPrice'] = decimalCols[1];
-          }
-          if (!headerIndexes['pnl'] && decimalCols.length >= 3) {
-            headerIndexes['pnl'] = decimalCols[2];
-          } else if (!headerIndexes['pnl'] && decimalCols.length >= 1) {
-            // If only 1 or 2 decimal columns and no pnl yet, last decimal is pnl
-            headerIndexes['pnl'] = decimalCols[decimalCols.length - 1];
-            // Remove it from prices if it was assigned
-            if (headerIndexes['buyPrice'] === headerIndexes['pnl']) delete headerIndexes['buyPrice'];
-            if (headerIndexes['sellPrice'] === headerIndexes['pnl']) delete headerIndexes['sellPrice'];
-          }
-        }
-
-        // Fallback for Tradovate order if detection fails
-        if (headerIndexes['qty'] === undefined) headerIndexes['qty'] = 1;
-        if (headerIndexes['pnl'] === undefined) headerIndexes['pnl'] = firstLineValues.length - 1;
-        if (headerIndexes['buyTime'] === undefined) {
-          // Look for anything that looks like a date in all columns
-          const dateIdx = firstLineValues.findIndex(v => v.includes('/') || v.includes('-'));
-          if (dateIdx !== -1) headerIndexes['buyTime'] = dateIdx;
-        }
+        entryTimestamp = !isNaN(d1) ? d1 : (!isNaN(d2) ? d2 : null);
       }
 
-      if (headerIndexes['qty'] === undefined || headerIndexes['pnl'] === undefined) {
-        throw new Error(`Could not detect 'Quantity' or 'P&L' columns. Checked: ${firstLineValues.join(', ')}`);
+      let dateStr: string | null = null;
+      if (entryTimestamp) {
+        const ed = new Date(entryTimestamp);
+        dateStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
       }
 
-      const newTrades = [];
-      const sanitizeNum = (str) => {
-        return cleanNumericValue(str);
+      return {
+        qty, pnlValue, symbol, buyPrice, sellPrice, direction, entryTimestamp, dateStr, rawMetadata,
+        buyTime: tradeData.buyTime, sellTime: tradeData.sellTime, duration: tradeData.duration
       };
+    };
 
-      for (let i = startRow; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line) continue;
+    try {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length === 0) throw new Error('No data found. Please paste at least one trade row.');
 
-        const rowValues = line.split(delimiterRegex).map(val => val.replace(/(^"|"$)/g, '').trim());
+      const newTrades: any[] = [];
 
-        // Extract raw values based on mapping
-        let qtyRaw = headerIndexes['qty'] !== undefined ? rowValues[headerIndexes['qty']] : '';
-        let pnlRaw = headerIndexes['pnl'] !== undefined ? rowValues[headerIndexes['pnl']] : '';
-        let durationRaw = headerIndexes['duration'] !== undefined ? rowValues[headerIndexes['duration']] : '00:00';
-        let buyTimeRaw = headerIndexes['buyTime'] !== undefined ? rowValues[headerIndexes['buyTime']] : null;
-        let sellTimeRaw = headerIndexes['sellTime'] !== undefined ? rowValues[headerIndexes['sellTime']] : null;
-        let symbolRaw = headerIndexes['symbol'] !== undefined ? rowValues[headerIndexes['symbol']] : '-';
-        let buyPriceRaw = headerIndexes['buyPrice'] !== undefined ? rowValues[headerIndexes['buyPrice']] : '';
-        let sellPriceRaw = headerIndexes['sellPrice'] !== undefined ? rowValues[headerIndexes['sellPrice']] : '';
-        let directionRaw = headerIndexes['direction'] !== undefined ? rowValues[headerIndexes['direction']] : '';
-
-        // Tratamento do P&L: Converter $(78.50) ou $100.00 e -
-        if (pnlRaw) {
-          pnlRaw = pnlRaw.replace(/\s/g, ''); // Remove spaces
-          if (pnlRaw.startsWith('$(') && pnlRaw.endsWith(')')) {
-            pnlRaw = '-' + pnlRaw.replace('$(', '').replace(')', '');
-          } else if (pnlRaw.startsWith('($') && pnlRaw.endsWith(')')) { // Outra variação comum
-            pnlRaw = '-' + pnlRaw.replace('($', '').replace(')', '');
-          } else if (pnlRaw.startsWith('(') && pnlRaw.endsWith(')')) {
-            pnlRaw = '-' + pnlRaw.replace('(', '').replace(')', '');
-          } else if (pnlRaw.startsWith('$')) {
-            pnlRaw = pnlRaw.replace('$', '');
-          }
+      // ── CSV MODE: mapeamento por nome de coluna (dict) ────────────────────────
+      if (importSource === 'csv') {
+        const csvMap: Record<string, string> = activeAccount.csvMapping;
+        if (!csvMap || typeof csvMap !== 'object' || Object.keys(csvMap).length === 0) {
+          setToastMessage(`Sem mapeamento CSV para a conta "${activeAccount.name}". Configure em Editar Conta → Aba CSV.`);
+          setTimeout(() => setToastMessage(''), 5000);
+          return;
         }
 
-        const qty = sanitizeNum(qtyRaw);
-        let pnlValue = sanitizeNum(pnlRaw);
-        // Ensure negative if it has minus or parentheses but was parsed positive due to weird formatting
-        if ((String(pnlRaw).includes('-') || String(pnlRaw).includes('(')) && pnlValue > 0) {
-          pnlValue = -pnlValue;
-        }
+        // Linha 0 = headers do CSV
+        const headerLine = lines[0];
+        const delimiter = headerLine.includes('\t') ? /\t/ : /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+        const headers = headerLine.split(delimiter).map(h => h.replace(/(^"|"$)/g, '').trim());
 
-        const symbol = symbolRaw ? symbolRaw.toUpperCase() : '-';
-        const buyPrice = buyPriceRaw ? sanitizeNum(buyPriceRaw) : 0;
-        const sellPrice = sellPriceRaw ? sanitizeNum(sellPriceRaw) : 0;
+        for (let i = 1; i < lines.length; i++) {
+          const rowValues = lines[i].split(delimiter).map(v => v.replace(/(^"|"$)/g, '').trim());
+          const tradeData: any = {};
+          const rawMetadata: any = {};
 
-        let direction = 'Long', entryTimestamp = null, dateStr = null;
-
-        // Determine direction
-        if (directionRaw.toLowerCase().includes('short') || directionRaw.toLowerCase().includes('venda')) {
-          direction = 'Short';
-        }
-
-        // Parse Dates using bulletproof parseSmartDate
-        const d1Iso = parseSmartDate(buyTimeRaw);
-        const d2Iso = parseSmartDate(sellTimeRaw);
-        const d1 = d1Iso ? new Date(d1Iso).getTime() : NaN;
-        const d2 = d2Iso ? new Date(d2Iso).getTime() : NaN;
-
-        if (!isNaN(d1) && !isNaN(d2)) {
-          if (d1 > d2 && direction !== 'Short') { direction = 'Short'; entryTimestamp = d2; }
-          else { entryTimestamp = d1; }
-        } else {
-          entryTimestamp = !isNaN(d1) ? d1 : (!isNaN(d2) ? d2 : null);
-        }
-
-        if (entryTimestamp) {
-          const ed = new Date(entryTimestamp);
-          dateStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
-        }
-        if (!entryTimestamp) {
-          // Fallback date search
-          const fallbackIdx = firstLineValues.findIndex(h => h.toLowerCase().includes('date') || h.toLowerCase().includes('data'));
-          if (fallbackIdx !== -1 && rowValues[fallbackIdx]) {
-            const fdIso = parseSmartDate(rowValues[fallbackIdx]);
-            if (fdIso) {
-              entryTimestamp = new Date(fdIso).getTime();
-              const ed = new Date(entryTimestamp);
-              dateStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
-            }
-          }
-        }
-
-        if (!isNaN(qty) && qty > 0 && !isNaN(pnlValue) && dateStr) {
-          newTrades.push({
-            id: generateId(),
-            accountId: selectedImportAccountId,
-            date: dateStr,
-            qty,
-            pnl: pnlValue,
-            duration: durationRaw,
-            direction,
-            entryTimestamp,
-            symbol,
-            buyPrice,
-            sellPrice,
-            buyTime: buyTimeRaw,
-            sellTime: sellTimeRaw
+          headers.forEach((header, idx) => {
+            const mapTo = csvMap[header]; // ex: "symbol", "pnl", "raw", "ignore"
+            if (!mapTo || mapTo === 'ignore') return;
+            const val = rowValues[idx] ?? '';
+            applyField(tradeData, rawMetadata, mapTo, header, val);
           });
+
+          const t = buildTrade(tradeData, rawMetadata);
+          if (!isNaN(t.qty) && t.qty > 0 && !isNaN(t.pnlValue) && t.dateStr) {
+            // ── Lógica Híbrida de Comissão (CSV) ─────────────────────────────
+            let finalCommission = 0;
+            if (activeAccount.isFixedFee) {
+              const defaultFee = Number(activeAccount.feePerContract || 0);
+              finalCommission = Math.abs(Number(t.qty)) * defaultFee;
+            } else if (tradeData.commission !== undefined && tradeData.commission !== null && tradeData.commission !== '') {
+              let cleanVal = String(tradeData.commission).replace(/[$\s,]/g, '');
+              if (cleanVal.includes('(') && cleanVal.includes(')')) cleanVal = '-' + cleanVal.replace(/[()]/g, '');
+              finalCommission = Number(cleanVal);
+            }
+            const commission = -Math.abs(finalCommission || 0);
+            newTrades.push({
+              id: generateId(), accountId: selectedImportAccountId, date: t.dateStr,
+              qty: t.qty, pnl: t.pnlValue, duration: t.duration || '00:00', direction: t.direction,
+              entryTimestamp: t.entryTimestamp, symbol: t.symbol, buyPrice: t.buyPrice, sellPrice: t.sellPrice,
+              buyTime: t.buyTime, sellTime: t.sellTime, rawMetadata: t.rawMetadata, commission
+            });
+          } else {
+            console.warn('CSV row rejected:', { line: lines[i], extracted: t });
+          }
+        }
+      }
+
+      // ── PASTE MODE: mapeamento por índice (array de objetos) ─────────────────
+      else {
+        const pasteMap: PasteRule[] = activeAccount.pasteMapping;
+        if (!pasteMap || !Array.isArray(pasteMap) || pasteMap.length === 0) {
+          setToastMessage(`Sem mapeamento Paste para a conta "${activeAccount.name}". Configure em Editar Conta → Aba Copiar/Colar.`);
+          setTimeout(() => setToastMessage(''), 5000);
+          return;
+        }
+
+        for (let i = 0; i < lines.length; i++) {
+          // ⚠️ PASTE: usar EXCLUSIVAMENTE tab como delimitador — vírgulas em valores numéricos (ex: 24,745.83) NÃO devem quebrar o split
+          const rowValues = lines[i].split('\t').map(v => v.replace(/(^"|"$)/g, '').trim());
+          const tradeData: any = {};
+          const rawMetadata: any = {};
+
+          pasteMap.forEach((rule, idx) => {
+            if (!rule || rule.mapTo === 'ignore') return;
+            const val = rowValues[idx] ?? '';
+            applyField(tradeData, rawMetadata, rule.mapTo, rule.name, val);
+          });
+
+          const t = buildTrade(tradeData, rawMetadata);
+          if (!isNaN(t.qty) && t.qty > 0 && !isNaN(t.pnlValue) && t.dateStr) {
+            // ── Lógica Híbrida de Comissão (Paste) ───────────────────────────
+            let finalCommission = 0;
+            if (activeAccount.isFixedFee) {
+              // Corretagem fixa: multiplica taxa padrão pela quantidade
+              const defaultFee = Number(activeAccount.feePerContract || 0);
+              finalCommission = Math.abs(Number(t.qty)) * defaultFee;
+            } else if (tradeData.commission !== undefined && tradeData.commission !== null && tradeData.commission !== '') {
+              // Corretagem variável: lê valor mapeado da coluna 'commission'
+              let cleanVal = String(tradeData.commission).replace(/[$\s,]/g, '');
+              if (cleanVal.includes('(') && cleanVal.includes(')')) cleanVal = '-' + cleanVal.replace(/[()]/g, '');
+              finalCommission = Number(cleanVal);
+            }
+            // Garante que o custo seja sempre negativo
+            const commission = -Math.abs(finalCommission || 0);
+            newTrades.push({
+              id: generateId(), accountId: selectedImportAccountId, date: t.dateStr,
+              qty: t.qty, pnl: t.pnlValue, duration: t.duration || '00:00', direction: t.direction,
+              entryTimestamp: t.entryTimestamp, symbol: t.symbol, buyPrice: t.buyPrice, sellPrice: t.sellPrice,
+              buyTime: t.buyTime, sellTime: t.sellTime, rawMetadata: t.rawMetadata, commission
+            });
+          } else {
+            console.warn('Paste row rejected:', { line: lines[i], extracted: t });
+          }
         }
       }
 
@@ -1117,7 +1132,9 @@ export default function Dashboard() {
             buy_time: t.buyTime ? (parseSmartDate(t.buyTime) || t.buyTime) : null,
             duration: t.duration || '',
             sell_time: t.sellTime ? (parseSmartDate(t.sellTime) || t.sellTime) : null,
-            sell_price: t.sellPrice || 0
+            sell_price: t.sellPrice || 0,
+            commission: t.commission || 0,
+            raw_metadata: t.rawMetadata
           })))
           .select();
 
@@ -1125,29 +1142,24 @@ export default function Dashboard() {
 
         if (data) {
           const imported = data.map(t => ({
-            id: t.id,
-            accountId: t.account_id,
-            symbol: t.symbol,
-            direction: t.direction,
-            qty: t.qty,
-            pnl: Number(t.pnl),
-            date: t.date,
+            id: t.id, accountId: t.account_id, symbol: t.symbol, direction: t.direction,
+            qty: t.qty, pnl: Number(t.pnl), date: t.date,
             entryTimestamp: t.entry_timestamp ? new Date(t.entry_timestamp).getTime() : null,
-            buyPrice: Number(t.buy_price),
-            buyTime: t.buy_time,
-            duration: t.duration,
-            sellTime: t.sell_time,
-            sellPrice: Number(t.sell_price)
+            buyPrice: Number(t.buy_price), buyTime: t.buy_time, duration: t.duration,
+            sellTime: t.sell_time, sellPrice: Number(t.sell_price),
+            commission: t.commission !== null ? Number(t.commission) : null,
+            rawMetadata: t.raw_metadata
           }));
           setTrades(prev => [...prev, ...imported]);
         }
 
         setActiveTab('dashboard');
-        setToastMessage(`${newTrades.length} trades correctly synchronized!`);
+        setToastMessage(`${newTrades.length} trades imported successfully!`);
       } else {
         setToastMessage('Could not parse any valid trades. Check rows or headers.');
       }
       setTimeout(() => setToastMessage(''), 3000);
+
 
     } catch (err: any) {
       console.error(err);
@@ -1160,7 +1172,7 @@ export default function Dashboard() {
 
   const handleImport = () => {
     if (!importText.trim()) return;
-    parseTradesFromText(importText);
+    parseTradesFromText(importText, 'paste');
     setImportText('');
   };
 
@@ -1169,9 +1181,7 @@ export default function Dashboard() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event: any) => {
-      // O split obrigatório para CSV é aplicado forçando isCSV = true. 
-      // Isso utiliza /,(?=(?:(?:[^"]*"){2})*[^"]*$)/ explicitamente ignorando auto-detect
-      parseTradesFromText(event.target.result, true);
+      parseTradesFromText(event.target.result, 'csv');
       e.target.value = null;
     };
     reader.readAsText(file);
@@ -1210,7 +1220,9 @@ export default function Dashboard() {
           buyTime: buyT,
           duration: manualTrade.duration || '',
           sellTime: sellT,
-          sellPrice: parseFloat(manualTrade.sellPrice) || 0
+          sellPrice: parseFloat(manualTrade.sellPrice) || 0,
+          commission: 0,
+          rawMetadata: {}
         };
       } else {
         const { data, error: dbError } = await supabase
@@ -1227,7 +1239,9 @@ export default function Dashboard() {
             buy_time: buyT,
             duration: manualTrade.duration || '',
             sell_time: sellT,
-            sell_price: parseFloat(manualTrade.sellPrice) || 0
+            sell_price: parseFloat(manualTrade.sellPrice) || 0,
+            commission: 0,
+            raw_metadata: {}
           }])
           .select()
           .single();
@@ -1247,7 +1261,9 @@ export default function Dashboard() {
           buyTime: data.buy_time,
           duration: data.duration,
           sellTime: data.sell_time,
-          sellPrice: Number(data.sell_price)
+          sellPrice: Number(data.sell_price),
+          commission: data.commission !== null ? Number(data.commission) : null,
+          rawMetadata: data.raw_metadata || {}
         };
       }
 
@@ -1549,11 +1565,25 @@ export default function Dashboard() {
         profit_split: Number(accountFormData.profitSplit),
         fee_per_trade: Number(accountFormData.feePerTrade),
         fee_type: accountFormData.feeType,
-        daily_loss_limit: Number(accountFormData.dailyLossLimit),
         daily_loss_limit_type: accountFormData.dailyLossLimitType,
         total_stop_loss: Number(accountFormData.totalStopLoss),
-        total_stop_loss_type: accountFormData.totalStopLossType
+        total_stop_loss_type: accountFormData.totalStopLossType,
+        enable_csv: accountFormData.enableCsv,
+        enable_paste: accountFormData.enablePaste,
+        csv_mapping: (accountFormData.enableCsv && accountFormData.csvMapping && Object.keys(accountFormData.csvMapping).length > 0)
+          ? accountFormData.csvMapping
+          : null,
+        paste_mapping: (accountFormData.enablePaste && accountFormData.pasteMapping && accountFormData.pasteMapping.length > 0)
+          ? accountFormData.pasteMapping
+          : null,
+        is_fixed_fee: accountFormData.isFixedFee ?? false,
+        fee_per_contract: accountFormData.isFixedFee ? Number(accountFormData.feePerContract || 0) : null
       };
+
+      if (!dbAccount.enable_csv && !dbAccount.enable_paste) {
+        setAccountFormError('You must enable at least one import method (CSV or Paste).');
+        return;
+      }
 
       if (editingAccount) {
         const { error } = await supabase.from('accounts').update(dbAccount).eq('id', editingAccount.id);
@@ -1576,7 +1606,13 @@ export default function Dashboard() {
           dailyLossLimit: Number(data.daily_loss_limit),
           dailyLossLimitType: data.daily_loss_limit_type,
           totalStopLoss: Number(data.total_stop_loss),
-          totalStopLossType: data.total_stop_loss_type
+          totalStopLossType: data.total_stop_loss_type,
+          enableCsv: data.enable_csv ?? true,
+          enablePaste: data.enable_paste ?? false,
+          csvMapping: (data.csv_mapping && !Array.isArray(data.csv_mapping) ? data.csv_mapping : {}),
+          pasteMapping: Array.isArray(data.paste_mapping) ? data.paste_mapping : [],
+          isFixedFee: data.is_fixed_fee ?? false,
+          feePerContract: Number(data.fee_per_contract ?? 0)
         };
         setAccounts(prev => [...prev, newAcc]);
         if (!activeAccountId) setActiveAccountId(newAcc.id);
@@ -1640,6 +1676,9 @@ export default function Dashboard() {
       bgStyle = `linear-gradient(${settings.gradientAngle}deg, ${theme.gradColor1} 0%, ${theme.gradColor2} 50%, ${theme.gradColor3} 100%)`;
     }
   }
+
+  // Previne os vazamentos de z-index do iOS causados por pull-to-refresh
+  const iosNavFix = { transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' };
 
   const appBackgroundStyle = {
     backgroundColor: theme.fundoPrincipal,
@@ -2041,8 +2080,9 @@ export default function Dashboard() {
       )}
 
       {/* HEADER FIXO NO TOPO */}
-      <header className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 lg:px-6 py-2.5 lg:py-3 shadow-sm transition-all header-safe"
+      <header className="fixed top-0 left-0 w-full z-[90] flex items-center justify-between px-4 lg:px-6 py-2.5 lg:py-3 shadow-sm transition-all header-safe"
         style={{
+          ...iosNavFix,
           ...(settings.enableGlassEffect ? {
             backgroundColor: hexToRgba(theme.fundoMenu, 1),
             backdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`,
@@ -2438,6 +2478,7 @@ export default function Dashboard() {
               accounts={accounts}
               selectedImportAccountId={selectedImportAccountId}
               setSelectedImportAccountId={setSelectedImportAccountId}
+              activeAccount={activeAccount}
               t={t}
               lang={settings.appLanguage}
             />
@@ -2485,10 +2526,11 @@ export default function Dashboard() {
         }
       </main >
 
-      {/* BARRA DE NAVEGAÇÃO MOBILE */}
-      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-50 items-center justify-around px-2 shadow-xl transition-all pb-safe"
+      {/* BOTTOM NAVIGATION MOBILE FIXO */}
+      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-[90] items-center justify-around px-2 shadow-xl transition-all pb-safe"
         style={{
           paddingTop: `${LAYOUT.nav.paddingTop}rem`,
+          ...iosNavFix,
           '--nav-pb-extra': `${LAYOUT.nav.paddingBottom}rem`,
           ...(settings.enableGlassEffect ? {
             backgroundColor: hexToRgba(theme.fundoMenu, Math.max(0.95, settings.cardOpacity / 100)),
@@ -2714,7 +2756,6 @@ export default function Dashboard() {
                     {/* Fields with Toggles */}
                     <div className="space-y-4 mt-6">
                       {[
-                        { key: 'feePerTrade', label: t('accountForm.feePerContract', settings.appLanguage), toggleKey: 'feeType' },
                         { key: 'dailyLossLimit', label: t('accountForm.dailyLossLimit', settings.appLanguage), toggleKey: 'dailyLossLimitType' },
                         { key: 'totalStopLoss', label: t('accountForm.totalStopLoss', settings.appLanguage), toggleKey: 'totalStopLossType' },
                       ].map(({ key, label, toggleKey }) => (
@@ -2745,6 +2786,46 @@ export default function Dashboard() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Import Configuration */}
+                  {/* Checkbox: Corretagem Fixa por Contrato */}
+                  <div className="pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                    <label className="flex items-center gap-2 cursor-pointer mb-3">
+                      <input
+                        type="checkbox"
+                        checked={accountFormData.isFixedFee ?? false}
+                        onChange={e => setAccountFormData(p => ({ ...p, isFixedFee: e.target.checked }))}
+                        className="w-4 h-4 rounded appearance-none border border-white/20 bg-white/5 checked:bg-[#00B0F0] checked:border-transparent transition-all outline-none"
+                      />
+                      <span className="text-sm font-semibold text-white/80">Corretagem Fixa por Contrato/Lote</span>
+                    </label>
+                    {(accountFormData.isFixedFee) && (
+                      <div className="space-y-1.5 mb-3">
+                        <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Valor da Taxa (Fee) por Contrato</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="ex: 2.50"
+                          className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
+                          style={{ color: '#fff' }}
+                          value={accountFormData.feePerContract || ''}
+                          onChange={e => setAccountFormData(p => ({ ...p, feePerContract: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                        />
+                        <p className="text-[10px] text-white/30">Este valor será multiplicado pela quantidade (qty) automaticamente ao importar.</p>
+                      </div>
+                    )}
+                  </div>
+                  <AccountMappingPanel
+                    enableCsv={accountFormData.enableCsv}
+                    onEnableCsvChange={v => setAccountFormData(p => ({ ...p, enableCsv: v }))}
+                    csvMapping={typeof accountFormData.csvMapping === 'object' && !Array.isArray(accountFormData.csvMapping) ? accountFormData.csvMapping : {}}
+                    onCsvMappingChange={v => setAccountFormData(p => ({ ...p, csvMapping: v }))}
+                    enablePaste={accountFormData.enablePaste}
+                    onEnablePasteChange={v => setAccountFormData(p => ({ ...p, enablePaste: v }))}
+                    pasteMapping={Array.isArray(accountFormData.pasteMapping) ? accountFormData.pasteMapping : []}
+                    onPasteMappingChange={v => setAccountFormData(p => ({ ...p, pasteMapping: v }))}
+                    isFixedFee={accountFormData.isFixedFee ?? false}
+                  />
                 </div>
                 <div className="px-5 py-5 flex gap-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
                   <button

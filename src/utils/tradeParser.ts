@@ -29,6 +29,21 @@ export const supabaseMapping: Record<string, string> = {
     pnl: 'pnl'
 };
 
+// Opções disponíveis para dropdown de mapeamento (AccountMappingPanel)
+export const FIELD_OPTIONS = [
+    { value: 'symbol', label: 'Symbol (Ativo)' },
+    { value: 'qty', label: 'Qty (Quantidade)' },
+    { value: 'buy_price', label: 'Buy Price (Preço Compra)' },
+    { value: 'buy_time', label: 'Buy Time (Hora Entrada)' },
+    { value: 'sell_price', label: 'Sell Price (Preço Venda)' },
+    { value: 'sell_time', label: 'Sell Time (Hora Saída)' },
+    { value: 'duration', label: 'Duration (Duração)' },
+    { value: 'pnl', label: 'P&L (Lucro/Prejuízo)' },
+    { value: 'direction', label: 'Direction (Long/Short)' },
+    { value: 'raw', label: '📦 Guardar como Dado Extra' },
+    { value: 'ignore', label: '✕ Ignorar coluna' },
+];
+
 /**
  * Cleans a numeric/financial string value.
  * Handles: $100.00, $(78.50), ($78.50), (78.50), -78.50, "1,234.56"

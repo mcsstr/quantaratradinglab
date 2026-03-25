@@ -223,6 +223,7 @@ export default function TradesView({
                 <th className="hidden lg:table-cell px-2 py-3 md:px-4 md:py-4 text-center">Sell Time</th>
                 <th className="hidden lg:table-cell px-2 py-3 md:px-4 md:py-4 text-center">Sell Price</th>
                 <th className="px-2 py-3 md:px-4 md:py-4 text-right md:text-left">Gross P&L</th>
+                <th className="hidden md:table-cell px-2 py-3 md:px-4 md:py-4 text-right">Fees</th>
                 <th className="px-2 py-3 md:px-4 md:py-4 text-right">Action</th>
               </tr>
             </thead>
@@ -266,6 +267,9 @@ export default function TradesView({
                   </td>
                   <td className="px-2 py-2.5 md:px-4 md:py-3 font-bold text-right md:text-left text-[10px] md:text-xs" style={{ color: trade.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
                     {formatCurrency(trade.pnl)}
+                  </td>
+                  <td className="hidden md:table-cell px-2 py-2.5 md:px-4 md:py-3 font-mono text-right text-[10px] md:text-xs" style={{ color: theme.textoNegativo }}>
+                    {trade.commission ? `-${formatCurrency(Math.abs(Number(trade.commission)))}` : '$0.00'}
                   </td>
                   <td className="px-2 py-2.5 md:px-4 md:py-3 text-right flex justify-end gap-1">
                     <button onClick={() => { setEditFormData(trade); setIsTradeModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
