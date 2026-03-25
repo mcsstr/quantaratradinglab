@@ -112,11 +112,6 @@ export default function Dashboard() {
   const [historyPage, setHistoryPage] = useState(1);
   const historyItemsPerPage = 20;
 
-  // Estados Customizados para o Mobile Pull-to-Refresh Interno
-  const [pullDist, setPullDist] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const pullStartY = useRef(0);
 
   // Estado das abas de Configurações
   const [activeSettingsTab, setActiveSettingsTab] = useState('account');
@@ -1887,68 +1882,11 @@ export default function Dashboard() {
   }, [activeTrades, timeGrouping, accountSettings.feePerTrade]);
 
 
-  // ── Pull-to-Refresh Logic (Mobile) ─────────────
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY === 0) {
-      pullStartY.current = e.touches[0].clientY;
-      setIsPulling(true);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isPulling) return;
-    const y = e.touches[0].clientY;
-    const dist = y - pullStartY.current;
-    if (dist > 0 && window.scrollY === 0) {
-      setPullDist(Math.min(dist * 0.4, 80));
-    } else {
-      setPullDist(0);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (isPulling) {
-      if (pullDist >= 60) {
-        setIsRefreshing(true);
-        setPullDist(0);
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate(50);
-        }
-        loadData().then(() => {
-          setIsRefreshing(false);
-          setToastMessage('Data synchronized');
-          setTimeout(() => setToastMessage(''), 2000);
-        });
-      } else {
-        setPullDist(0);
-      }
-      setIsPulling(false);
-    }
-  };
-
   return (
     <div
       className="min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden relative"
       style={appBackgroundStyle}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
     >
-      {/* INDICADOR DE PULL-TO-REFRESH MOBILE */}
-      <div
-        className="flex items-center justify-center overflow-hidden transition-all duration-300 pointer-events-none w-full"
-        style={{
-          height: isRefreshing ? 60 : (pullDist > 0 ? pullDist : 0),
-          opacity: (pullDist > 0 || isRefreshing) ? 1 : 0,
-          marginTop: '60px' /* Para ficar visível abaixo do header */
-        }}
-      >
-        {isRefreshing ? (
-          <div className="w-6 h-6 border-2 border-[#00B0F0] border-t-transparent rounded-full animate-spin"></div>
-        ) : (
-          <RefreshCcw size={20} className="text-white/50 transition-transform" style={{ transform: `rotate(${pullDist * 2}deg)` }} />
-        )}
-      </div>
       {/* MODAL: EDIT TRADE */}
       {isTradeModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all" onClick={() => setIsTradeModalOpen(false)}>
