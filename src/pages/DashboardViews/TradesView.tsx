@@ -220,7 +220,7 @@ export default function TradesView({
               <tr>
                 <th className="px-2 py-3 md:px-4 md:py-4 w-6 text-center"><input type="checkbox" className="cursor-pointer" checked={paginatedTrades.length > 0 && selectedTrades.length === paginatedTrades.length} onChange={(e) => { if (e.target.checked) setSelectedTrades(paginatedTrades.map(t => t.id)); else setSelectedTrades([]); }} /></th>
                 <th className={`${getColClass('symbol')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sym</th>
-                <th className={`${getColClass('dateTime')} px-2 py-3 md:px-4 md:py-4`}>Date & Time</th>
+                <th className={`${getColClass('dateTime')} px-2 py-3 md:px-4 md:py-4 text-center`}>Date & Time</th>
                 <th className={`${getColClass('direction')} px-2 py-3 md:px-4 md:py-4 text-center w-8 sm:w-12`}>Dir</th>
                 <th className={`${getColClass('qty', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Contracts</th>
                 <th className={`${getColClass('buyPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Buy Price</th>
@@ -228,9 +228,9 @@ export default function TradesView({
                 <th className={`${getColClass('duration', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Duration</th>
                 <th className={`${getColClass('sellTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sell Time</th>
                 <th className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sell Price</th>
-                <th className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-right`}>Fees</th>
-                <th className={`${getColClass('pnl')} px-2 py-3 md:px-4 md:py-4 text-right md:text-left`}>Gross P&L</th>
-                <th className={`${getColClass('action')} px-2 py-3 md:px-4 md:py-4 text-right`}>Action</th>
+                <th className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center w-24`}>Fees</th>
+                <th className={`${getColClass('pnl')} px-2 py-3 md:px-4 md:py-4 text-center w-28`}>Gross P&L</th>
+                <th className={`${getColClass('action')} px-2 py-3 md:px-4 md:py-4 text-center w-20`}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -271,13 +271,13 @@ export default function TradesView({
                   <td className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
                     {trade.sellPrice ? trade.sellPrice.toLocaleString(userLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                   </td>
-                  <td className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-right text-[10px] md:text-xs`} style={{ color: theme.textoSecundario }}>
+                  <td className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[10px] md:text-xs w-24`} style={{ color: theme.textoSecundario }}>
                     {trade.commission ? `-${formatCurrency(Math.abs(Number(trade.commission)))}` : '$0.00'}
                   </td>
-                  <td className={`${getColClass('pnl')} px-2 py-2.5 md:px-4 md:py-3 font-bold text-right md:text-left text-[10px] md:text-xs`} style={{ color: trade.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
+                  <td className={`${getColClass('pnl')} px-2 py-2.5 md:px-4 md:py-3 font-bold text-center text-[10px] md:text-xs w-28`} style={{ color: trade.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
                     {formatCurrency(trade.pnl)}
                   </td>
-                  <td className={`${getColClass('action')} px-2 py-2.5 md:px-4 md:py-3 text-right flex justify-end gap-1`}>
+                  <td className={`${getColClass('action')} px-2 py-2.5 md:px-4 md:py-3 text-center flex justify-center gap-1 w-20`}>
                     <button onClick={() => { setEditFormData(trade); setIsTradeModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
                     <button onClick={() => handleDeleteSingle(trade.id)} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 14} /></button>
                   </td>

@@ -7,6 +7,7 @@ import {
 import {
   LayoutDashboard, Import, Settings as SettingsIcon, TrendingUp, DollarSign, Percent, Target, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Trash2, ListIcon, Search, Activity, CalendarDays, Plus, Palette, BarChart2, Sun, ShieldAlert, Layers, Banknote, Edit2, Check, X, Download, FileText, ArrowUp, ArrowDown, Newspaper, Folder, MenuIcon, UserIcon, CreditCardIcon, LogOutIcon, GearIcon2, Building2, Monitor, RefreshCcw
 } from '../components/Icons';
+import { Loader2 } from 'lucide-react';
 import {
   CURRENCIES_LIST, TIMEZONES_LIST, DEFAULT_SETTINGS, DEFAULT_THEME, DEFAULT_ACCOUNT_SETTINGS, THEME_GROUPS, generateId, hexToRgba
 } from '../utils/constants';
@@ -91,6 +92,14 @@ export default function Dashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
   const [settingsHideTabs, setSettingsHideTabs] = useState(false);
+  // Tarefa 9: Guard para evitar flash do empty-state durante o carregamento
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+
+  // Tarefa 3: Scroll-lock no body quando FAB estiver aberto
+  useEffect(() => {
+    document.body.style.overflow = isFabOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [isFabOpen]);
   const [prevTab, setPrevTab] = useState('dashboard');
   const scrollRef = useRef(null);
 
@@ -254,6 +263,8 @@ export default function Dashboard() {
         if (!activeAccountId) setActiveAccountId(dbAccounts[0].id);
         if (!selectedImportAccountId) setSelectedImportAccountId(dbAccounts[0].id);
       }
+      // Tarefa 9: Marca o carregamento de contas como finalizado
+      setIsLoadingAccounts(false);
 
       // Migration from localStorage if Supabase is empty
       if ((!dbAccounts || dbAccounts.length === 0)) {
@@ -2123,7 +2134,7 @@ export default function Dashboard() {
       )}
 
       {/* HEADER FIXO NO TOPO */}
-      <header className="fixed top-0 left-0 w-full z-[90] flex items-center justify-between px-4 lg:px-6 py-2.5 lg:py-3 shadow-sm transition-all header-safe"
+      <header className="fixed top-0 left-0 w-full z-[90] flex items-center justify-between px-4 lg:px-6 h-[var(--header-height-mob)] lg:h-[var(--header-height-desk)] shadow-sm transition-all header-safe"
         style={{
           ...iosNavFix,
           ...(settings.enableGlassEffect ? {
@@ -2321,7 +2332,11 @@ export default function Dashboard() {
         )}
 
         {
-          !activeAccountId && ['dashboard', 'analytics', 'trades'].includes(activeTab) ? (
+          isLoadingAccounts ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="animate-spin" size={32} style={{ color: theme.linhaGrafico }} />
+            </div>
+          ) : !activeAccountId && ['dashboard', 'analytics', 'trades'].includes(activeTab) ? (
             <div className="flex flex-col items-center justify-center p-8 mt-12 text-center animate-fade-in">
               <div className="p-5 rounded-full mb-6" style={{ backgroundColor: hexToRgba(theme.linhaGrafico, 0.15) }}>
                 <Layers size={56} style={{ color: theme.linhaGrafico }} />
@@ -2570,6 +2585,13 @@ export default function Dashboard() {
       </main >
 
       {/* BOTTOM NAVIGATION MOBILE FIXO */}
+      {/* Tarefa 3: Backdrop do FAB cobre o BottomNav (z-index > 50) */}
+      {isFabOpen && (
+        <div
+          className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm lg:hidden"
+          onClick={() => setIsFabOpen(false)}
+        />
+      )}
       <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-[50] items-center justify-around px-2 shadow-xl transition-all pb-safe"
         style={{
           paddingTop: `${LAYOUT.nav.paddingTop}rem`,
@@ -2613,10 +2635,8 @@ export default function Dashboard() {
               <button
                 key={item.id}
                 onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })}
-                className="flex flex-col items-center justify-center flex-1 gap-1 transition-all active:scale-90"
+                className="flex flex-col items-center justify-center flex-1 gap-1 transition-all active:scale-90 min-h-[56px] py-3"
                 style={{
-                  paddingTop: `${LAYOUT.nav.buttonPaddingY}rem`,
-                  paddingBottom: `${LAYOUT.nav.buttonPaddingY}rem`,
                   color: isActive ? LAYOUT.nav.activeColor : theme.textoSecundario
                 }}
               >

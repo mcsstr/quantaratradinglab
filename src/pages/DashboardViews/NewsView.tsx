@@ -33,73 +33,94 @@ export default function NewsView({
   deleteNews,
   news
 }) {
+  const [isAddNewsOpen, setIsAddNewsOpen] = React.useState(false);
+
   return (
-    <div key="news" className="max-w-6xl space-y-6 mx-auto w-full animate-tab-enter">
+    <div key="news" className="max-w-4xl space-y-6 mx-auto w-full animate-tab-enter">
       {!isMobile && (
         <header className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
           <div>
             <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><Newspaper size={24} style={{ color: theme.textoAlerta }} /> Economic Calendar & News</h2>
             <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>Track high impact events that may affect your trading day.</p>
           </div>
+          {!isAddNewsOpen && (
+            <button onClick={() => setIsAddNewsOpen(true)} className="py-2 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 shadow-md h-[40px]" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>
+              <Plus size={18} /> Add News
+            </button>
+          )}
         </header>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
-        {/* Register Economic News */}
-        <div className="rounded-xl p-4 md:p-6 shadow-xl transition-all flex flex-col" style={getGlassStyle(theme.fundoCards)}>
-          <SectionTitle
-            icon={Plus}
-            title="Register News"
-            theme={theme}
-          />
-          <div className="space-y-4 flex-1 flex flex-col">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1"><label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Date</label><input type="date" className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.date} onChange={e => setNewNewsItem({ ...newNewsItem, date: e.target.value })} /></div>
-              <div className="space-y-1"><label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Time</label><input type="text" placeholder="Ex: 14:30 or All Day" className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.time} onChange={e => setNewNewsItem({ ...newNewsItem, time: e.target.value })} /></div>
-              <div className="space-y-1"><label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Currency</label><input type="text" placeholder="Ex: USD, EUR..." className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent uppercase" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.currency} onChange={e => setNewNewsItem({ ...newNewsItem, currency: e.target.value.toUpperCase() })} /></div>
+      {isMobile && !isAddNewsOpen && (
+        <button onClick={() => setIsAddNewsOpen(true)} className="py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 shadow-md w-full h-[46px]" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>
+          <Plus size={18} /> Add News
+        </button>
+      )}
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Impact</label>
-                <select className="w-full rounded-lg p-2.5 outline-none text-xs cursor-pointer bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.impact} onChange={e => setNewNewsItem({ ...newNewsItem, impact: e.target.value })}>
-                  <option value="High" className="bg-gray-800">High Impact</option>
-                  <option value="Medium" className="bg-gray-800">Medium Impact</option>
-                  <option value="Low" className="bg-gray-800">Low Impact</option>
-                  <option value="Holiday" className="bg-gray-800">Bank Holiday</option>
-                </select>
+      {isAddNewsOpen && (
+        <div className="flex flex-col gap-4 animate-fade-in relative z-10">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold text-lg" style={{ color: theme.textoPrincipal }}>Add New Event</h3>
+            <button onClick={() => setIsAddNewsOpen(false)} className="px-4 py-2 text-xs md:text-sm font-bold rounded-lg hover:bg-white/10 transition-colors" style={{ color: theme.textoSecundario }}>Cancel</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Register Economic News */}
+            <div className="rounded-xl p-4 md:p-6 shadow-xl transition-all flex flex-col" style={getGlassStyle(theme.fundoCards)}>
+              <SectionTitle
+                icon={Plus}
+                title="Register News"
+                theme={theme}
+              />
+              <div className="space-y-4 flex-1 flex flex-col">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1"><label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Date</label><input type="date" className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.date} onChange={e => setNewNewsItem({ ...newNewsItem, date: e.target.value })} /></div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Time</label><input type="text" placeholder="Ex: 14:30 or All Day" className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.time} onChange={e => setNewNewsItem({ ...newNewsItem, time: e.target.value })} /></div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Currency</label><input type="text" placeholder="Ex: USD, EUR..." className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent uppercase" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.currency} onChange={e => setNewNewsItem({ ...newNewsItem, currency: e.target.value.toUpperCase() })} /></div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Impact</label>
+                    <select className="w-full rounded-lg p-2.5 outline-none text-xs cursor-pointer bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.impact} onChange={e => setNewNewsItem({ ...newNewsItem, impact: e.target.value })}>
+                      <option value="High" className="bg-gray-800">High Impact</option>
+                      <option value="Medium" className="bg-gray-800">Medium Impact</option>
+                      <option value="Low" className="bg-gray-800">Low Impact</option>
+                      <option value="Holiday" className="bg-gray-800">Bank Holiday</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1 sm:col-span-2"><label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Description</label><input type="text" placeholder="Ex: CPI Data Release..." className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.description} onChange={e => setNewNewsItem({ ...newNewsItem, description: e.target.value })} /></div>
+                </div>
+
+                <button onClick={handleAddNews} className="py-2.5 px-8 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 w-full shadow-md mt-auto" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}><Plus size={18} /> Add Event</button>
               </div>
-
-              <div className="space-y-1 sm:col-span-2"><label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>Description</label><input type="text" placeholder="Ex: CPI Data Release..." className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newNewsItem.description} onChange={e => setNewNewsItem({ ...newNewsItem, description: e.target.value })} /></div>
             </div>
 
-            <button onClick={handleAddNews} className="py-2.5 px-8 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 w-full shadow-md mt-auto" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}><Plus size={18} /> Add Event</button>
-          </div>
-        </div>
-
-        {/* RAW TEXT IMPORT CARD */}
-        <div className="rounded-xl p-4 md:p-6 shadow-xl transition-all flex flex-col" style={getGlassStyle(theme.fundoCards)}>
-          <div>
-            <SectionTitle
-              icon={ListIcon}
-              title="Raw Text Paste"
-              theme={theme}
-            />
-            <p className="text-[10px] opacity-60 mb-4" style={{ color: theme.textoSecundario }}>Paste bulk news here. The lines should contain: Date, Time, Currency, and Description.</p>
-          </div>
-          <div className="flex flex-col gap-4 flex-1">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>General Impact for this Import</label>
-              <select className="w-full rounded-lg p-2.5 outline-none text-xs cursor-pointer bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newsImportImpact} onChange={e => setNewsImportImpact(e.target.value)}>
-                <option value="High" className="bg-gray-800">High Impact</option>
-                <option value="Medium" className="bg-gray-800">Medium Impact</option>
-                <option value="Low" className="bg-gray-800">Low Impact</option>
-                <option value="Holiday" className="bg-gray-800">Bank Holiday</option>
-              </select>
+            {/* RAW TEXT IMPORT CARD */}
+            <div className="rounded-xl p-4 md:p-6 shadow-xl transition-all flex flex-col" style={getGlassStyle(theme.fundoCards)}>
+              <div>
+                <SectionTitle
+                  icon={ListIcon}
+                  title="Raw Text Paste"
+                  theme={theme}
+                />
+                <p className="text-[10px] opacity-60 mb-4" style={{ color: theme.textoSecundario }}>Paste bulk news here. The lines should contain: Date, Time, Currency, and Description.</p>
+              </div>
+              <div className="flex flex-col gap-4 flex-1">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold" style={{ color: theme.textoSecundario }}>General Impact for this Import</label>
+                  <select className="w-full rounded-lg p-2.5 outline-none text-xs cursor-pointer bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newsImportImpact} onChange={e => setNewsImportImpact(e.target.value)}>
+                    <option value="High" className="bg-gray-800">High Impact</option>
+                    <option value="Medium" className="bg-gray-800">Medium Impact</option>
+                    <option value="Low" className="bg-gray-800">Low Impact</option>
+                    <option value="Holiday" className="bg-gray-800">Bank Holiday</option>
+                  </select>
+                </div>
+                <textarea className="w-full flex-1 min-h-[120px] rounded-lg p-3 font-mono text-[10px] outline-none shadow-sm transition-all bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} placeholder={"Sun Feb 1\nMon Feb 2\n10:00\nUSD\nISM Manufacturing PMI"} value={newsImportText} onChange={e => setNewsImportText(e.target.value)} />
+                <button onClick={handleImportNews} className="font-bold py-2.5 px-8 rounded-lg transition-opacity hover:opacity-80 w-full shadow-lg mt-auto" style={{ backgroundColor: theme.contornoHoje, color: '#000' }}>Process Raw Data</button>
+              </div>
             </div>
-            <textarea className="w-full flex-1 min-h-[120px] rounded-lg p-3 font-mono text-[10px] outline-none shadow-sm transition-all bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} placeholder={"Sun Feb 1\nMon Feb 2\n10:00\nUSD\nISM Manufacturing PMI"} value={newsImportText} onChange={e => setNewsImportText(e.target.value)} />
-            <button onClick={handleImportNews} className="font-bold py-2.5 px-8 rounded-lg transition-opacity hover:opacity-80 w-full shadow-lg mt-auto" style={{ backgroundColor: theme.contornoHoje, color: '#000' }}>Process Raw Data</button>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="flex items-center overflow-x-auto hide-scrollbar rounded-lg p-1.5 shadow-sm bg-transparent w-full" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', backgroundColor: hexToRgba(theme.fundoCards, settings.cardOpacity / 100) }}>
         {[

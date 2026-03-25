@@ -1,4 +1,9 @@
 /* Estilos customizados e Tipografia Premium */
+:root {
+    --header-height-desk: 64px;
+    --header-height-mob: 60px;
+}
+
 html,
 body {
     background-color: #09090b;
@@ -125,7 +130,7 @@ html {
 /* Desktop (>= 1024px): altere o valor de 5.5rem abaixo */
 @media (min-width: 1024px) {
     .pt-safe-main {
-        padding-top: calc(6rem + env(safe-area-inset-top)) !important;
+        padding-top: calc(6.1rem + env(safe-area-inset-top)) !important;
     }
 
     .pb-safe-main {

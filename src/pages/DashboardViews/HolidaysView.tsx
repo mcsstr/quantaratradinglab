@@ -1,3 +1,4 @@
+import React from 'react';
 import { createPortal } from 'react-dom';
 import { CalendarDays, Trash2, Edit2, Plus, Search, Check, X } from '../../components/Icons';
 
@@ -28,35 +29,58 @@ export default function HolidaysView({
   deleteHoliday,
   isMobile
 }) {
+  const [isAddHolidayOpen, setIsAddHolidayOpen] = React.useState(false);
+
   return (
     <div key="holidays" className="max-w-4xl space-y-6 mx-auto w-full animate-tab-enter">
       {!isMobile && (
-        <header className="flex flex-col md:flex-row justify-between p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
-          <div>
+        <header className="flex flex-col md:flex-row justify-between p-4 rounded-xl shadow-sm transition-all items-center gap-4" style={getGlassStyle(theme.fundoCards)}>
+          <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><CalendarDays size={24} style={{ color: theme.contornoFeriado }} /> Manage Holidays</h2>
             <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>Registered dates here will have a highlighted border in the calendar.</p>
           </div>
-          <div className="flex rounded-lg p-0.5 shadow-sm bg-transparent mt-4 md:mt-0 h-fit" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid' }}>
-            <button onClick={() => setHolidaySortOrder('recent')} className="px-3 py-1.5 text-[10px] md:text-xs font-bold rounded-md transition-all" style={{ backgroundColor: holidaySortOrder === 'recent' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: holidaySortOrder === 'recent' ? theme.textoPrincipal : theme.textoSecundario }}>Recent</button>
-            <button onClick={() => setHolidaySortOrder('oldest')} className="px-3 py-1.5 text-[10px] md:text-xs font-bold rounded-md transition-all" style={{ backgroundColor: holidaySortOrder === 'oldest' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: holidaySortOrder === 'oldest' ? theme.textoPrincipal : theme.textoSecundario }}>Oldest</button>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex rounded-lg p-0.5 shadow-sm bg-transparent h-fit" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid' }}>
+              <button onClick={() => setHolidaySortOrder('recent')} className="px-3 py-1.5 text-[10px] md:text-xs font-bold rounded-md transition-all" style={{ backgroundColor: holidaySortOrder === 'recent' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: holidaySortOrder === 'recent' ? theme.textoPrincipal : theme.textoSecundario }}>Recent</button>
+              <button onClick={() => setHolidaySortOrder('oldest')} className="px-3 py-1.5 text-[10px] md:text-xs font-bold rounded-md transition-all" style={{ backgroundColor: holidaySortOrder === 'oldest' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: holidaySortOrder === 'oldest' ? theme.textoPrincipal : theme.textoSecundario }}>Oldest</button>
+            </div>
+            {!isAddHolidayOpen && (
+              <button onClick={() => setIsAddHolidayOpen(true)} className="py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 shadow-md h-[40px] whitespace-nowrap" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>
+                <Plus size={18} /> Add Holiday
+              </button>
+            )}
           </div>
         </header>
       )}
-      <div className="w-full">
-        {/* Add New Holiday */}
-        <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
-          <SectionTitle
-            icon={Plus}
-            title="Register Holiday"
-            theme={theme}
-          />
-          <div className="flex flex-col md:flex-row items-end gap-4 w-full">
-            <div className="space-y-2 w-full md:w-1/4"><label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>Holiday Date</label><input type="date" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newHoliday.date} onChange={e => setNewHoliday({ ...newHoliday, date: e.target.value })} /></div>
-            <div className="space-y-2 w-full md:w-1/2"><label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>Description</label><input type="text" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" placeholder="Ex: Memorial Day..." style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newHoliday.description} onChange={e => setNewHoliday({ ...newHoliday, description: e.target.value })} /></div>
-            <button onClick={addHoliday} className="py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 w-full md:w-1/4 shadow-md h-[42px]" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}><Plus size={18} /> Save Holiday</button>
+
+      {isMobile && !isAddHolidayOpen && (
+        <button onClick={() => setIsAddHolidayOpen(true)} className="py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 shadow-md w-full h-[46px]" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>
+          <Plus size={18} /> Add Holiday
+        </button>
+      )}
+
+      {isAddHolidayOpen && (
+        <div className="w-full animate-fade-in relative z-10">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold text-lg" style={{ color: theme.textoPrincipal }}>Add New Holiday</h3>
+            <button onClick={() => setIsAddHolidayOpen(false)} className="px-4 py-2 text-xs md:text-sm font-bold rounded-lg hover:bg-white/10 transition-colors" style={{ color: theme.textoSecundario }}>Cancel</button>
+          </div>
+          {/* Add New Holiday */}
+          <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
+            <SectionTitle
+              icon={Plus}
+              title="Register Holiday"
+              theme={theme}
+            />
+            <div className="flex flex-col md:flex-row items-end gap-4 w-full">
+              <div className="space-y-2 w-full md:w-1/4"><label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>Holiday Date</label><input type="date" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newHoliday.date} onChange={e => setNewHoliday({ ...newHoliday, date: e.target.value })} /></div>
+              <div className="space-y-2 w-full md:w-1/2"><label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>Description</label><input type="text" className="w-full rounded-lg p-2.5 outline-none text-xs md:text-sm bg-transparent" placeholder="Ex: Memorial Day..." style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }} value={newHoliday.description} onChange={e => setNewHoliday({ ...newHoliday, description: e.target.value })} /></div>
+              <button onClick={addHoliday} className="py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 w-full md:w-1/4 shadow-md h-[42px]" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}><Plus size={18} /> Save Holiday</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
       <div className="rounded-xl overflow-hidden w-full mx-auto shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
         <div className="w-full overflow-x-auto">
           <table className="w-full text-left text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap">

@@ -85,7 +85,7 @@ export default function AnalyticsView({
   );
 
   return (
-    <div key="analytics" className="max-w-[1600px] mx-auto w-full animate-tab-enter space-y-4">
+    <div key="analytics" className="max-w-[1600px] mx-auto w-full animate-tab-enter space-y-6">
 
       {!isMobile && (
         <header className="flex flex-col p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>

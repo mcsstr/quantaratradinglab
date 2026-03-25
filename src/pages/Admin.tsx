@@ -52,12 +52,14 @@ export default function Admin() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
     const [showAddPassword, setShowAddPassword] = useState(false);
+    const [showAddConfirm, setShowAddConfirm] = useState(false);
     const [addForm, setAddForm] = useState({
-        firstName: '', lastName: '', email: '', password: '',
+        firstName: '', lastName: '', email: '', password: '', confirmPassword: '',
         phoneCode: '+1', phone: '', country: '', postalCode: '', howHeard: ''
     });
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
     // ---------- SUPABASE: Fetch all profiles ----------
     const fetchProfiles = async () => {
@@ -150,6 +152,10 @@ export default function Admin() {
     // ---------- SUPABASE: Add New User ----------
     const handleAddUser = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (addForm.password !== addForm.confirmPassword) {
+            showToast('Passwords do not match!');
+            return;
+        }
         setIsAdding(true);
         try {
             const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -180,7 +186,7 @@ export default function Admin() {
 
             showToast('User created successfully!');
             setIsAddModalOpen(false);
-            setAddForm({ firstName: '', lastName: '', email: '', password: '', phoneCode: '+1', phone: '', country: '', postalCode: '', howHeard: '' });
+            setAddForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phoneCode: '+1', phone: '', country: '', postalCode: '', howHeard: '' });
             await fetchProfiles();
         } catch (err: any) {
             showToast(`Error creating user: ${err.message}`);
@@ -261,6 +267,23 @@ export default function Admin() {
                 </div>
             )}
 
+            {/* LOGOUT CONFIRM MODAL */}
+            {isLogoutConfirmOpen && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-[#111114] border border-yellow-500/30 rounded-2xl w-full max-w-sm shadow-2xl p-8 text-center">
+                        <div className="w-14 h-14 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-500/20">
+                            <LogOut size={24} className="text-yellow-500" />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">Leave Admin?</h3>
+                        <p className="text-sm text-gray-400 mb-6">Did you save your changes? Are you sure you want to exit?</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setIsLogoutConfirmOpen(false)} className="flex-1 py-3 rounded-lg font-bold text-gray-400 bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
+                            <button onClick={() => { setIsLogoutConfirmOpen(false); navigate('/dashboard'); }} className="flex-1 py-3 rounded-lg font-bold bg-yellow-500 text-black hover:bg-yellow-400 transition-colors">Yes, Exit</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ADD USER MODAL */}
             {isAddModalOpen && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -300,19 +323,25 @@ export default function Admin() {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-gray-400">Phone</label>
-                                        <div className="flex gap-2">
-                                            <select value={addForm.phoneCode} onChange={e => setAddForm({ ...addForm, phoneCode: e.target.value })} className="w-[100px] bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer appearance-none">
-                                                {countryCodes.map(c => <option key={`${c.country}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>)}
-                                            </select>
-                                            <input type="text" value={addForm.phone} onChange={e => setAddForm({ ...addForm, phone: e.target.value })} className="flex-1 bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
-                                        </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-400">Confirm Password</label>
+                                    <div className="relative">
+                                        <input type={showAddConfirm ? "text" : "password"} required value={addForm.confirmPassword} onChange={e => setAddForm({ ...addForm, confirmPassword: e.target.value })} placeholder="Repeat password" className={`w-full bg-black/40 border rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors pr-10 ${addForm.confirmPassword && addForm.password !== addForm.confirmPassword ? 'border-red-500' : 'border-white/10'}`} />
+                                        <button type="button" onClick={() => setShowAddConfirm(!showAddConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                                            {showAddConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-gray-400">Postal Code</label>
-                                        <input type="text" value={addForm.postalCode} onChange={e => setAddForm({ ...addForm, postalCode: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
+                                    {addForm.confirmPassword && addForm.password !== addForm.confirmPassword && (
+                                        <p className="text-[10px] text-red-400">Passwords do not match</p>
+                                    )}
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-400">Phone</label>
+                                    <div className="flex gap-2">
+                                        <select value={addForm.phoneCode} onChange={e => setAddForm({ ...addForm, phoneCode: e.target.value })} className="w-[120px] bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer appearance-none">
+                                            {countryCodes.map(c => <option key={`${c.country}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>)}
+                                        </select>
+                                        <input type="text" placeholder="Phone without country code" value={addForm.phone} onChange={e => setAddForm({ ...addForm, phone: e.target.value })} className="flex-1 bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -489,11 +518,12 @@ export default function Admin() {
             {/* Sidebar */}
             <aside className={`fixed inset-y-0 left-0 z-[150] w-64 border-r border-yellow-500/20 flex flex-col bg-[#000000] transition-transform duration-300 lg:relative lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="p-6 flex items-center justify-between">
-                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-                        <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center text-black font-bold">
+                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/dashboard')}>
+                        <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 lg:w-9 lg:h-9 object-contain drop-shadow-md z-10 rounded-xl" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                        <div style={{ display: 'none' }} className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center text-black font-bold">
                             <Activity size={20} />
                         </div>
-                        <h2 className="text-white text-lg font-black tracking-tighter uppercase font-display">Quantara</h2>
+                        <h2 className="text-white text-lg font-black tracking-tighter font-display">Quantara</h2>
                     </div>
                     <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-gray-400">
                         <X size={24} />
@@ -509,22 +539,10 @@ export default function Admin() {
                         <Users size={18} />
                         <span className="text-sm font-medium">User Management</span>
                     </button>
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors">
-                        <TrendingUp size={18} />
-                        <span className="text-sm font-medium">Market Data</span>
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors">
-                        <BarChart2 size={18} />
-                        <span className="text-sm font-medium">Analytics</span>
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors">
-                        <Settings size={18} />
-                        <span className="text-sm font-medium">Settings</span>
-                    </button>
                 </nav>
 
                 <div className="p-4 border-t border-yellow-500/20">
-                    <button onClick={() => navigate('/')} className="flex w-full items-center justify-center gap-2 px-4 py-2 rounded-xl border border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all text-sm font-bold">
+                    <button onClick={() => setIsLogoutConfirmOpen(true)} className="flex w-full items-center justify-center gap-2 px-4 py-2 rounded-xl border border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all text-sm font-bold">
                         <LogOut size={16} />
                         Logout
                     </button>
@@ -539,10 +557,13 @@ export default function Admin() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="py-4 border-b border-yellow-500/20 flex items-center justify-between px-4 lg:px-8 bg-[#000000]/50 backdrop-blur-md sticky top-0 z-40 header-safe">
+                <header className="h-[var(--header-height-mob)] lg:h-[var(--header-height-desk)] border-b border-yellow-500/20 flex items-center justify-between px-4 lg:px-8 bg-[#000000]/50 backdrop-blur-md sticky top-0 z-40 header-safe">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden text-yellow-500 p-1">
-                            <Activity size={24} />
+                        <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-1">
+                            <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 object-contain drop-shadow-md z-10 rounded-xl" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                            <div style={{ display: 'none' }} className="text-yellow-500">
+                                <Activity size={24} />
+                            </div>
                         </button>
                         <div className="hidden sm:flex items-center gap-2">
                             <span className="text-gray-400 text-sm">Admin</span>
@@ -551,15 +572,12 @@ export default function Admin() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
+                        <button onClick={() => navigate('/dashboard')} className="flex items-center gap-1 text-sm font-bold transition-opacity hover:opacity-70" style={{ color: '#00B0F0' }}>
+                            <Bell size={16} /> Back to Dashboard
+                        </button>
                         <button onClick={fetchProfiles} className="p-2 text-gray-400 hover:text-yellow-500 transition-colors" title="Refresh data">
                             <Activity size={20} className={isLoading ? 'animate-spin' : ''} />
                         </button>
-                        <button className="hidden sm:block p-2 text-gray-400 hover:text-yellow-500 transition-colors">
-                            <Bell size={20} />
-                        </button>
-                        <div className="h-8 w-8 rounded-full bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center overflow-hidden">
-                            <UserPlus size={16} className="text-yellow-500" />
-                        </div>
                     </div>
                 </header>
 

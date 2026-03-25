@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, LogOut, ChevronLeft, Check, Loader2, Shield } from 'lucide-react';
+import { LogOut, ChevronLeft, Check, Loader2, Shield, Activity } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
 const countriesList = [
@@ -165,36 +165,30 @@ export default function Account() {
       )}
 
       {/* Header */}
-      <header className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 lg:px-6 py-2.5 lg:py-3 border-b border-white/10 bg-[#0c0c0e] shadow-sm transition-all header-safe">
-        <div className="flex items-center gap-2 cursor-pointer md:flex" onClick={() => navigate(-1)}>
+      <header className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 lg:px-6 h-[var(--header-height-mob)] lg:h-[var(--header-height-desk)] border-b border-white/10 bg-[#0c0c0e] shadow-sm transition-all header-safe">
+        <div className="flex items-center gap-2">
+          {/* Mobile: back link */}
           <div className="md:hidden">
-            <button onClick={(e) => { e.stopPropagation(); navigate(-1); }} className="flex items-center gap-1.5 py-1 pr-4 active:opacity-70 transition-opacity" style={{ color: '#00B0F0' }}>
+            <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 py-1 pr-4 active:opacity-70 transition-opacity" style={{ color: '#00B0F0' }}>
               <ChevronLeft size={24} />
               <span className="font-bold text-lg font-display">Back</span>
             </button>
           </div>
-          <div className="hidden md:flex items-center gap-2">
-            <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center text-black font-bold">
+          {/* Desktop: logo original */}
+          <div className="hidden md:flex items-center gap-2 cursor-pointer" onClick={() => navigate('/dashboard')}>
+            <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 lg:w-9 lg:h-9 object-contain drop-shadow-md z-10 rounded-xl" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+            <div style={{ display: 'none' }} className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center text-black font-bold">
               <Activity size={20} />
             </div>
-            <span className="text-xl font-bold font-display">Quantara</span>
+            <h2 className="text-white text-lg font-black tracking-tighter font-display">Quantara</h2>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="bg-white/5 border border-white/10 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-white/10 transition-colors flex items-center gap-2">
-              <ChevronLeft size={16} /> Voltar
-            </button>
-            <button onClick={() => {
-              if (window.confirm('Tem certeza que deseja sair?')) {
-                supabase.auth.signOut();
-                navigate('/');
-              }
-            }} className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-500/20 transition-colors flex items-center gap-2">
-              <LogOut size={16} /> Sair
-            </button>
-          </div>
+        {/* Desktop only: Back button */}
+        <div className="hidden md:flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm font-bold transition-opacity hover:opacity-70" style={{ color: '#00B0F0' }}>
+            <ChevronLeft size={18} /> Back
+          </button>
         </div>
       </header>
 
