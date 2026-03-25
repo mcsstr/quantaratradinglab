@@ -159,17 +159,17 @@ html {
 /* ⚠️ AJUSTE MANUAL: Espaço entre header e conteúdo principal */
 /* Mobile: altere o valor de 5rem abaixo */
 .pt-safe-main {
-    padding-top: calc(4.5rem + env(safe-area-inset-top)) !important;
+    padding-top: calc(5rem + env(safe-area-inset-top)) !important;
 }
 
 .pb-safe-main {
-    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)) !important;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
 }
 
 /* Desktop (>= 1024px): altere o valor de 5.5rem abaixo */
 @media (min-width: 1024px) {
     .pt-safe-main {
-        padding-top: calc(6.1rem + env(safe-area-inset-top)) !important;
+        padding-top: calc(5rem + env(safe-area-inset-top)) !important;
     }
 
     .pb-safe-main {
