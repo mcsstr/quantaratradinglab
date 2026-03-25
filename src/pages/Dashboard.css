@@ -9,7 +9,7 @@
     /* CABEÇALHO (Top Header)                                                 */
     /* ----------------------------------------------------------------------- */
     /* Dica: Use valores em px, em ou rem. */
-    --header-height-desk: 6rem;
+    --header-height-desk: 4rem;
     /* Altura do Menu Superior no Computador */
     --header-height-mob: 4rem;
     /* Altura do Menu Superior no Celular */
@@ -25,13 +25,13 @@
     /* ----------------------------------------------------------------------- */
     /* CARDS & CONTAINERS                                                      */
     /* ----------------------------------------------------------------------- */
-    --card-padding-desk: 1.5rem;
+    --card-padding-desk: 1rem;
     /* Padding (respiro interno) dos cards (PC) */
     --card-padding-mob: 1rem;
     /* Padding (respiro interno) dos cards (Celular) */
     --card-border-radius: 16px;
     /* Nível de arredondamento das bordas dos cards */
-    --card-gap-global: 1.5rem;
+    --card-gap-global: 2rem;
     /* Espaçamento padrão entre múltiplos cards */
 
     /* ----------------------------------------------------------------------- */
