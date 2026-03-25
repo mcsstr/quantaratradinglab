@@ -129,18 +129,18 @@ export const LAYOUT = {
         colors: {
             trade: {
                 iconColor: '#34d399',                     // Verde esmeralda
-                bgColor: 'rgba(52,211,153,0.12)',         // Verde translúcido
-                borderColor: 'rgba(52,211,153,0.25)',     // Verde borda
+                bgColor: '#1c1c1f',                       // Fundo Sólido Escuro
+                borderColor: '#34d399',                   // Verde borda forte
             },
             news: {
                 iconColor: '#22d3ee',                     // Ciano
-                bgColor: 'rgba(34,211,238,0.12)',         // Ciano translúcido
-                borderColor: 'rgba(34,211,238,0.25)',     // Ciano borda
+                bgColor: '#1c1c1f',                       // Fundo Sólido Escuro
+                borderColor: '#22d3ee',                   // Ciano borda forte
             },
             holidays: {
                 iconColor: '#f472b6',                     // Rosa
-                bgColor: 'rgba(244,114,182,0.12)',        // Rosa translúcido
-                borderColor: 'rgba(244,114,182,0.25)',    // Rosa borda
+                bgColor: '#1c1c1f',                       // Fundo Sólido Escuro
+                borderColor: '#f472b6',                   // Rosa borda forte
             },
         },
     },

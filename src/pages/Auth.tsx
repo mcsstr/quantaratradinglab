@@ -49,9 +49,12 @@ export default function Auth() {
     setError(null);
 
     try {
+      let userId = null;
+
       if (isLogin) {
-        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
         if (authError) throw authError;
+        if (authData?.user) userId = authData.user.id;
       } else {
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
@@ -61,13 +64,14 @@ export default function Auth() {
           }
         });
         if (authError) throw authError;
+        if (authData?.user) userId = authData.user.id;
 
-        if (authData?.user) {
+        if (userId) {
           // Atualiza a tabela profiles com os dados capturados
           const { error: profileError } = await supabase
             .from('profiles')
             .upsert({
-              id: authData.user.id,
+              id: userId,
               first_name: firstName,
               last_name: lastName,
               email: email,
@@ -82,6 +86,21 @@ export default function Auth() {
         }
 
         alert('Cadastro realizado! Se o e-mail de confirmação estiver habilitado, verifique sua caixa de entrada.');
+      }
+
+      if (isLogin && userId) {
+        // [BLOCKER DE LOGIN PARA USUARIOS DELETADOS]
+        // Se for login, valida se o usuário ainda existe explicitamente em profiles.
+        const { data: profileCheck, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (!profileError && profileCheck === null) {
+          await supabase.auth.signOut();
+          throw new Error('Esta conta não existe mais.');
+        }
       }
       navigate('/loading');
     } catch (err: any) {

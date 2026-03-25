@@ -69,7 +69,7 @@ const translations: Record<string, Record<Lang, string>> = {
     // --- Import ---
     'import.title': { en: 'Import Data', pt: 'Importar Dados', es: 'Importar Datos' },
     'import.subtitle': { en: 'Select an account, then add trades manually or upload files.', pt: 'Selecione uma conta, depois adicione operações manualmente ou envie arquivos.', es: 'Seleccione una cuenta, luego agregue operaciones manualmente o cargue archivos.' },
-    'import.step1': { en: 'Step 1 — Select Account', pt: 'Passo 1 — Selecionar Conta', es: 'Paso 1 — Seleccionar Cuenta' },
+    'import.step1': { en: 'Attention: Selected Account', pt: 'Atenção: Conta Selecionada', es: 'Atención: Cuenta Seleccionada' },
     'import.noAccounts': { en: 'No accounts found. Create an account in Settings → Account first.', pt: 'Nenhuma conta encontrada. Crie uma conta em Configurações → Conta primeiro.', es: 'No se encontraron cuentas. Cree una cuenta en Ajustes → Cuenta primero.' },
     'import.selectAccount': { en: 'Select an account above to reveal import options.', pt: 'Selecione uma conta acima para revelar as opções de importação.', es: 'Seleccione una cuenta arriba para revelar las opciones de importación.' },
     'import.manualEntry': { en: 'Manual Entry', pt: 'Entrada Manual', es: 'Entrada Manual' },

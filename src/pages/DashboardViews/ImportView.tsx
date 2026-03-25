@@ -109,7 +109,7 @@ export default function ImportView({
             </span>
             <div className="flex flex-col">
               <span className="text-sm font-bold" style={{ color: '#fde68a' }}>{activeAccount.name}</span>
-              <span className="text-[10px] font-medium opacity-70" style={{ color: theme.textoSecundario }}>Importing data into this account</span>
+              <span className="text-[10px] font-medium opacity-70" style={{ color: theme.textoSecundario }}>{lang === 'pt' ? 'Os dados serão mesclados com a conta global ativa selecionada.' : 'Data will be merged into this active global account.'}</span>
             </div>
             <div className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(251,191,36,0.2)', color: '#fde68a' }}>ACTIVE</div>
           </div>

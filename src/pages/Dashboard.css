@@ -1,7 +1,46 @@
-/* Estilos customizados e Tipografia Premium */
+/* ========================================================================= */
+/* 🛠️ QUANTARA TRADING LAB - GLOBAL DESIGN SYSTEM (CSS VARIABLES)            */
+/* ========================================================================= */
+/* Aqui você encontra os controladores mestres de Layout, Medidas e Cores.   */
+/* Altere os valores abaixo para refletir instantaneamente em todo o site.   */
+
 :root {
-    --header-height-desk: 64px;
-    --header-height-mob: 60px;
+    /* ----------------------------------------------------------------------- */
+    /* CABEÇALHO (Top Header)                                                 */
+    /* ----------------------------------------------------------------------- */
+    /* Dica: Use valores em px, em ou rem. */
+    --header-height-desk: 6rem;
+    /* Altura do Menu Superior no Computador */
+    --header-height-mob: 4rem;
+    /* Altura do Menu Superior no Celular */
+
+    /* ----------------------------------------------------------------------- */
+    /* NAVEGAÇÃO MOBILE (Bottom Menu)                                         */
+    /* ----------------------------------------------------------------------- */
+    --nav-bottom-height: 60px;
+    /* Altura do menu inferior de abas no celular */
+    --nav-icon-size: 24px;
+    /* Tamanho dos ícones dentro do bottom menu */
+
+    /* ----------------------------------------------------------------------- */
+    /* CARDS & CONTAINERS                                                      */
+    /* ----------------------------------------------------------------------- */
+    --card-padding-desk: 1.5rem;
+    /* Padding (respiro interno) dos cards (PC) */
+    --card-padding-mob: 1rem;
+    /* Padding (respiro interno) dos cards (Celular) */
+    --card-border-radius: 16px;
+    /* Nível de arredondamento das bordas dos cards */
+    --card-gap-global: 1.5rem;
+    /* Espaçamento padrão entre múltiplos cards */
+
+    /* ----------------------------------------------------------------------- */
+    /* TIPOGRAFIA BÁSICA                                                      */
+    /* ----------------------------------------------------------------------- */
+    --font-size-title: 1.5rem;
+    /* Tamanho do titulo H2 das páginas principais */
+    --font-size-table: 0.75rem;
+    /* Tamanho mínimo de fonte nas tabelas */
 }
 
 html,

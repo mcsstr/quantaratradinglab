@@ -138,8 +138,8 @@ export default function TradesView({
             title="Search & Sorting"
             theme={theme}
           />
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="relative group flex-1 min-w-[200px]">
+          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4">
+            <div className="relative group flex-1 w-full sm:min-w-[200px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 transition-colors" style={{ color: theme.textoSecundario }} />
               <input
                 type="text"
@@ -150,11 +150,11 @@ export default function TradesView({
                 onChange={e => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="text-[10px] font-bold opacity-50 uppercase" style={{ color: theme.textoSecundario }}>Order:</span>
-              <div className="flex rounded-lg p-0.5 shadow-sm bg-transparent border-white/5" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid' }}>
-                <button onClick={() => setSortOrder('recent')} className="px-3 py-1.5 text-[10px] font-bold rounded-md transition-all" style={{ backgroundColor: sortOrder === 'recent' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: sortOrder === 'recent' ? theme.textoPrincipal : theme.textoSecundario }}>Recent</button>
-                <button onClick={() => setSortOrder('oldest')} className="px-3 py-1.5 text-[10px] font-bold rounded-md transition-all" style={{ backgroundColor: sortOrder === 'oldest' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: sortOrder === 'oldest' ? theme.textoPrincipal : theme.textoSecundario }}>Oldest</button>
+              <div className="flex flex-1 sm:flex-none rounded-lg p-0.5 shadow-sm bg-transparent border-white/5" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid' }}>
+                <button onClick={() => setSortOrder('recent')} className="flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all text-center" style={{ backgroundColor: sortOrder === 'recent' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: sortOrder === 'recent' ? theme.textoPrincipal : theme.textoSecundario }}>Recent</button>
+                <button onClick={() => setSortOrder('oldest')} className="flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all text-center" style={{ backgroundColor: sortOrder === 'oldest' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: sortOrder === 'oldest' ? theme.textoPrincipal : theme.textoSecundario }}>Oldest</button>
               </div>
             </div>
           </div>
@@ -167,10 +167,10 @@ export default function TradesView({
             title="History Filter"
             theme={theme}
           />
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex gap-2 flex-1 min-w-[200px]">
+          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4">
+            <div className="flex gap-2 w-full flex-1 sm:min-w-[200px]">
               <select
-                className="flex-1 rounded-lg py-2 px-3 text-xs outline-none cursor-pointer bg-transparent"
+                className="flex-1 rounded-lg py-2 px-3 text-xs outline-none cursor-pointer bg-transparent w-full"
                 style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
                 value={filterMonth}
                 onChange={e => setFilterMonth(e.target.value)}
@@ -179,7 +179,7 @@ export default function TradesView({
                 {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={(i + 1).toString().padStart(2, '0')} className="bg-gray-800">{new Date(2000, i).toLocaleString(userLocale, { month: 'long' })}</option>)}
               </select>
               <select
-                className="flex-1 rounded-lg py-2 px-3 text-xs outline-none cursor-pointer bg-transparent"
+                className="flex-1 rounded-lg py-2 px-3 text-xs outline-none cursor-pointer bg-transparent w-full"
                 style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
                 value={filterYear}
                 onChange={e => setFilterYear(e.target.value)}
@@ -190,11 +190,11 @@ export default function TradesView({
                 <option value="2026" className="bg-gray-800">2026</option>
               </select>
             </div>
-            <div className="flex gap-2 text-right">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto mt-1 sm:mt-0">
               {filteredTrades.length > 0 && (
                 <button
                   onClick={() => setIsConfirmDeleteAllOpen(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap"
                 >
                   <Trash2 size={14} /> Delete All
                 </button>
@@ -203,7 +203,7 @@ export default function TradesView({
                 <button
                   onClick={handleDeleteSelected}
                   disabled={isDeleting}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap disabled:opacity-40"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap disabled:opacity-40"
                 >
                   <Trash2 size={14} /> {isDeleting ? 'Deleting...' : `Delete Selected (${selectedTrades.length})`}
                 </button>

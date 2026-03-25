@@ -196,7 +196,7 @@ export default function Account() {
         {/* Sidebar */}
         <aside className="w-64 hidden md:flex flex-col gap-8">
           <div>
-            <h2 className="text-2xl font-bold font-display capitalize mb-6 text-white">Conta</h2>
+            <h2 className="text-3xl font-bold font-display capitalize mb-8 text-white">Conta</h2>
             <nav className="flex flex-col gap-2">
               <button onClick={() => setActiveTab('info')} className={`text-left px-4 py-3 rounded-lg text-sm font-bold transition-colors ${activeTab === 'info' ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
                 Informações Pessoais

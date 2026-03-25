@@ -125,6 +125,7 @@ export default function Dashboard() {
   // Estado das abas de Configurações
   const [activeSettingsTab, setActiveSettingsTab] = useState('account');
   const [session, setSession] = useState<any>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true); // Blocks all render until auth verified
 
   const isFreePlan = settings?.userPlan === 'Free';
   const { news, saveNews, deleteNews, saveNewsBulk, overrideNews } = useNewsRepository(session, isFreePlan);
@@ -133,13 +134,41 @@ export default function Dashboard() {
   // --- AUTH SESSION CHECK ---
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      setSession(currentSession);
-      if (!currentSession) navigate('/auth');
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession) { navigate('/auth'); return; }
+
+        // Verify user profile still exists in the database
+        const { data: profileCheck, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, plan')
+          .eq('id', currentSession.user.id)
+          .maybeSingle();
+
+        if (!profileError && profileCheck === null) {
+          // Profile deleted (never had an account or was removed) -> boot user to Auth
+          await supabase.auth.signOut();
+          navigate('/auth');
+          return;
+        }
+
+        if (profileCheck && !profileCheck.plan) {
+          // Profile exists but has NO PLAN -> send to sales page (Landing "/")
+          navigate('/');
+          return;
+        }
+
+        // Profile exists (or query had transient error — allow login to prevent false lockouts)
+        setSession(currentSession);
+      } finally {
+        // Always unblock the UI; redirect already happened if needed
+        setIsAuthChecking(false);
+      }
     };
 
     checkSession();
 
+    // onAuthStateChange: synchronous only — no async signOut here to avoid infinite loops
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (!session) navigate('/auth');
@@ -1893,6 +1922,15 @@ export default function Dashboard() {
   }, [activeTrades, timeGrouping, accountSettings.feePerTrade]);
 
 
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center font-sans tracking-widest text-[#00B0F0] text-sm uppercase">
+        <div className="w-12 h-12 border-4 rounded-full animate-spin mb-4" style={{ borderColor: 'rgba(0,176,240,0.2)', borderTopColor: '#00B0F0' }}></div>
+        Authenticating...
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden relative"
@@ -2064,56 +2102,56 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-[90]" onClick={() => setIsProfileDropdownOpen(false)}></div>
       )}
 
-      {/* FAB SPEED DIAL OVERLAY */}
+      {/* FAB SPEED DIAL OVERLAY — backdrop separado dos botões */}
       {isFabOpen && (
         <div
-          className="fixed inset-0 z-[50] bg-black/70 backdrop-blur-md transition-opacity duration-300"
+          className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md transition-opacity duration-300 lg:hidden"
           onClick={() => setIsFabOpen(false)}
+        />
+      )}
+
+      {/* FAB speed-dial BUTTONS (acima do backdrop, z-70) */}
+      {isFabOpen && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 flex items-end z-[70] pointer-events-none lg:hidden"
+          style={{ bottom: `calc(var(--nav-bottom-height, 65px) + env(safe-area-inset-bottom, 0px) + 1.5rem)`, gap: `${LAYOUT.fab.gap}rem` }}
         >
-          {/* Buttons in a gentle arc above the FAB */}
-          <div
-            className="fixed left-1/2 -translate-x-1/2 flex items-end pointer-events-none"
-            style={{ bottom: `${LAYOUT.fab.bottomOffset}rem`, gap: `${LAYOUT.fab.gap}rem`, paddingBottom: '8px' }}
-          >
-            {[
-              { id: 'import', icon: Plus, label: 'Trade', ...LAYOUT.fab.colors.trade, offsetY: LAYOUT.fab.arcOffsets[0] },
-              { id: 'news', icon: Newspaper, label: 'News', ...LAYOUT.fab.colors.news, offsetY: LAYOUT.fab.arcOffsets[1] },
-              { id: 'holidays', icon: CalendarDays, label: 'Holidays', ...LAYOUT.fab.colors.holidays, offsetY: LAYOUT.fab.arcOffsets[2] }
-            ].map((item, idx) => (
-              <div
-                key={item.id}
-                className="flex flex-col items-center gap-2 pointer-events-auto animate-in fade-in slide-in-from-bottom-4 duration-300"
+          {[
+            { id: 'import', icon: Plus, label: 'Trade', ...LAYOUT.fab.colors.trade, offsetY: LAYOUT.fab.arcOffsets[0] },
+            { id: 'news', icon: Newspaper, label: 'News', ...LAYOUT.fab.colors.news, offsetY: LAYOUT.fab.arcOffsets[1] },
+            { id: 'holidays', icon: CalendarDays, label: 'Holidays', ...LAYOUT.fab.colors.holidays, offsetY: LAYOUT.fab.arcOffsets[2] }
+          ].map((item, idx) => (
+            <div
+              key={item.id}
+              className="flex flex-col items-center gap-2 pointer-events-auto transition-transform duration-300"
+              style={{
+                animationDelay: `${idx * 60}ms`,
+                marginBottom: `${item.offsetY}px`
+              }}
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPrevTab(activeTab);
+                  setActiveTab(item.id);
+                  setIsFabOpen(false);
+                }}
+                className="rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200 active:scale-90 hover:brightness-125"
                 style={{
-                  animationDelay: `${idx * 60}ms`,
-                  marginBottom: `${item.offsetY}px`
+                  width: `${LAYOUT.fab.circleSize}rem`,
+                  height: `${LAYOUT.fab.circleSize}rem`,
+                  backgroundColor: item.bgColor,
+                  border: `${LAYOUT.fab.circleBorderWidth}px solid ${item.borderColor}`
                 }}
               >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startTransition(() => {
-                      setPrevTab(activeTab);
-                      setActiveTab(item.id);
-                    });
-                    setIsFabOpen(false);
-                  }}
-                  className="rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200 active:scale-90 hover:brightness-125"
-                  style={{
-                    width: `${LAYOUT.fab.circleSize}rem`,
-                    height: `${LAYOUT.fab.circleSize}rem`,
-                    backgroundColor: item.bgColor,
-                    border: `${LAYOUT.fab.circleBorderWidth}px solid ${item.borderColor}`
-                  }}
-                >
-                  <item.icon size={LAYOUT.fab.iconSize} style={{ color: item.iconColor }} />
-                </button>
-                <span
-                  className="font-bold uppercase tracking-widest"
-                  style={{ fontSize: `${LAYOUT.fab.labelFontSize}rem`, color: item.iconColor }}
-                >{item.label}</span>
-              </div>
-            ))}
-          </div>
+                <item.icon size={LAYOUT.fab.iconSize} style={{ color: item.iconColor }} />
+              </button>
+              <span
+                className="font-bold uppercase tracking-widest mt-2"
+                style={{ fontSize: `${LAYOUT.fab.labelFontSize}rem`, color: item.iconColor, textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}
+              >{item.label}</span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -2134,9 +2172,12 @@ export default function Dashboard() {
       )}
 
       {/* HEADER FIXO NO TOPO */}
-      <header className="fixed top-0 left-0 w-full z-[90] flex items-center justify-between px-4 lg:px-6 h-[var(--header-height-mob)] lg:h-[var(--header-height-desk)] shadow-sm transition-all header-safe"
+      <header className="fixed top-0 left-0 w-full z-[90] flex items-end justify-between px-4 lg:px-6 shadow-sm transition-all overflow-hidden lg:items-center"
         style={{
           ...iosNavFix,
+          height: isMobile ? 'calc(var(--header-height-mob, 90px) + env(safe-area-inset-top, 0px))' : 'var(--header-height-desk, 80px)',
+          paddingTop: isMobile ? 'env(safe-area-inset-top, 0px)' : '0',
+          paddingBottom: isMobile ? '0.75rem' : '0',
           ...(settings.enableGlassEffect ? {
             backgroundColor: hexToRgba(theme.fundoMenu, 1),
             backdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`,
@@ -2585,25 +2626,18 @@ export default function Dashboard() {
       </main >
 
       {/* BOTTOM NAVIGATION MOBILE FIXO */}
-      {/* Tarefa 3: Backdrop do FAB cobre o BottomNav (z-index > 50) */}
-      {isFabOpen && (
-        <div
-          className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm lg:hidden"
-          onClick={() => setIsFabOpen(false)}
-        />
-      )}
-      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-[50] items-center justify-around px-2 shadow-xl transition-all pb-safe"
+      <nav className="flex lg:hidden fixed bottom-0 left-0 w-full z-[65] items-start justify-around px-2 shadow-xl transition-all"
         style={{
+          height: 'calc(var(--nav-bottom-height, 65px) + env(safe-area-inset-bottom, 0px))',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           paddingTop: `${LAYOUT.nav.paddingTop}rem`,
           ...iosNavFix,
-          '--nav-pb-extra': `${LAYOUT.nav.paddingBottom}rem`,
-          ...(settings.enableGlassEffect ? {
-            backgroundColor: hexToRgba(theme.fundoMenu, Math.max(0.95, settings.cardOpacity / 100)),
-            backdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`,
-            WebkitBackdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`
-          } : { backgroundColor: theme.fundoMenu }),
-          borderColor: theme.contornoGeral, borderWidth: `${settings.borderWidthGeral}px 0 0 0`, borderStyle: 'solid'
-        } as React.CSSProperties}>
+          backgroundColor: hexToRgba(theme.fundoMenu, 0.95),
+          borderTop: `1px solid ${theme.contornoGeral}`,
+          backdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`,
+          WebkitBackdropFilter: `blur(${Math.max(20, settings.glassBlur)}px)`
+        }}
+      >
         {
           [
             { id: 'dashboard', icon: LayoutDashboard, title: 'Home' },
@@ -2617,7 +2651,7 @@ export default function Dashboard() {
                 <button
                   key={item.id}
                   onClick={() => setIsFabOpen(!isFabOpen)}
-                  className={`relative flex items-center justify-center rounded-full shadow-2xl transition-all duration-300 z-[60] ${isFabOpen ? 'rotate-90' : ''}`}
+                  className={`relative flex items-center justify-center rounded-full shadow-2xl transition-all duration-300 z-[75]`}
                   style={{
                     marginTop: `-${LAYOUT.nav.fabNegativeMarginTop}rem`,
                     padding: `${LAYOUT.nav.fabPadding}rem`,
@@ -2626,7 +2660,9 @@ export default function Dashboard() {
                     border: `${LAYOUT.nav.fabBorderWidth}px solid ${theme.fundoPrincipal}`
                   }}
                 >
-                  <item.icon size={LAYOUT.nav.fabIconSize} />
+                  <div className={`transition-transform duration-300 ${isFabOpen ? 'rotate-90 scale-110' : ''}`}>
+                    {isFabOpen ? <X size={LAYOUT.nav.fabIconSize} /> : <Plus size={LAYOUT.nav.fabIconSize} />}
+                  </div>
                 </button>
               );
             }
@@ -2634,9 +2670,18 @@ export default function Dashboard() {
             return (
               <button
                 key={item.id}
-                onClick={() => startTransition(() => { if (activeTab !== item.id) setPrevTab(activeTab); setActiveTab(item.id); })}
-                className="flex flex-col items-center justify-center flex-1 gap-1 transition-all active:scale-90 min-h-[56px] py-3"
+                onClick={() => {
+                  if (activeTab !== item.id) {
+                    startTransition(() => {
+                      setPrevTab(activeTab);
+                      setActiveTab(item.id);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    });
+                  }
+                }}
+                className={`flex flex-col items-center justify-start flex-1 gap-1 transition-all duration-300 active:scale-90 touch-manipulation pt-2 ${isFabOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}
                 style={{
+                  height: 'var(--nav-bottom-height, 65px)',
                   color: isActive ? LAYOUT.nav.activeColor : theme.textoSecundario
                 }}
               >

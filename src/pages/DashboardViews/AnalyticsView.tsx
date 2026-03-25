@@ -222,7 +222,7 @@ export default function AnalyticsView({
               })}
             </select>
           </div>
-          <div className="w-full flex-1 min-h-0">
+          <div className="w-full flex-1" style={{ minHeight: 0, height: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={filteredTradeValuesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />

@@ -55,7 +55,7 @@ export default function Admin() {
     const [showAddConfirm, setShowAddConfirm] = useState(false);
     const [addForm, setAddForm] = useState({
         firstName: '', lastName: '', email: '', password: '', confirmPassword: '',
-        phoneCode: '+1', phone: '', country: '', postalCode: '', howHeard: ''
+        phoneCode: '+1', phone: '', country: ''
     });
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -175,8 +175,6 @@ export default function Admin() {
                         phone_code: addForm.phoneCode,
                         phone_number: addForm.phone,
                         country: addForm.country,
-                        postal_code: addForm.postalCode,
-                        how_heard_about_us: addForm.howHeard,
                         plan: 'Free',
                         status: 'Active',
                         updated_at: new Date().toISOString()
@@ -186,7 +184,7 @@ export default function Admin() {
 
             showToast('User created successfully!');
             setIsAddModalOpen(false);
-            setAddForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phoneCode: '+1', phone: '', country: '', postalCode: '', howHeard: '' });
+            setAddForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phoneCode: '+1', phone: '', country: '' });
             await fetchProfiles();
         } catch (err: any) {
             showToast(`Error creating user: ${err.message}`);
@@ -344,24 +342,12 @@ export default function Admin() {
                                         <input type="text" placeholder="Phone without country code" value={addForm.phone} onChange={e => setAddForm({ ...addForm, phone: e.target.value })} className="flex-1 bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-gray-400">Country</label>
-                                        <select value={addForm.country} onChange={e => setAddForm({ ...addForm, country: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer">
-                                            <option value="">Select a country</option>
-                                            {countriesList.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-gray-400">How heard about us?</label>
-                                        <select value={addForm.howHeard} onChange={e => setAddForm({ ...addForm, howHeard: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer">
-                                            <option value="">Select an option</option>
-                                            <option value="Google">Google</option>
-                                            <option value="Social Media">Social Media</option>
-                                            <option value="Friend">Friend recommendation</option>
-                                            <option value="Other">Other</option>
-                                        </select>
-                                    </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-400">Country</label>
+                                    <select value={addForm.country} onChange={e => setAddForm({ ...addForm, country: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors cursor-pointer">
+                                        <option value="">Select a country</option>
+                                        {countriesList.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
                                 </div>
                             </div>
                             <div className="p-6 border-t border-white/10 flex justify-end gap-3">
