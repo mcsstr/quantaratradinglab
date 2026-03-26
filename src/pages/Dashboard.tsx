@@ -34,6 +34,17 @@ import { useNewsRepository } from '../hooks/useNewsRepository';
 import { useHolidaysRepository } from '../hooks/useHolidaysRepository';
 
 
+// Helper for Universal Commission Deduction
+const calculateTradeFee = (trade: any, accSettings: any) => {
+  if (trade.commission !== undefined && trade.commission !== null && trade.commission !== 0) {
+    return Math.abs(Number(trade.commission));
+  }
+  const fixedFeeAmount = accSettings.isFixedFee
+    ? (accSettings.feeType === '%' ? (accSettings.initialBalance * accSettings.feePerContract) / 100 : accSettings.feePerContract)
+    : 0;
+  return (trade.qty || 1) * fixedFeeAmount;
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -275,11 +286,11 @@ export default function Dashboard() {
             pnl: Number(t.pnl),
             date: t.date,
             entryTimestamp: t.entry_timestamp,
-            buyPrice: Number(t.buy_price),
+            buyPrice: t.buy_price != null ? Number(t.buy_price) : null,
             buyTime: t.buy_time,
             duration: t.duration,
             sellTime: t.sell_time,
-            sellPrice: Number(t.sell_price),
+            sellPrice: t.sell_price != null ? Number(t.sell_price) : null,
             notes: t.notes,
             commission: t.commission !== null && t.commission !== undefined ? Number(t.commission) : null,
             rawMetadata: t.raw_metadata || {}
@@ -289,8 +300,12 @@ export default function Dashboard() {
 
       // Initialize Active Account and Selection if not set
       if (dbAccounts && dbAccounts.length > 0) {
-        if (!activeAccountId) setActiveAccountId(dbAccounts[0].id);
-        if (!selectedImportAccountId) setSelectedImportAccountId(dbAccounts[0].id);
+        const savedId = localStorage.getItem('quantara_activeAccountId');
+        const accountExists = dbAccounts.some(a => a.id === savedId);
+        const targetId = accountExists && savedId ? savedId : dbAccounts[0].id;
+        
+        if (!activeAccountId) setActiveAccountId(targetId);
+        if (!selectedImportAccountId) setSelectedImportAccountId(targetId);
       }
       // Tarefa 9: Marca o carregamento de contas como finalizado
       setIsLoadingAccounts(false);
@@ -662,7 +677,6 @@ export default function Dashboard() {
   }, [activeTrades]);
 
   const metrics = useMemo(() => {
-    const feeAmount = accountSettings.feeType === '%' ? (accountSettings.initialBalance * accountSettings.feePerTrade) / 100 : accountSettings.feePerTrade;
     const dailyLossLimitAmount = accountSettings.dailyLossLimitType === '%' ? (accountSettings.initialBalance * accountSettings.dailyLossLimit) / 100 : accountSettings.dailyLossLimit;
     const totalStopLossAmount = accountSettings.totalStopLossType === '%' ? (accountSettings.initialBalance * accountSettings.totalStopLoss) / 100 : accountSettings.totalStopLoss;
 
@@ -679,12 +693,8 @@ export default function Dashboard() {
 
     sortedChronological.forEach(trade => {
       grossPnl += trade.pnl; totalQty += trade.qty;
-      // Lógica Híbrida de Comissão: usa commission do trade (importado) ou feePerTrade como fallback
-      const rawPnl = Number(trade.pnl || 0);
-      const fee = trade.commission !== undefined && trade.commission !== null && trade.commission !== 0
-        ? Math.abs(Number(trade.commission))
-        : trade.qty * feeAmount;
-      const netTradePnl = rawPnl - fee;
+      const fee = calculateTradeFee(trade, accountSettings);
+      const netTradePnl = Number(trade.pnl || 0) - fee;
 
       if (trade.pnl >= 0) {
         winningTrades++; totalGrossProfit += trade.pnl;
@@ -714,10 +724,7 @@ export default function Dashboard() {
       if (currentDrawdown > maxDrawdown) maxDrawdown = currentDrawdown;
     });
 
-    const totalFees = activeTrades.reduce((acc, t) => {
-      if (t.commission !== undefined && t.commission !== null && t.commission !== 0) return acc + Math.abs(Number(t.commission));
-      return acc + (t.qty * feeAmount);
-    }, 0);
+    const totalFees = activeTrades.reduce((acc, t) => acc + calculateTradeFee(t, accountSettings), 0);
     const netPnl = grossPnl - totalFees;
     const currentBalance = accountSettings.initialBalance + netPnl;
     const totalTrades = activeTrades.length;
@@ -777,13 +784,8 @@ export default function Dashboard() {
 
     activeTrades.forEach(t => {
       const [y, m, d] = t.date.split('-'); const tDate = new Date(y, m - 1, d).getTime();
-      // Lógica Híbrida de Comissão idêntica à de metrics
-      const rawPnl = Number(t.pnl || 0);
-      const baseFee = accountSettings.feeType === '%' ? (accountSettings.initialBalance * accountSettings.feePerTrade) / 100 : accountSettings.feePerTrade;
-      const fee = t.commission !== undefined && t.commission !== null && t.commission !== 0
-        ? Math.abs(Number(t.commission))
-        : t.qty * baseFee;
-      const net = rawPnl - fee;
+      const fee = calculateTradeFee(t, accountSettings);
+      const net = Number(t.pnl || 0) - fee;
       if (tDate === startOfToday) profitToday += net;
       if (tDate === startOfYesterday) profitYesterday += net;
       if (tDate === startOfDayBefore) profitDayBefore += net;
@@ -828,12 +830,8 @@ export default function Dashboard() {
     let runningBalance = accountSettings.initialBalance;
 
     const tradePoints = sortedTrades.map((t) => {
-      // Lógica Híbrida de Comissão para a curva de equity
-      const rawPnl = Number(t.pnl || 0);
-      const fee = t.commission !== undefined && t.commission !== null && t.commission !== 0
-        ? Math.abs(Number(t.commission))
-        : t.qty * accountSettings.feePerTrade;
-      runningBalance += rawPnl - fee;
+      const fee = calculateTradeFee(t, accountSettings);
+      runningBalance += Number(t.pnl || 0) - fee;
       return { date: t.date, balance: runningBalance };
     });
 
@@ -890,9 +888,18 @@ export default function Dashboard() {
       const dd = String(currentDayIter.getDate()).padStart(2, '0');
       const dateStr = `${yyyy}-${mm}-${dd}`;
 
+      const feeAmount = accountSettings.feeType === '%'
+        ? (accountSettings.initialBalance * accountSettings.feePerTrade) / 100
+        : accountSettings.feePerTrade;
+
       const dayTrades = activeTrades.filter(t => t.date === dateStr);
       let dayGrossPnl = 0, dayFees = 0, wins = 0;
-      dayTrades.forEach(t => { dayGrossPnl += t.pnl; dayFees += (t.qty * accountSettings.feePerTrade); if (t.pnl > 0) wins++; });
+      dayTrades.forEach(t => {
+        dayGrossPnl += t.pnl;
+        const fee = calculateTradeFee(t, accountSettings);
+        dayFees += fee;
+        if (t.pnl - fee > 0) wins++;
+      });
 
       const dayHolidays = holidays.filter(h => h.date === dateStr);
       const dayNews = news.filter(n => n.date === dateStr);
@@ -922,7 +929,7 @@ export default function Dashboard() {
       weeks.push({ days: weekDays, summary: { pnl: weekNetPnl, trades: weekTrades, winRate: weekTrades > 0 ? (weekWins / weekTrades) * 100 : 0 } });
     }
     return weeks;
-  }, [currentDate, activeTrades, accountSettings.feePerTrade, holidays, news]);
+  }, [currentDate, activeTrades, accountSettings.feePerTrade, accountSettings.feeType, accountSettings.initialBalance, holidays, news]);
 
   const performanceWeeklyData = useMemo(() => {
     const daysData = [
@@ -1032,9 +1039,24 @@ export default function Dashboard() {
       const d2 = d2Iso ? new Date(d2Iso).getTime() : NaN;
 
       let entryTimestamp: number | null = null;
+      let finalBuyPrice = buyPrice;
+      let finalSellPrice = sellPrice;
+      let finalBuyTime = tradeData.buyTime;
+      let finalSellTime = tradeData.sellTime;
+
       if (!isNaN(d1) && !isNaN(d2)) {
-        if (d1 > d2 && direction !== 'Short') { direction = 'Short'; entryTimestamp = d2; }
-        else { entryTimestamp = d1; }
+        if (d1 > d2 && direction !== 'Short') {
+          // Auto-detect Short: sell happened before buy in calendar time
+          // Swap prices and times so "sellPrice" = closing price of the position
+          direction = 'Short';
+          entryTimestamp = d2;
+          finalBuyPrice = sellPrice;   // broker's "sell" = short entry → becomes our buyPrice conceptually
+          finalSellPrice = buyPrice;   // broker's "buy" = short exit → becomes our sellPrice (closing)
+          finalBuyTime = tradeData.sellTime;
+          finalSellTime = tradeData.buyTime;
+        } else {
+          entryTimestamp = d1;
+        }
       } else {
         entryTimestamp = !isNaN(d1) ? d1 : (!isNaN(d2) ? d2 : null);
       }
@@ -1051,8 +1073,11 @@ export default function Dashboard() {
       }
 
       return {
-        qty, pnlValue, symbol, buyPrice, sellPrice, direction, entryTimestamp, dateStr, rawMetadata,
-        buyTime: tradeData.buyTime, sellTime: tradeData.sellTime, duration: tradeData.duration, commission
+        qty, pnlValue, symbol,
+        buyPrice: finalBuyPrice, sellPrice: finalSellPrice,
+        direction, entryTimestamp, dateStr, rawMetadata,
+        buyTime: finalBuyTime, sellTime: finalSellTime,
+        duration: tradeData.duration, commission
       };
     };
 
@@ -1184,9 +1209,9 @@ export default function Dashboard() {
             date: t.date,
             entry_timestamp: t.entryTimestamp ? new Date(t.entryTimestamp).toISOString() : null,
             buy_price: t.buyPrice || 0,
-            buy_time: t.buyTime ? (parseSmartDate(t.buyTime) || t.buyTime) : null,
+            buy_time: t.buyTime ? parseSmartDate(t.buyTime) : null,
             duration: t.duration || '',
-            sell_time: t.sellTime ? (parseSmartDate(t.sellTime) || t.sellTime) : null,
+            sell_time: t.sellTime ? parseSmartDate(t.sellTime) : null,
             sell_price: t.sellPrice || 0,
             commission: t.commission || 0,
             raw_metadata: t.rawMetadata
@@ -1200,8 +1225,9 @@ export default function Dashboard() {
             id: t.id, accountId: t.account_id, symbol: t.symbol, direction: t.direction,
             qty: t.qty, pnl: Number(t.pnl), date: t.date,
             entryTimestamp: t.entry_timestamp ? new Date(t.entry_timestamp).getTime() : null,
-            buyPrice: Number(t.buy_price), buyTime: t.buy_time, duration: t.duration,
-            sellTime: t.sell_time, sellPrice: Number(t.sell_price),
+            buyPrice: t.buy_price != null ? Number(t.buy_price) : null,
+            buyTime: t.buy_time, duration: t.duration,
+            sellTime: t.sell_time, sellPrice: t.sell_price != null ? Number(t.sell_price) : null,
             commission: t.commission !== null ? Number(t.commission) : null,
             rawMetadata: t.raw_metadata
           }));
@@ -1291,9 +1317,9 @@ export default function Dashboard() {
             date: dateStr,
             entry_timestamp: new Date(buyT).toISOString(),
             buy_price: parseFloat(manualTrade.buyPrice) || 0,
-            buy_time: buyT,
+            buy_time: buyT ? new Date(buyT).toISOString() : null,
             duration: manualTrade.duration || '',
-            sell_time: sellT,
+            sell_time: sellT ? new Date(sellT).toISOString() : null,
             sell_price: parseFloat(manualTrade.sellPrice) || 0,
             commission: 0,
             raw_metadata: {}
@@ -1535,9 +1561,15 @@ export default function Dashboard() {
   const handleExportCSV = () => {
     if (filteredTrades.length === 0) return;
     const headers = "Trade ID,Date,Contracts,Fees,Duration,Gross P&L,Net P&L\n";
+    const fixedFeeAmount = accountSettings.isFixedFee
+      ? (accountSettings.feeType === '%' ? (accountSettings.initialBalance * accountSettings.feePerContract) / 100 : accountSettings.feePerContract)
+      : 0;
+
     const csvRows = filteredTrades.map(t => {
-      const fees = (t.qty * accountSettings.feePerTrade).toFixed(2);
-      const netPnl = (t.pnl - parseFloat(fees)).toFixed(2);
+      const fees = (t.commission !== undefined && t.commission !== null && t.commission !== 0)
+        ? Math.abs(Number(t.commission)).toFixed(2)
+        : (t.qty * fixedFeeAmount).toFixed(2);
+      const netPnl = (Number(t.pnl || 0) - Number(fees)).toFixed(2);
       return `${t.id},${t.date},${t.qty},${fees},${t.duration},${t.pnl},${netPnl}`;
     });
     const blob = new Blob([headers + csvRows.join("\n")], { type: 'text/csv' });
@@ -1563,9 +1595,9 @@ export default function Dashboard() {
           date: editFormData.date,
           entry_timestamp: editFormData.entryTimestamp,
           buy_price: parseFloat(editFormData.buyPrice),
-          buy_time: editFormData.buyTime,
+          buy_time: editFormData.buyTime ? parseSmartDate(editFormData.buyTime) : null,
           duration: editFormData.duration,
-          sell_time: editFormData.sellTime,
+          sell_time: editFormData.sellTime ? parseSmartDate(editFormData.sellTime) : null,
           sell_price: editFormData.sellPrice ? parseFloat(editFormData.sellPrice) : null,
           commission: editFormData.commission ? parseFloat(editFormData.commission) : null,
           notes: editFormData.notes
@@ -1629,6 +1661,7 @@ export default function Dashboard() {
         profit_split: Number(accountFormData.profitSplit),
         fee_per_trade: Number(accountFormData.feePerTrade),
         fee_type: accountFormData.feeType,
+        daily_loss_limit: Number(accountFormData.dailyLossLimit),
         daily_loss_limit_type: accountFormData.dailyLossLimitType,
         total_stop_loss: Number(accountFormData.totalStopLoss),
         total_stop_loss_type: accountFormData.totalStopLossType,
@@ -1806,7 +1839,7 @@ export default function Dashboard() {
     activeTrades.forEach(t => {
       const sym = t.symbol && t.symbol !== '-' ? t.symbol : 'Other';
       if (!map[sym]) map[sym] = 0;
-      map[sym] += t.pnl - (t.qty * accountSettings.feePerTrade);
+      map[sym] += t.pnl - calculateTradeFee(t, accountSettings);
     });
     return Object.keys(map).map(k => ({ name: k, pnl: map[k] })).sort((a: any, b: any) => b.pnl - a.pnl).slice(0, 10); // Top 10 Symbols
   }, [activeTrades, accountSettings.feePerTrade]);
@@ -1814,7 +1847,7 @@ export default function Dashboard() {
   const directionData = useMemo(() => {
     let longPnl = 0, shortPnl = 0;
     activeTrades.forEach(t => {
-      const net = t.pnl - (t.qty * accountSettings.feePerTrade);
+      const net = t.pnl - calculateTradeFee(t, accountSettings);
       if (t.direction === 'Short') shortPnl += net;
       else longPnl += net;
     });
@@ -1829,7 +1862,7 @@ export default function Dashboard() {
     activeTrades.forEach(t => {
       const key = t.date.substring(0, 7); // Agrupa por YYYY-MM
       if (!map[key]) map[key] = 0;
-      map[key] += t.pnl - (t.qty * accountSettings.feePerTrade);
+      map[key] += t.pnl - calculateTradeFee(t, accountSettings);
     });
     return Object.keys(map).sort().map(k => {
       const [y, m] = k.split('-');
@@ -1868,7 +1901,7 @@ export default function Dashboard() {
         name: `Trade ${index + 1}`,
         date: formatDateTime(t),
         rawDate: t.date,
-        pnl: t.pnl - (t.qty * accountSettings.feePerTrade)
+        pnl: t.pnl - calculateTradeFee(t, accountSettings)
       }));
   }, [activeTrades, accountSettings.feePerTrade]);
 
@@ -1916,7 +1949,7 @@ export default function Dashboard() {
       const binName = `${String(h).padStart(2, '0')}:${String(binMin).padStart(2, '0')}`;
       if (!bins[binName]) bins[binName] = { name: binName, count: 0, pnl: 0 };
       bins[binName].count += 1;
-      bins[binName].pnl += (t.pnl - (t.qty * accountSettings.feePerTrade));
+      bins[binName].pnl += (t.pnl - calculateTradeFee(t, accountSettings));
     });
     return (Object.values(bins) as any[]).sort((a: any, b: any) => a.name.localeCompare(b.name));
   }, [activeTrades, timeGrouping, accountSettings.feePerTrade]);
@@ -2731,7 +2764,12 @@ export default function Dashboard() {
                   ) : accounts.map(acc => (
                     <button
                       key={acc.id}
-                      onClick={() => { setActiveAccountId(acc.id); setIsAccountSwitcherOpen(false); }}
+                      onClick={() => { 
+                        setActiveAccountId(acc.id); 
+                        setSelectedImportAccountId(acc.id);
+                        localStorage.setItem('quantara_activeAccountId', acc.id);
+                        setIsAccountSwitcherOpen(false); 
+                      }}
                       className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${acc.id === activeAccountId
                         ? 'border-[#00B0F0]/50 bg-[#00B0F0]/10'
                         : 'border-white/5 hover:border-white/20 hover:bg-white/5'
