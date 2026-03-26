@@ -5,6 +5,7 @@ import {
     Bell, Search, Filter, UserPlus, Edit2, Trash2, Clock, DollarSign, X, AlertTriangle, Lock, Check, Eye, EyeOff
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import './Dashboard.css';
 
 const countryCodes = [
     { code: '+1', country: 'United States', flag: '🇺🇸' },
