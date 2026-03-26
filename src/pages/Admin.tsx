@@ -62,6 +62,12 @@ export default function Admin() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
+    // Toast helper
+    const showToast = (message: string) => {
+        setToastMessage(message);
+        setTimeout(() => setToastMessage(''), 3000);
+    };
+
     // ---------- SUPABASE: Fetch all profiles ----------
     const fetchProfiles = async () => {
         setIsLoading(true);
@@ -84,6 +90,12 @@ export default function Admin() {
                 phoneCode: p.phone_code || '+1',
                 phone: p.phone_number || '',
                 country: p.country || '',
+                stripeCustomerId: p.stripe_customer_id || '',
+                stripeSubscriptionId: p.stripe_subscription_id || '',
+                stripePriceId: p.stripe_price_id || '',
+                planExpiresAt: p.plan_expires_at || '',
+                billingInterval: p.billing_interval || 'monthly',
+                trialEnd: p.trial_end || '',
                 // Keep raw fields for updates
                 _raw: p
             }));
@@ -141,28 +153,29 @@ export default function Admin() {
                 .eq('id', userId);
 
             if (error) throw error;
-
             setUsers(prev => prev.filter(u => u.id !== userId));
             showToast('User deleted successfully.');
         } catch (err: any) {
             console.error('Error deleting profile:', err);
-            showToast(`Error deleting profile: ${err.message}`);
+            showToast(`Error deleting user: ${err.message}`);
         }
     };
 
-    // ---------- SUPABASE: Add New User ----------
+    // ---------- SUPABASE: Add new user ----------
     const handleAddUser = async (e: React.FormEvent) => {
         e.preventDefault();
         if (addForm.password !== addForm.confirmPassword) {
-            showToast('Passwords do not match!');
+            showToast('Passwords do not match');
             return;
         }
+
         setIsAdding(true);
         try {
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: addForm.email,
-                password: addForm.password
+                password: addForm.password,
             });
+
             if (authError) throw authError;
 
             if (authData?.user) {
@@ -180,17 +193,64 @@ export default function Admin() {
                         status: 'Active',
                         updated_at: new Date().toISOString()
                     });
-                if (profileError) throw profileError;
-            }
 
-            showToast('User created successfully!');
-            setIsAddModalOpen(false);
-            setAddForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phoneCode: '+1', phone: '', country: '' });
-            await fetchProfiles();
+                if (profileError) throw profileError;
+                showToast('User added successfully');
+                setIsAddModalOpen(false);
+                setAddForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phoneCode: '+1', phone: '', country: '' });
+                fetchProfiles();
+            }
         } catch (err: any) {
-            showToast(`Error creating user: ${err.message}`);
+            console.error('Error adding user:', err);
+            showToast(`Error adding user: ${err.message}`);
         } finally {
             setIsAdding(false);
+        }
+    };
+
+    // ---------- SUPABASE: Suspend profile via Edge Function ----------
+    const handleSuspendProfile = async (userId: string) => {
+        if (!confirm('Tem a certeza que deseja suspender este usuário? Isso pode bloquear os serviços dele caso o plano não seja Free.')) return;
+        setIsLoading(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const { data, error } = await supabase.functions.invoke('admin-suspend-user', {
+                body: { targetUserId: userId },
+                headers: {
+                    Authorization: `Bearer ${session?.access_token}`
+                }
+            });
+
+            if (error || data?.error) throw new Error(error?.message || data?.error || 'Failed to suspend');
+            
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'Suspended' } : u));
+            showToast('User suspended successfully.');
+        } catch (err: any) {
+            console.error('Error suspending profile:', err);
+            showToast(`Error suspending user: ${err.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // ---------- SUPABASE: Reactivate profile ----------
+    const handleReactivateProfile = async (userId: string) => {
+        setIsLoading(true);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ status: 'Active', updated_at: new Date().toISOString() })
+                .eq('id', userId);
+
+            if (error) throw error;
+            
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'Active' } : u));
+            showToast('User reactivated successfully.');
+        } catch (err: any) {
+            console.error('Error reactivating profile:', err);
+            showToast(`Error reactivating user: ${err.message}`);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -239,11 +299,6 @@ export default function Admin() {
         } else {
             showToast('Incorrect password!');
         }
-    };
-
-    const showToast = (msg: string) => {
-        setToastMessage(msg);
-        setTimeout(() => setToastMessage(''), 3000);
     };
 
     const filteredUsers = users.filter(u => {

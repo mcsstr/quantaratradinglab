@@ -10,6 +10,7 @@ import Loading from './pages/Loading';
 import Dashboard from './pages/Dashboard';
 import Account from './pages/Account';
 import Admin from './pages/Admin';
+import Pricing from './pages/Pricing';
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/account" element={<Account />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/pricing" element={<Pricing />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

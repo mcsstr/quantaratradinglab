@@ -6,6 +6,8 @@ export default function Loading() {
   const navigate = useNavigate();
   const [progress, setProgress] = useState(0);
   const [userName, setUserName] = useState('');
+  const [loadingMessage, setLoadingMessage] = useState('We are preparing your trading lab...');
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
 
   // Buscar nome do usuário logado
   useEffect(() => {
@@ -29,26 +31,74 @@ export default function Loading() {
     fetchUser();
   }, []);
 
+  // Normal Loading / Checkout Polling Logic
   useEffect(() => {
-    const duration = 2500; // 2.5 seconds
-    const intervalTime = 50;
-    const steps = duration / intervalTime;
-    let currentStep = 0;
+    const urlParams = new URLSearchParams(window.location.search);
+    const checkoutStatus = urlParams.get('checkout');
+    
+    if (checkoutStatus === 'success') {
+      setIsProcessingCheckout(true);
+      setLoadingMessage('Confirming your subscription...');
+      
+      const pollSubscription = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          navigate('/auth');
+          return;
+        }
 
-    const timer = setInterval(() => {
-      currentStep++;
-      const newProgress = Math.min(Math.round((currentStep / steps) * 100), 100);
-      setProgress(newProgress);
+        let attempts = 0;
+        const maxAttempts = 20; // up to 20 * 2s = 40s wait
+        
+        while (attempts < maxAttempts) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('status, plan')
+            .eq('id', user.id)
+            .single();
 
-      if (currentStep >= steps) {
-        clearInterval(timer);
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 300);
-      }
-    }, intervalTime);
+          // Se webhook já processou e o plano tá ativo, liberar (só garante q não é free cancelado)
+          if (profile && profile.status === 'Active' && profile.plan !== 'Free') {
+            setLoadingMessage('Subscription confirmed! Redirecting...');
+            setTimeout(() => {
+              navigate('/dashboard');
+            }, 1000);
+            return; // Success, exit polling
+          }
 
-    return () => clearInterval(timer);
+          attempts++;
+          setProgress(Math.min((attempts / maxAttempts) * 100, 95));
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        // Se passar do tempo, manda pro dashboard de qualquer jeito (pode tar atrasado no stripe)
+        navigate('/dashboard');
+      };
+
+      pollSubscription();
+
+    } else {
+      // Normal Loading Logic
+      const duration = 2500; // 2.5 seconds
+      const intervalTime = 50;
+      const steps = duration / intervalTime;
+      let currentStep = 0;
+
+      const timer = setInterval(() => {
+        currentStep++;
+        const newProgress = Math.min(Math.round((currentStep / steps) * 100), 100);
+        setProgress(newProgress);
+
+        if (currentStep >= steps) {
+          clearInterval(timer);
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 300);
+        }
+      }, intervalTime);
+
+      return () => clearInterval(timer);
+    }
   }, [navigate]);
 
   return (
@@ -95,7 +145,9 @@ export default function Loading() {
           <h2 className="text-xl font-medium">
             Welcome back{userName ? `, ${userName}` : ''}.
           </h2>
-          <p className="text-gray-400">We are preparing your trading lab...</p>
+          <p className={isProcessingCheckout ? "text-green-400 font-medium animate-pulse" : "text-gray-400"}>
+            {loadingMessage}
+          </p>
         </div>
       </div>
     </div>

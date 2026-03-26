@@ -301,7 +301,7 @@ export default function Account() {
                       <p className="text-sm text-gray-400 mb-4 leading-relaxed">
                         Você está no plano gratuito. Faça upgrade para desbloquear recursos avançados de análise e armazenamento na nuvem.
                       </p>
-                      <button className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors">
+                      <button onClick={() => navigate('/pricing')} className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors">
                         Fazer Upgrade
                       </button>
                     </div>

@@ -89,17 +89,27 @@ export default function Auth() {
       }
 
       if (isLogin && userId) {
-        // [BLOCKER DE LOGIN PARA USUARIOS DELETADOS]
-        // Se for login, valida se o usuário ainda existe explicitamente em profiles.
+        // Check if profile still exists (deleted account guard)
         const { data: profileCheck, error: profileError } = await supabase
           .from('profiles')
-          .select('id')
+          .select('id, plan, status')
           .eq('id', userId)
           .maybeSingle();
 
         if (!profileError && profileCheck === null) {
+          // Profile deleted — sign out and block
           await supabase.auth.signOut();
           throw new Error('Esta conta não existe mais.');
+        }
+
+        if (profileCheck) {
+          const plan = profileCheck.plan;
+          const status = profileCheck.status;
+          // No active plan or account suspended/payment failure → send to pricing
+          if (!plan || plan === '' || status === 'Suspended' || status === 'Inactive') {
+            navigate('/pricing');
+            return;
+          }
         }
       }
       navigate('/loading');

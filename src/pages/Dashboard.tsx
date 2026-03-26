@@ -27,6 +27,7 @@ import HolidaysView from './DashboardViews/HolidaysView';
 import ImportView from './DashboardViews/ImportView';
 import SettingsView from './DashboardViews/SettingsView';
 import MobileMenuView from './DashboardViews/MobileMenuView';
+import PlanExpiredModal from '../components/PlanExpiredModal';
 
 // Components
 import SearchableSelect from '../components/SearchableSelect';
@@ -133,10 +134,10 @@ export default function Dashboard() {
   const historyItemsPerPage = 20;
 
 
-  // Estado das abas de Configurações
   const [activeSettingsTab, setActiveSettingsTab] = useState('account');
   const [session, setSession] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true); // Blocks all render until auth verified
+  const [planExpiredStatus, setPlanExpiredStatus] = useState<'Suspended' | 'Inactive' | 'Expired' | null>(null);
 
   const isFreePlan = settings?.userPlan === 'Free';
   const { news, saveNews, deleteNews, saveNewsBulk, overrideNews } = useNewsRepository(session, isFreePlan);
@@ -187,6 +188,34 @@ export default function Dashboard() {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  // Realtime subscription for Profile Status changes (e.g., Stripe Webhook suspend)
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const channel = supabase
+      .channel('profile-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${session.user.id}`
+        },
+        (payload) => {
+          const newStatus = payload.new.status;
+          if (newStatus === 'Suspended' || newStatus === 'Inactive') {
+            setPlanExpiredStatus(newStatus);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
 
   // Retorna para a página 1 da Tabela caso os filtros mudem e limpa seleção
   useEffect(() => {
@@ -3053,6 +3082,8 @@ export default function Dashboard() {
         )
       }
 
+      {/* ===== PLAN EXPIRED MODAL ===== */}
+      {planExpiredStatus && <PlanExpiredModal status={planExpiredStatus} />}
     </div >
   );
 }
