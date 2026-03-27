@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Activity, LayoutDashboard, Users, TrendingUp, BarChart2, Settings, LogOut,
-    Bell, Search, Filter, UserPlus, Edit2, Trash2, Clock, DollarSign, X, AlertTriangle, Lock, Check, Eye, EyeOff
+    Bell, Search, Filter, UserPlus, Edit2, Trash2, Clock, DollarSign, X, AlertTriangle,
+    Lock, Check, Eye, EyeOff, Gift, Package
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { usePlanConfig } from '../hooks/usePlanConfig';
 import './Dashboard.css';
 
 const countryCodes = [
@@ -61,6 +63,17 @@ export default function Admin() {
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<'users' | 'plans'>('users');
+
+    // Plan config state
+    const { plans: planConfigs, fetchPlans } = usePlanConfig();
+    const [editingPlan, setEditingPlan] = useState<any>(null);
+    const [savingPlan, setSavingPlan] = useState(false);
+
+    // Admin override modal state
+    const [overrideModal, setOverrideModal] = useState<{ show: boolean; user: any } | null>(null);
+    const [overrideForm, setOverrideForm] = useState({ plan: 'Premium', days: '7' });
+    const [isGranting, setIsGranting] = useState(false);
 
     // Toast helper
     const showToast = (message: string) => {
@@ -266,6 +279,64 @@ export default function Admin() {
             setUsers(prev => prev.map(u => u.id === id ? { ...u, plan: newPlan } : u));
         } catch (err: any) {
             showToast(`Error updating plan: ${err.message}`);
+        }
+    };
+
+    // ---------- ADMIN: Grant temporary plan override ----------
+    const handleGrantOverride = async () => {
+        if (!overrideModal?.user) return;
+        setIsGranting(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('admin-override-plan', {
+                body: {
+                    targetUserId: overrideModal.user.id,
+                    overridePlan: overrideForm.plan,
+                    durationDays: parseInt(overrideForm.days, 10)
+                }
+            });
+            if (error) throw error;
+            if (data?._isError) throw new Error(data.error);
+            setUsers(prev => prev.map(u => u.id === overrideModal.user.id
+                ? { ...u, plan: overrideForm.plan, status: 'Active' } : u));
+            showToast(`Successfully granted ${overrideForm.plan} for ${overrideForm.days} days!`);
+            setOverrideModal(null);
+        } catch (err: any) {
+            showToast(`Error granting override: ${err.message}`);
+        } finally {
+            setIsGranting(false);
+        }
+    };
+
+    // ---------- ADMIN: Save plan config ----------
+    const handleSavePlanConfig = async () => {
+        if (!editingPlan) return;
+        setSavingPlan(true);
+        try {
+            const { error } = await supabase
+                .from('plans_config')
+                .update({
+                    name: editingPlan.name,
+                    price_monthly: parseFloat(editingPlan.price_monthly),
+                    price_yearly: parseFloat(editingPlan.price_yearly),
+                    stripe_price_monthly: editingPlan.stripe_price_monthly,
+                    stripe_price_yearly: editingPlan.stripe_price_yearly,
+                    trial_days: parseInt(editingPlan.trial_duration_value ?? editingPlan.trial_days, 10),
+                    trial_duration_value: parseInt(editingPlan.trial_duration_value ?? editingPlan.trial_days, 10),
+                    trial_duration_unit: editingPlan.trial_duration_unit || 'days',
+                    features: typeof editingPlan.features === 'string'
+                        ? editingPlan.features.split('\n').map((f: string) => f.trim()).filter(Boolean)
+                        : editingPlan.features,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', editingPlan.id);
+            if (error) throw new Error(error.message + (error.code === '42501' ? ' (RLS: make sure you are logged in as admin)' : ''));
+            showToast(`Plan "${editingPlan.name}" saved!`);
+            setEditingPlan(null);
+            fetchPlans();
+        } catch (err: any) {
+            showToast(`Error saving plan: ${err.message}`);
+        } finally {
+            setSavingPlan(false);
         }
     };
 
@@ -577,9 +648,13 @@ export default function Admin() {
                         <LayoutDashboard size={18} />
                         <span className="text-sm font-medium">Dashboard</span>
                     </button>
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-yellow-500/10 text-yellow-500 border border-yellow-500/30">
+                    <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${activeTab === 'users' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' : 'text-gray-400 hover:bg-yellow-500/10 hover:text-yellow-500'}`}>
                         <Users size={18} />
                         <span className="text-sm font-medium">User Management</span>
+                    </button>
+                    <button onClick={() => setActiveTab('plans')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${activeTab === 'plans' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' : 'text-gray-400 hover:bg-yellow-500/10 hover:text-yellow-500'}`}>
+                        <Package size={18} />
+                        <span className="text-sm font-medium">Plan Settings</span>
                     </button>
                 </nav>
 
@@ -717,6 +792,13 @@ export default function Admin() {
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() => { setOverrideModal({ show: true, user }); setOverrideForm({ plan: 'Premium', days: '7' }); }}
+                                                            title="Grant Free Upgrade"
+                                                            className="p-2 text-gray-400 hover:text-yellow-500 transition-colors border border-transparent hover:border-yellow-500/30 rounded-lg"
+                                                        >
+                                                            <Gift size={18} />
+                                                        </button>
                                                         <button onClick={() => openEditModal(user)} className="p-2 text-gray-400 hover:text-yellow-500 transition-colors border border-transparent hover:border-yellow-500/30 rounded-lg">
                                                             <Edit2 size={18} />
                                                         </button>
@@ -804,6 +886,116 @@ export default function Admin() {
                     </footer>
 
                 </div>
+
+                {/* PLAN SETTINGS TAB */}
+                {activeTab === 'plans' && (
+                    <div className="p-4 lg:p-8 max-w-4xl mx-auto w-full">
+                        <div className="mb-8">
+                            <h1 className="text-2xl lg:text-3xl font-black text-white tracking-tight uppercase italic font-display">Plan Settings</h1>
+                            <p className="text-sm text-gray-400 mt-1">Edit plan names, prices, features, and trial durations. Changes reflect immediately on the Pricing page.</p>
+                        </div>
+                        <div className="grid gap-6">
+                            {planConfigs.map(plan => (
+                                <div key={plan.id} className="bg-[#09090b] border border-yellow-500/20 rounded-2xl p-6">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
+                                                plan.id === 'premium' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/30' :
+                                                plan.id === 'basic' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30' :
+                                                'bg-gray-500/10 text-gray-400 border border-gray-500/30'
+                                            }`}>{plan.id}</span>
+                                            <h3 className="font-black text-white">{plan.name}</h3>
+                                        </div>
+                                        <button
+                                            onClick={() => setEditingPlan({ ...plan, features: Array.isArray(plan.features) ? (plan.features as string[]).join('\n') : plan.features })}
+                                            className="p-2 text-gray-400 hover:text-yellow-500 border border-white/10 hover:border-yellow-500/30 rounded-lg transition-colors"
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                        <div><p className="text-gray-500 text-xs mb-1">Monthly Price</p><p className="font-bold text-white">${plan.price_monthly}/mo</p></div>
+                                        <div><p className="text-gray-500 text-xs mb-1">Yearly Price</p><p className="font-bold text-white">${plan.price_yearly}/yr</p></div>
+                                        <div><p className="text-gray-500 text-xs mb-1">Trial</p><p className="font-bold text-white">{plan.trial_duration_value || plan.trial_days} {plan.trial_duration_unit || 'days'}</p></div>
+                                        <div><p className="text-gray-500 text-xs mb-1">Storage</p><p className="font-bold text-white">{plan.id === 'premium' ? '☁ Cloud' : '💾 Local'}</p></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Edit Plan Modal */}
+                        {editingPlan && (
+                            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                                <div className="bg-[#111114] border border-yellow-500/30 rounded-2xl w-full max-w-lg shadow-2xl p-8 max-h-[90vh] overflow-y-auto">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h3 className="text-lg font-black">Edit Plan: <span className="text-yellow-500">{editingPlan.name}</span></h3>
+                                        <button onClick={() => setEditingPlan(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-400 block mb-1">Display Name</label>
+                                            <input value={editingPlan.name} onChange={e => setEditingPlan({ ...editingPlan, name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 block mb-1">Monthly Price ($)</label>
+                                                <input type="number" value={editingPlan.price_monthly} onChange={e => setEditingPlan({ ...editingPlan, price_monthly: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 block mb-1">Yearly Price ($)</label>
+                                                <input type="number" value={editingPlan.price_yearly} onChange={e => setEditingPlan({ ...editingPlan, price_yearly: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500" />
+                                            </div>
+                                        </div>
+                                        {editingPlan.id === 'free' && (
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 block mb-1">Trial Duration</label>
+                                                <div className="flex gap-2">
+                                                    <input 
+                                                        type="number" 
+                                                        value={editingPlan.trial_duration_value ?? editingPlan.trial_days} 
+                                                        onChange={e => setEditingPlan({ ...editingPlan, trial_duration_value: e.target.value })} 
+                                                        className="w-2/3 bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500" 
+                                                    />
+                                                    <select 
+                                                        value={editingPlan.trial_duration_unit || 'days'} 
+                                                        onChange={e => setEditingPlan({ ...editingPlan, trial_duration_unit: e.target.value })} 
+                                                        className="w-1/3 bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 text-white"
+                                                    >
+                                                        <option value="minutes">Minutes</option>
+                                                        <option value="hours">Hours</option>
+                                                        <option value="days">Days</option>
+                                                        <option value="months">Months</option>
+                                                        <option value="years">Years</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {editingPlan.id !== 'free' && (
+                                            <div className="grid grid-cols-1 gap-4">
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-400 block mb-1">Stripe Price ID (Monthly)</label>
+                                                    <input value={editingPlan.stripe_price_monthly || ''} onChange={e => setEditingPlan({ ...editingPlan, stripe_price_monthly: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm font-mono outline-none focus:border-yellow-500" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-400 block mb-1">Stripe Price ID (Yearly)</label>
+                                                    <input value={editingPlan.stripe_price_yearly || ''} onChange={e => setEditingPlan({ ...editingPlan, stripe_price_yearly: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm font-mono outline-none focus:border-yellow-500" />
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-400 block mb-1">Features (one per line)</label>
+                                            <textarea rows={5} value={typeof editingPlan.features === 'string' ? editingPlan.features : (editingPlan.features as string[]).join('\n')} onChange={e => setEditingPlan({ ...editingPlan, features: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 resize-none" />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 mt-6">
+                                        <button onClick={() => setEditingPlan(null)} className="flex-1 py-3 rounded-lg font-bold text-gray-400 bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
+                                        <button onClick={handleSavePlanConfig} disabled={savingPlan} className="flex-1 py-3 rounded-lg font-black bg-yellow-500 text-black hover:bg-yellow-400 transition-colors disabled:opacity-50">{savingPlan ? 'Saving...' : 'Save Changes'}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </main>
         </div>
     );

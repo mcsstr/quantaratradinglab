@@ -1,29 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Activity } from 'lucide-react';
-import { supabase } from '../utils/supabase'; const countryCodes = [
-  { code: '+1', country: 'United States', flag: '🇺🇸' },
-  { code: '+44', country: 'United Kingdom', flag: '🇬🇧' },
-  { code: '+55', country: 'Brazil', flag: '🇧🇷' },
-  { code: '+49', country: 'Germany', flag: '🇩🇪' },
-  { code: '+33', country: 'France', flag: '🇫🇷' },
-  { code: '+81', country: 'Japan', flag: '🇯🇵' },
-  { code: '+86', country: 'China', flag: '🇨🇳' },
-  { code: '+91', country: 'India', flag: '🇮🇳' },
-  { code: '+61', country: 'Australia', flag: '🇦🇺' },
-  { code: '+351', country: 'Portugal', flag: '🇵🇹' },
-  { code: '+34', country: 'Spain', flag: '🇪🇸' },
-  { code: '+39', country: 'Italy', flag: '🇮🇹' },
-  { code: '+7', country: 'Russia', flag: '🇷🇺' },
-  { code: '+27', country: 'South Africa', flag: '🇿🇦' },
-  { code: '+52', country: 'Mexico', flag: '🇲🇽' },
-  { code: '+54', country: 'Argentina', flag: '🇦🇷' },
-  { code: '+56', country: 'Chile', flag: '🇨🇱' },
-  { code: '+57', country: 'Colombia', flag: '🇨🇴' },
-  { code: '+51', country: 'Peru', flag: '🇵🇪' },
-];
-
-const countriesList = [...new Set(countryCodes.map(c => c.country))].sort();
+import { supabase } from '../utils/supabase';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -34,11 +12,6 @@ export default function Auth() {
   // Campos de Perfil adicionais
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phoneCode, setPhoneCode] = useState('+1');
-  const [phone, setPhone] = useState('');
-  const [country, setCountry] = useState('');
-  const [postalCode, setPostalCode] = useState('');
-  const [howHeard, setHowHeard] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +40,28 @@ export default function Auth() {
         if (authData?.user) userId = authData.user.id;
 
         if (userId) {
+          // Fetch free plan trial config
+          const { data: freePlan } = await supabase
+            .from('plans_config')
+            .select('trial_duration_value, trial_duration_unit')
+            .eq('id', 'free')
+            .single();
+            
+          let trialEndIso = null;
+          if (freePlan && freePlan.trial_duration_value) {
+            const now = new Date();
+            const val = freePlan.trial_duration_value;
+            switch(freePlan.trial_duration_unit) {
+              case 'minutes': now.setMinutes(now.getMinutes() + val); break;
+              case 'hours': now.setHours(now.getHours() + val); break;
+              case 'days': now.setDate(now.getDate() + val); break;
+              case 'months': now.setMonth(now.getMonth() + val); break;
+              case 'years': now.setFullYear(now.getFullYear() + val); break;
+              default: now.setDate(now.getDate() + val); break; // fallback days
+            }
+            trialEndIso = now.toISOString();
+          }
+
           // Atualiza a tabela profiles com os dados capturados
           const { error: profileError } = await supabase
             .from('profiles')
@@ -75,11 +70,10 @@ export default function Auth() {
               first_name: firstName,
               last_name: lastName,
               email: email,
-              phone_code: phoneCode,
-              phone_number: phone,
-              country: country,
-              postal_code: postalCode,
-              how_heard_about_us: howHeard,
+              plan: 'free',
+              status: 'active',
+              trial_end: trialEndIso,
+              storage_mode: 'local',
               updated_at: new Date().toISOString()
             });
           if (profileError) console.error('Erro ao salvar profile:', profileError);
@@ -92,7 +86,7 @@ export default function Auth() {
         // Check if profile still exists (deleted account guard)
         const { data: profileCheck, error: profileError } = await supabase
           .from('profiles')
-          .select('id, plan, status')
+          .select('id, plan, status, trial_end, storage_mode')
           .eq('id', userId)
           .maybeSingle();
 
@@ -103,12 +97,22 @@ export default function Auth() {
         }
 
         if (profileCheck) {
-          const plan = profileCheck.plan;
+          const plan = (profileCheck.plan || '').toLowerCase();
           const status = profileCheck.status;
-          // No active plan or account suspended/payment failure → send to pricing
-          if (!plan || plan === '' || status === 'Suspended' || status === 'Inactive') {
+          const trialEnd = profileCheck.trial_end;
+
+          // Suspended or no plan → pricing
+          if (!plan || status === 'Suspended' || status === 'Inactive') {
             navigate('/pricing');
             return;
+          }
+
+          // Free plan: check if trial has expired
+          if (plan === 'free' || plan === '' ) {
+            if (trialEnd && new Date(trialEnd) < new Date()) {
+              navigate('/pricing?reason=trial_expired');
+              return;
+            }
           }
         }
       }
@@ -230,71 +234,7 @@ export default function Auth() {
               />
             </div>
 
-            {!isLogin && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">Phone</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={phoneCode}
-                        onChange={e => setPhoneCode(e.target.value)}
-                        className="w-[90px] sm:w-[100px] bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors cursor-pointer appearance-none"
-                      >
-                        {countryCodes.map(c => (
-                          <option key={`${c.country}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors"
-                        value={phone}
-                        onChange={e => setPhone(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">Postal Code</label>
-                    <input
-                      type="text"
-                      className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors"
-                      value={postalCode}
-                      onChange={e => setPostalCode(e.target.value)}
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">Country</label>
-                    <select
-                      value={country}
-                      onChange={e => setCountry(e.target.value)}
-                      className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors cursor-pointer"
-                    >
-                      <option value="">Select a country</option>
-                      {countriesList.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400">How heard about us?</label>
-                    <select
-                      value={howHeard}
-                      onChange={e => setHowHeard(e.target.value)}
-                      className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors cursor-pointer"
-                    >
-                      <option value="">Select an option</option>
-                      <option value="Google">Google</option>
-                      <option value="Social Media">Social Media</option>
-                      <option value="Friend">Friend recommendation</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                </div>
-              </>
-            )}
 
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-400">Senha</label>

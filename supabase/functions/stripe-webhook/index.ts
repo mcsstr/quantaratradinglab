@@ -53,21 +53,20 @@ serve(async (req) => {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        const userId = session.metadata?.supabase_user_id
+        
+        // Pega o supabase_user_id ou do metadata, ou do client_reference_id (graças ao seu novo checkout)
+        const userId = session.metadata?.supabase_user_id || session.client_reference_id
         
         if (userId) {
           // Identify plan from price or metadata
-          const priceId = session.line_items?.data[0]?.price?.id
+          const priceId = session.line_items?.data[0]?.price?.id || ''
           let planName = 'Premium'
           if (priceId) {
-             // Basic matching, adjust based on actual price IDs
-             if (priceId.includes('pro')) planName = 'Pro'
-             if (priceId.includes('premium')) planName = 'Premium'
-             if (priceId.includes('free')) planName = 'Free'
+             // Opcional: Inferir nome consoante o ID do preço, ou colocar fixo até a db atualizar.
+             // O próximo evento (subscription.updated) vai consolidar isto.
           }
 
-          // In checkout complete we know they subscribed properly but wait for the subscription event
-          // for the exact dates. We can set it to Active status here preemptively.
+          // Atualizar o profile com o Customer ID e colocar Active
           await supabaseAdmin.from('profiles').update({
             stripe_customer_id: session.customer as string,
             status: 'Active',
@@ -80,19 +79,31 @@ serve(async (req) => {
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription
-        const userId = subscription.metadata?.supabase_user_id || 
-                       (await stripe.customers.retrieve(subscription.customer as string) as Stripe.Customer).metadata?.supabase_user_id
+        let userId = subscription.metadata?.supabase_user_id
+        
+        // Se a subscrição não tiver metadata, vamos procurar na Base de Dados usando o stripe_customer_id
+        if (!userId && subscription.customer) {
+           const { data: profile } = await supabaseAdmin
+              .from('profiles')
+              .select('id')
+              .eq('stripe_customer_id', subscription.customer)
+              .single()
+              
+           if (profile) userId = profile.id;
+        }
 
         if (userId) {
           const price = subscription.items.data[0].price
-          const planName = price.id.includes('pro') ? 'Pro' : price.id.includes('premium') ? 'Premium' : 'Free'
+          // Tentar inferir o nome do plano se houver metadata, senão Premium
+          const planName = price.id.includes('pro') ? 'Pro' : price.id.includes('premium') ? 'Premium' : 'Premium'
           const interval = price.recurring?.interval === 'year' ? 'yearly' : 'monthly'
           const expiresAt = new Date(subscription.current_period_end * 1000).toISOString()
           const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null
           
           let subStatus = 'Active'
-          if (subscription.status === 'past_due') subStatus = 'Inactive' // Or 'payment_failed'
-          if (subscription.status === 'canceled' || subscription.status === 'unpaid') subStatus = 'Inactive'
+          if (subscription.status === 'past_due' || subscription.status === 'canceled' || subscription.status === 'unpaid') {
+              subStatus = 'Inactive'
+          }
 
           await supabaseAdmin.from('profiles').update({
             stripe_subscription_id: subscription.id,
@@ -109,8 +120,12 @@ serve(async (req) => {
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
-        const userId = subscription.metadata?.supabase_user_id || 
-                       (await stripe.customers.retrieve(subscription.customer as string) as Stripe.Customer).metadata?.supabase_user_id
+        let userId = subscription.metadata?.supabase_user_id
+        
+        if (!userId && subscription.customer) {
+           const { data: profile } = await supabaseAdmin.from('profiles').select('id').eq('stripe_customer_id', subscription.customer).single()
+           if (profile) userId = profile.id;
+        }
         
         if (userId) {
           await supabaseAdmin.from('profiles').update({

@@ -1,108 +1,106 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1"
-import Stripe from "https://esm.sh/stripe@14.21.0"
-
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
-  apiVersion: '2024-06-20',
-  httpClient: Stripe.createFetchHttpClient(),
-})
+import Stripe from 'npm:stripe@^14.21.0'
+import { createClient } from 'npm:@supabase/supabase-js@^2.42.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const supabaseClient = createClient(
+    const { priceId } = await req.json()
+    if (!priceId) throw new Error('priceId is required')
+
+    // Auth: extract JWT from frontend call
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) throw new Error('Missing Authorization header')
+
+    const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      { global: { headers: { Authorization: authHeader } } }
     )
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) throw new Error('Unauthorized')
 
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser()
-
-    if (!user) throw new Error('Unauthorized')
-
-    const { priceId } = await req.json()
-
-    if (!priceId) {
-      throw new Error('priceId is required')
-    }
-
-    // Determine interval based on a trailing flag, or default to monthly if not matching a known id format
-    // Realistically you should just pick up the proper interval from Stripe later in the webhook
-    
-    // Check if customer exists in profiles
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('stripe_customer_id, email, first_name, last_name')
-      .eq('id', user.id)
-      .single()
-
-    let customerId = profile?.stripe_customer_id
-
-    if (!customerId) {
-      // Create a new Customer in Stripe
-      const customer = await stripe.customers.create({
-        email: profile?.email || user.email,
-        name: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || undefined,
-        metadata: {
-          supabase_user_id: user.id,
-        },
-      })
-      customerId = customer.id
-
-      // Save it in our DB
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      )
-      
-      await supabaseAdmin
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id)
-    }
+    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
+      httpClient: Stripe.createFetchHttpClient(),
+    })
 
     const origin = req.headers.get('origin') || 'http://localhost:5173'
 
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+    // Fetch the user's existing profile for customer ID & existing subscription
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('stripe_customer_id, stripe_subscription_id, email, plan')
+      .eq('id', user.id)
+      .single()
+
+    // ===================================================================
+    // PHASE 6: Immediate billing — cancel existing subscription NOW
+    // before creating a new one, so no prorations are applied.
+    // The user always pays 100% of the new plan from day 1.
+    // ===================================================================
+    if (profile?.stripe_subscription_id) {
+      try {
+        const existingSub = await stripe.subscriptions.retrieve(profile.stripe_subscription_id)
+        if (existingSub && existingSub.status !== 'canceled') {
+          // Cancel immediately — do not wait for period end
+          await stripe.subscriptions.cancel(profile.stripe_subscription_id, {
+            // Prorate to $0 credit so user does not get a refund
+            // (they are switching plans by choice)
+            prorate: false,
+          })
+          console.log(`Cancelled existing subscription ${profile.stripe_subscription_id} for plan change`)
+
+          // Clear the old subscription ID from the profile so webhook doesn't get confused
+          await supabaseAdmin
+            .from('profiles')
+            .update({ stripe_subscription_id: null, stripe_price_id: null })
+            .eq('id', user.id)
+        }
+      } catch (stripeErr: any) {
+        // If the sub was already cancelled or not found, just continue
+        console.warn('Could not cancel old subscription (may already be cancelled):', stripeErr.message)
+      }
+    }
+
+    // Build checkout session config
+    const sessionConfig: any = {
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       success_url: `${origin}/loading?checkout=success`,
-      cancel_url: `${origin}/pricing`,
-      metadata: {
-        supabase_user_id: user.id
-      },
-      subscription_data: {
-        metadata: {
-          supabase_user_id: user.id
-        }
-      }
-    })
+      cancel_url: `${origin}/pricing?checkout=cancel`,
+      client_reference_id: user.id, // Webhook uses this to find the user
+    }
+
+    if (profile?.stripe_customer_id) {
+      sessionConfig.customer = profile.stripe_customer_id
+    } else if (profile?.email || user.email) {
+      sessionConfig.customer_email = profile?.email || user.email
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig)
 
     return new Response(
       JSON.stringify({ url: session.url }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
-  } catch (err: any) {
-    console.error('checkout error:', err.message)
+
+  } catch (error: any) {
+    console.error('Erro no Checkout:', error)
     return new Response(
-      JSON.stringify({ error: err.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      JSON.stringify({ _isError: true, error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   }
 })
