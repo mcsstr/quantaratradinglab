@@ -76,6 +76,20 @@ export default function Account() {
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
+        if (data.plan === 'free' && data.trial_end) {
+          const trialEndTime = new Date(data.trial_end).getTime();
+          const now = Date.now();
+          if (now > trialEndTime) {
+            navigate('/pricing?reason=trial_expired');
+            return;
+          } else {
+            const msUntilExpire = trialEndTime - now;
+            if (msUntilExpire < 2147483647) {
+              setTimeout(() => navigate('/pricing?reason=trial_expired'), msUntilExpire);
+            }
+          }
+        }
+
         setForm({
           first_name: data.first_name || '',
           last_name: data.last_name || '',
@@ -166,7 +180,14 @@ export default function Account() {
       )}
 
       {/* Header */}
-      <header className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 lg:px-6 h-[var(--header-height-mob)] lg:h-[var(--header-height-desk)] border-b border-white/10 bg-[#0c0c0e] shadow-sm transition-all header-safe">
+      <header className="fixed top-0 left-0 w-full z-50 flex items-end lg:items-center justify-between px-4 lg:px-6 shadow-sm transition-all border-b border-white/10 bg-[#0c0c0e]"
+        style={{
+          transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)',
+          height: 'calc(var(--header-height-mob, 90px) + env(safe-area-inset-top, 0px))',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingBottom: '0.75rem' // to match Dashboard.tsx Mobile padding
+        }}
+      >
         <div className="flex items-center gap-2">
           {/* Mobile: back link */}
           <div className="md:hidden">
@@ -193,7 +214,7 @@ export default function Account() {
         </div>
       </header>
 
-      <div className="flex flex-1 max-w-7xl mx-auto w-full p-6 lg:p-12 gap-12 mt-[60px] lg:mt-[72px]">
+      <div className="flex flex-1 max-w-7xl mx-auto w-full p-6 lg:p-12 gap-12 mt-[100px] lg:mt-[110px]">
         {/* Sidebar */}
         <aside className="w-64 hidden md:flex flex-col gap-8">
           <div>
@@ -213,12 +234,26 @@ export default function Account() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1">
-          <h1 className="text-3xl font-bold font-display capitalize mb-8 text-white">
+        <main className="flex-1 min-w-0" style={{ marginTop: '30px' }}>
+          
+          <h1 className="text-3xl font-bold font-display capitalize mb-6 text-white hidden lg:block">
             {activeTab === 'info' && 'Informações Pessoais'}
             {activeTab === 'sub' && 'Assinatura'}
             {activeTab === 'sec' && 'Segurança'}
           </h1>
+
+          {/* Mobile Tabs */}
+          <div className="md:hidden flex overflow-x-auto gap-2 mb-6 pb-2 hide-scrollbar">
+            <button onClick={() => setActiveTab('info')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'info' ? 'bg-yellow-500 text-black' : 'text-gray-400 border border-white/10 bg-[#111114]'}`}>
+              Pessoais
+            </button>
+            <button onClick={() => setActiveTab('sub')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'sub' ? 'bg-yellow-500 text-black' : 'text-gray-400 border border-white/10 bg-[#111114]'}`}>
+              Assinatura
+            </button>
+            <button onClick={() => setActiveTab('sec')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'sec' ? 'bg-yellow-500 text-black' : 'text-gray-400 border border-white/10 bg-[#111114]'}`}>
+              Segurança
+            </button>
+          </div>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-20">

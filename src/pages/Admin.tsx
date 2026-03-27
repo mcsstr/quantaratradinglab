@@ -72,7 +72,7 @@ export default function Admin() {
 
     // Admin override modal state
     const [overrideModal, setOverrideModal] = useState<{ show: boolean; user: any } | null>(null);
-    const [overrideForm, setOverrideForm] = useState({ plan: 'Premium', days: '7' });
+    const [overrideForm, setOverrideForm] = useState({ plan: 'Premium', durationValue: '7', durationUnit: 'days' });
     const [isGranting, setIsGranting] = useState(false);
 
     // Toast helper
@@ -291,14 +291,15 @@ export default function Admin() {
                 body: {
                     targetUserId: overrideModal.user.id,
                     overridePlan: overrideForm.plan,
-                    durationDays: parseInt(overrideForm.days, 10)
+                    durationValue: parseInt(overrideForm.durationValue, 10),
+                    durationUnit: overrideForm.durationUnit
                 }
             });
             if (error) throw error;
             if (data?._isError) throw new Error(data.error);
             setUsers(prev => prev.map(u => u.id === overrideModal.user.id
                 ? { ...u, plan: overrideForm.plan, status: 'Active' } : u));
-            showToast(`Successfully granted ${overrideForm.plan} for ${overrideForm.days} days!`);
+            showToast(`Successfully granted ${overrideForm.plan} for ${overrideForm.durationValue} ${overrideForm.durationUnit}!`);
             setOverrideModal(null);
         } catch (err: any) {
             showToast(`Error granting override: ${err.message}`);
@@ -404,6 +405,67 @@ export default function Admin() {
                         <div className="flex gap-3">
                             <button onClick={() => setIsLogoutConfirmOpen(false)} className="flex-1 py-3 rounded-lg font-bold text-gray-400 bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
                             <button onClick={() => { setIsLogoutConfirmOpen(false); navigate('/dashboard'); }} className="flex-1 py-3 rounded-lg font-bold bg-yellow-500 text-black hover:bg-yellow-400 transition-colors">Yes, Exit</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OVERRIDE PLAN MODAL */}
+            {overrideModal?.show && overrideModal.user && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-[#111114] border border-yellow-500/30 rounded-2xl w-full max-w-md shadow-2xl flex flex-col p-8">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20">
+                                <Gift size={20} className="text-yellow-500" />
+                            </div>
+                            <h3 className="text-xl font-bold font-display">Override Plan</h3>
+                        </div>
+                        <p className="text-sm text-gray-400 mb-6">
+                            Change the plan for <strong>{overrideModal.user.firstName} {overrideModal.user.lastName}</strong> and set an exact duration. If they are on a paid plan, their Stripe billing will be paused automatically.
+                        </p>
+                        
+                        <div className="space-y-4 mb-8">
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-gray-400">Target Plan</label>
+                                <select 
+                                    value={overrideForm.plan} 
+                                    onChange={e => setOverrideForm({ ...overrideForm, plan: e.target.value })} 
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500"
+                                >
+                                    <option value="Free">Free</option>
+                                    <option value="Basic">Basic</option>
+                                    <option value="Premium">Premium</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-400 block mb-1">Duration</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="number" 
+                                        value={overrideForm.durationValue} 
+                                        onChange={e => setOverrideForm({ ...overrideForm, durationValue: e.target.value })} 
+                                        className="w-2/3 bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500" 
+                                    />
+                                    <select 
+                                        value={overrideForm.durationUnit} 
+                                        onChange={e => setOverrideForm({ ...overrideForm, durationUnit: e.target.value })} 
+                                        className="w-1/3 bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 text-white"
+                                    >
+                                        <option value="minutes">Minutes</option>
+                                        <option value="hours">Hours</option>
+                                        <option value="days">Days</option>
+                                        <option value="months">Months</option>
+                                        <option value="years">Years</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex w-full gap-3">
+                            <button onClick={() => setOverrideModal(null)} className="flex-1 py-3 rounded-lg font-bold text-gray-400 bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
+                            <button disabled={isGranting} onClick={handleGrantOverride} className="flex-1 py-3 rounded-lg font-bold bg-yellow-500 text-black hover:bg-yellow-400 transition-colors shadow-[0_0_15px_rgba(234,179,8,0.2)] disabled:opacity-50">
+                                {isGranting ? 'Processing...' : 'Confirm'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -674,9 +736,16 @@ export default function Admin() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="h-[var(--header-height-mob)] lg:h-[var(--header-height-desk)] border-b border-yellow-500/20 flex items-center justify-between px-4 lg:px-8 bg-[#000000]/50 backdrop-blur-md sticky top-0 z-40 header-safe">
+                <header className="fixed top-0 left-0 w-full z-50 flex items-end lg:items-center justify-between px-4 lg:px-8 shadow-sm transition-all border-b border-yellow-500/20 bg-[#000000]/50 backdrop-blur-md"
+                  style={{
+                    transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)',
+                    height: 'calc(var(--header-height-mob, 90px) + env(safe-area-inset-top, 0px))',
+                    paddingTop: 'env(safe-area-inset-top, 0px)',
+                    paddingBottom: '0.75rem' // to match Dashboard.tsx Mobile padding
+                  }}
+                >
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-1">
+                        <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-1 active:opacity-70 transition-opacity">
                             <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 object-contain drop-shadow-md z-10 rounded-xl" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
                             <div style={{ display: 'none' }} className="text-yellow-500">
                                 <Activity size={24} />
@@ -690,7 +759,7 @@ export default function Admin() {
                     </div>
                     <div className="flex items-center gap-4">
                         <button onClick={() => navigate('/dashboard')} className="flex items-center gap-1 text-sm font-bold transition-opacity hover:opacity-70" style={{ color: '#00B0F0' }}>
-                            <Bell size={16} /> Back to Dashboard
+                            <Bell size={16} /> <span className="hidden sm:inline">Back to Dashboard</span>
                         </button>
                         <button onClick={fetchProfiles} className="p-2 text-gray-400 hover:text-yellow-500 transition-colors" title="Refresh data">
                             <Activity size={20} className={isLoading ? 'animate-spin' : ''} />
@@ -698,9 +767,21 @@ export default function Admin() {
                     </div>
                 </header>
 
-                <div className="p-4 lg:p-8 max-w-7xl mx-auto w-full">
-                    {/* Title & Add Button */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 text-left">
+                <div className="p-4 lg:p-8 max-w-7xl mx-auto w-full mt-[100px] lg:mt-[110px]">
+                    
+                    {/* Mobile Tabs */}
+                    <div className="lg:hidden flex overflow-x-auto gap-2 mb-6 pb-2 hide-scrollbar">
+                        <button onClick={() => setActiveTab('users')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'users' ? 'bg-yellow-500 text-black' : 'text-gray-400 border border-white/10 bg-[#111114]'}`}>
+                            Usuários
+                        </button>
+                        <button onClick={() => setActiveTab('plans')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'plans' ? 'bg-yellow-500 text-black' : 'text-gray-400 border border-white/10 bg-[#111114]'}`}>
+                            Planos
+                        </button>
+                    </div>
+                    {activeTab === 'users' && (
+                        <>
+                            {/* Title & Add Button */}
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 text-left">
                         <div>
                             <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight uppercase italic font-display">User Account Administration</h1>
                             <p className="text-xs sm:text-sm text-gray-400 mt-1">Manage and monitor your trading platform users. <span className="text-yellow-500 font-bold">({users.length} profiles loaded)</span></p>
@@ -793,7 +874,7 @@ export default function Admin() {
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex justify-end gap-2">
                                                         <button
-                                                            onClick={() => { setOverrideModal({ show: true, user }); setOverrideForm({ plan: 'Premium', days: '7' }); }}
+                                                            onClick={() => { setOverrideModal({ show: true, user }); setOverrideForm({ plan: 'Premium', durationValue: '7', durationUnit: 'days' }); }}
                                                             title="Grant Free Upgrade"
                                                             className="p-2 text-gray-400 hover:text-yellow-500 transition-colors border border-transparent hover:border-yellow-500/30 rounded-lg"
                                                         >
@@ -874,8 +955,10 @@ export default function Admin() {
                             </div>
                         </div>
                     </div>
+                    </>
+                )}
 
-                    {/* Footer */}
+                {/* Footer */}
                     <footer className="mt-12 p-8 border-t border-yellow-500/10 flex flex-col md:flex-row justify-between items-center gap-4 text-gray-500 text-xs font-medium">
                         <p>© 2024 QUANTARA TRADING LAB. INTERNAL SYSTEM ACCESS ONLY.</p>
                         <div className="flex gap-6 uppercase tracking-widest">
@@ -884,7 +967,6 @@ export default function Admin() {
                             <a href="#" className="hover:text-yellow-500 transition-colors">API Status</a>
                         </div>
                     </footer>
-
                 </div>
 
                 {/* PLAN SETTINGS TAB */}

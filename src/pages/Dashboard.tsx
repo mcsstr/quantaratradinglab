@@ -153,7 +153,7 @@ export default function Dashboard() {
         // Verify user profile still exists in the database
         const { data: profileCheck, error: profileError } = await supabase
           .from('profiles')
-          .select('id, plan')
+          .select('id, plan, trial_end')
           .eq('id', currentSession.user.id)
           .maybeSingle();
 
@@ -170,7 +170,28 @@ export default function Dashboard() {
           return;
         }
 
-        // Profile exists (or query had transient error — allow login to prevent false lockouts)
+        if (profileCheck && profileCheck.plan === 'free' && profileCheck.trial_end) {
+          const trialStr = profileCheck.trial_end;
+          const safeTrialStr = (trialStr.endsWith('Z') || trialStr.includes('+')) ? trialStr : `${trialStr}Z`;
+          const trialEndTime = new Date(safeTrialStr).getTime();
+          const now = Date.now();
+          
+          if (now > trialEndTime) {
+            navigate('/pricing?reason=trial_expired');
+            return;
+          } else {
+            // Se o trial ainda está ativo, agenda o kick automático
+            const msUntilExpire = trialEndTime - now;
+            // Limit timeout to max safe integer (~24 days) to prevent overflow
+            if (msUntilExpire < 2147483647) {
+              setTimeout(() => {
+                navigate('/pricing?reason=trial_expired');
+              }, msUntilExpire);
+            }
+          }
+        }
+
+        // Profile exists and trial is active
         setSession(currentSession);
       } finally {
         // Always unblock the UI; redirect already happened if needed
@@ -205,8 +226,29 @@ export default function Dashboard() {
         },
         (payload) => {
           const newStatus = payload.new.status;
+          const newPlan = payload.new.plan;
           if (newStatus === 'Suspended' || newStatus === 'Inactive') {
             setPlanExpiredStatus(newStatus);
+          }
+          
+          // Se o Admin deu Overide no tempo de trial para 'free', reagendamos o kick
+          const newTrialEnd = payload.new.trial_end;
+          if (newPlan === 'free' && newTrialEnd) {
+            const trialStr = newTrialEnd;
+            const safeTrialStr = (trialStr.endsWith('Z') || trialStr.includes('+')) ? trialStr : `${trialStr}Z`;
+            const trialEndTime = new Date(safeTrialStr).getTime();
+            const now = Date.now();
+            
+            if (now > trialEndTime) {
+              navigate('/pricing?reason=trial_expired');
+            } else {
+              const msUntilExpire = trialEndTime - now;
+              if (msUntilExpire < 2147483647) {
+                setTimeout(() => {
+                  navigate('/pricing?reason=trial_expired');
+                }, msUntilExpire);
+              }
+            }
           }
         }
       )

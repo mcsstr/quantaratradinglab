@@ -9,9 +9,6 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // Campos de Perfil adicionais
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,8 +64,8 @@ export default function Auth() {
             .from('profiles')
             .upsert({
               id: userId,
-              first_name: firstName,
-              last_name: lastName,
+              first_name: email.split('@')[0], // derived from email
+              last_name: '',
               email: email,
               plan: 'free',
               status: 'active',
@@ -91,9 +88,48 @@ export default function Auth() {
           .maybeSingle();
 
         if (!profileError && profileCheck === null) {
-          // Profile deleted — sign out and block
-          await supabase.auth.signOut();
-          throw new Error('Esta conta não existe mais.');
+          // Profile deleted from database but auth user still exists.
+          // Let's recreate their free profile gracefully.
+          const { data: freePlan } = await supabase
+            .from('plans_config')
+            .select('trial_duration_value, trial_duration_unit')
+            .eq('id', 'free')
+            .single();
+            
+          let trialEndIso = null;
+          if (freePlan && freePlan.trial_duration_value) {
+            const now = new Date();
+            const val = freePlan.trial_duration_value;
+            switch(freePlan.trial_duration_unit) {
+              case 'minutes': now.setMinutes(now.getMinutes() + val); break;
+              case 'hours': now.setHours(now.getHours() + val); break;
+              case 'days': now.setDate(now.getDate() + val); break;
+              case 'months': now.setMonth(now.getMonth() + val); break;
+              case 'years': now.setFullYear(now.getFullYear() + val); break;
+              default: now.setDate(now.getDate() + val); break;
+            }
+            trialEndIso = now.toISOString();
+          }
+
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: userId,
+              email: email,
+              plan: 'free',
+              status: 'active',
+              trial_end: trialEndIso,
+              storage_mode: 'local',
+              updated_at: new Date().toISOString()
+            });
+
+          if (insertError) {
+            await supabase.auth.signOut();
+            throw new Error('Falha ao restaurar perfil da conta. Tente novamente.');
+          }
+          
+          navigate('/loading');
+          return;
         }
 
         if (profileCheck) {
@@ -197,30 +233,6 @@ export default function Auth() {
           )}
 
           <form onSubmit={handleAuth} className="space-y-5">
-            {!isLogin && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-400">First Name</label>
-                  <input
-                    type="text"
-                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors"
-                    value={firstName}
-                    onChange={e => setFirstName(e.target.value)}
-                    required={!isLogin}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-400">Last Name</label>
-                  <input
-                    type="text"
-                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors"
-                    value={lastName}
-                    onChange={e => setLastName(e.target.value)}
-                    required={!isLogin}
-                  />
-                </div>
-              </div>
-            )}
 
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-400">E-mail</label>
