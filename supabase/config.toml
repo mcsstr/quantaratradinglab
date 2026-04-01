@@ -13,3 +13,8 @@ entrypoint = "./functions/stripe-checkout/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-override-plan/index.ts"
+
+[functions.admin-update-profile]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-update-profile/index.ts"

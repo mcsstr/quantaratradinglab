@@ -1869,10 +1869,13 @@ export default function Dashboard() {
   const appBackgroundStyle = {
     backgroundColor: theme.fundoPrincipal,
     color: theme.textoPrincipal,
+  };
+
+  const backgroundLayerStyle = {
     backgroundImage: bgStyle,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    backgroundAttachment: 'fixed'
+    backgroundRepeat: 'no-repeat',
   };
 
   const metricRows = [
@@ -2091,9 +2094,13 @@ export default function Dashboard() {
 
   return (
     <div
-      className="min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden relative"
+      className="min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden relative z-0"
       style={appBackgroundStyle}
     >
+      {/* Background Layer (Fixed Support for iOS App/Safari) */}
+      {bgStyle !== 'none' && (
+        <div className="fixed inset-0 z-[-1] pointer-events-none" style={backgroundLayerStyle} />
+      )}
       {/* MODAL: EDIT TRADE */}
       {isTradeModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all" onClick={() => setIsTradeModalOpen(false)}>

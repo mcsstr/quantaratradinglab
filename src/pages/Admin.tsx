@@ -128,25 +128,25 @@ export default function Admin() {
     // ---------- SUPABASE: Update profile ----------
     const handleUpdateProfile = async (user: any) => {
         try {
-            // Atualiza public.profiles
-            // Nota: Conforme a nova regra, o email não pode ser alterado no modal geral.
-            // Para atualizar o e-mail, deve-se usar a Server Action / Vercel API específica.
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    first_name: user.firstName,
-                    last_name: user.lastName,
+            const { data: { session } } = await supabase.auth.getSession();
+            const { data, error } = await supabase.functions.invoke('admin-update-profile', {
+                body: { 
+                    targetUserId: user.id,
                     email: user.email,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
                     plan: user.plan,
                     status: user.status,
-                    phone_code: user.phoneCode,
-                    phone_number: user.phone,
-                    country: user.country,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', user.id);
+                    phoneCode: user.phoneCode,
+                    phone: user.phone,
+                    country: user.country
+                },
+                headers: {
+                    Authorization: `Bearer ${session?.access_token}`
+                }
+            });
 
-            if (error) throw error;
+            if (error || data?._isError) throw new Error(error?.message || data?.error || 'Failed to update user');
 
             // Update local state
             setUsers(prev => prev.map(u => u.id === user.id ? { ...user, initials: (user.firstName[0] + (user.lastName[0] || '?')).toUpperCase() } : u));
@@ -575,7 +575,7 @@ export default function Admin() {
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs font-bold text-gray-400">Email Address</label>
-                                <input type="email" disabled value={editingUser.email} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-gray-400 cursor-not-allowed outline-none focus:border-yellow-500 transition-colors" />
+                                <input type="email" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-yellow-500 transition-colors" />
                             </div>
                             <div className="space-y-4">
                                 <div className="space-y-1">

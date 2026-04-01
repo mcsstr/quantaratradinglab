@@ -65,7 +65,7 @@ function MigrationModal({ type, targetPlan, price, interval, onConfirm, onCancel
         <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/8">
           <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-2">Billing Summary</p>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-black text-yellow-500">${price}</span>
+            <span className="text-2xl font-black text-yellow-500">${Number(price).toFixed(2)}</span>
             <span className="text-gray-500 text-sm">/ {interval === 'yearly' ? 'year' : 'month'}</span>
           </div>
           <p className="text-xs text-gray-500 mt-1">
@@ -322,9 +322,9 @@ export default function Pricing() {
               const isFree = plan.id === 'free';
               const isCurrent = currentUserPlan === plan.id;
               const badge = PLAN_BADGES[plan.id];
-              const displayPrice = isFree ? 0 : (isYearly ? Math.round(plan.price_yearly / 12) : plan.price_monthly);
-              const yearlyDesc = `$${plan.price_yearly}/year — save $${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)}`;
-              const monthlyDesc = `Billed monthly — $${plan.price_monthly}/mo`;
+              const displayPrice = isFree ? '0.00' : (isYearly ? (plan.price_yearly / 12).toFixed(2) : Number(plan.price_monthly).toFixed(2));
+              const yearlyDesc = `$${Number(plan.price_yearly).toFixed(2)}/year — save $${(plan.price_monthly * 12 - plan.price_yearly).toFixed(2)}`;
+              const monthlyDesc = `Billed monthly — $${Number(plan.price_monthly).toFixed(2)}/mo`;
               const trialValue = plan.trial_duration_value || plan.trial_days;
               const trialUnit = plan.trial_duration_unit || 'days';
               
