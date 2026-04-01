@@ -190,10 +190,30 @@ export default function DashboardHomeView({
     </div>
   );
 
+  const currentMonthPnl = calendarData.flatMap(w => w.days).filter(d => d.isCurrentMonth).reduce((sum, d) => sum + d.netPnl, 0);
+
   const calendarBlock = (
     <div className="rounded-xl p-4 md:p-6 shadow-sm w-full transition-all h-full flex flex-col" style={getGlassStyle(theme.fundoCards)}>
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-4 gap-4 shrink-0">
-        <SectionTitle icon={CalendarDays} title="Performance Calendar" theme={theme} />
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-4 gap-3 shrink-0">
+        {/* Title + inline badge for mobile/tablet */}
+        <div className="flex items-center gap-3 min-w-0">
+          <SectionTitle icon={CalendarDays} title="Performance Calendar" theme={theme} />
+          {/* Mobile/tablet: inline P&L badge next to title */}
+          <span className="xl:hidden text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+            style={{ color: currentMonthPnl >= 0 ? theme.textoPositivo : theme.textoNegativo, backgroundColor: currentMonthPnl >= 0 ? `${theme.textoPositivo}18` : `${theme.textoNegativo}18` }}>
+            {formatCurrency(currentMonthPnl)}
+          </span>
+        </div>
+
+        {/* Desktop: centered month P&L */}
+        <div className="hidden xl:flex flex-1 justify-center items-center gap-2">
+          <span className="text-xs font-semibold" style={{ color: theme.textoSecundario }}>Month P&L:</span>
+          <span className="text-base font-bold" style={{ color: currentMonthPnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
+            {formatCurrency(currentMonthPnl)}
+          </span>
+        </div>
+
+        {/* Nav controls always on right */}
         <div className="flex gap-1 items-center rounded-lg p-1 w-full xl:w-auto justify-between shadow-sm border" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), borderColor: theme.contornoGeral }}>
           <div className="flex items-center">
             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronLeft size={14} /></button>

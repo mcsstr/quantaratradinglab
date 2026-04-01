@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie
+  ComposedChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie, ReferenceLine, AreaChart, Area
 } from 'recharts';
 import {
   Activity, TrendingUp, DollarSign, Percent, Layers, CalendarDays, Target, AlertTriangle, ShieldAlert, Sun, Banknote, Check,
@@ -40,7 +40,9 @@ export default function AnalyticsView({
   tradeValuesFilter,
   setTradeValuesFilter,
   availableTradePeriods,
-  filteredTradeValuesData
+  filteredTradeValuesData,
+  cumulativePnlData,
+  dayOfWeekData
 }) {
 
   const activeInfoBlock = (
@@ -63,7 +65,7 @@ export default function AnalyticsView({
   );
 
   const evaluationTableBlock = (
-    <div className="w-full lg:w-1/3 flex flex-col rounded-xl overflow-hidden shadow-xl transition-all h-auto lg:max-h-[948px]" style={getGlassStyle(theme.fundoCards)}>
+    <div className="w-full lg:w-1/3 flex flex-col rounded-xl overflow-hidden shadow-xl transition-all h-auto lg:max-h-[1028px]" style={getGlassStyle(theme.fundoCards)}>
       <div className="p-4 border-b shrink-0 flex justify-between items-center cursor-pointer lg:cursor-default" style={{ borderColor: theme.contornoGeral }} onClick={() => isMobile && setIsEvalTableExpanded(!isEvalTableExpanded)}>
         <h3 className="font-bold text-sm" style={{ color: theme.textoSecundario }}>Evaluation</h3>
         {isMobile && <ChevronDown className={`transition-transform duration-300 ${isEvalTableExpanded ? 'rotate-180' : ''}`} size={16} style={{ color: theme.textoSecundario }} />}
@@ -180,22 +182,44 @@ export default function AnalyticsView({
             </div>
 
             {/* CHART 5: Most Traded Hours */}
-            <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full sm:col-span-2" style={{ ...getGlassStyle(theme.fundoCards), height: 300 }}>
+            <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full sm:col-span-2" style={{ ...getGlassStyle(theme.fundoCards), height: 400 }}>
               <div className="flex justify-between items-center mb-4 gap-2">
                 <SectionTitle icon={CalendarDays} title="Most Traded Hours" theme={theme} />
-                <select value={timeGrouping} onChange={e => setTimeGrouping(e.target.value)} className="filter-select outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded hover:bg-white/10" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
-                  <option value="60" className="bg-gray-900">1 Hour</option>
-                  <option value="30" className="bg-gray-900">30 Mins</option>
-                  <option value="15" className="bg-gray-900">15 Mins</option>
-                </select>
+                <div className="flex items-center gap-4">
+                  <div className="hidden sm:flex items-center gap-3 text-[11px] font-bold" style={{ color: theme.textoSecundario }}>
+                    <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>Wins</span>
+                    <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>Losses</span>
+                  </div>
+                  <select value={timeGrouping} onChange={e => setTimeGrouping(e.target.value)} className="filter-select outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded hover:bg-white/10" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
+                    <option value="60" className="bg-gray-900">1 Hour</option>
+                    <option value="30" className="bg-gray-900">30 Mins</option>
+                    <option value="15" className="bg-gray-900">15 Mins</option>
+                  </select>
+                </div>
               </div>
-              <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+              <div className="sm:hidden flex items-center gap-3 text-[10px] font-bold mb-4" style={{ color: theme.textoSecundario }}>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>Wins</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>Losses</span>
+              </div>
+              <ResponsiveContainer width="100%" height="100%" minHeight={250}>
                 <BarChart data={timeDistributionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
-                  <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-                  <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario }} formatter={(val) => [`${val} Trades`, 'Volume']} />
-                  <Bar dataKey="count" fill={theme.linhaGrafico} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                  <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <RechartsTooltip
+                    cursor={{ fill: 'rgba(128,128,128,0.1)' }}
+                    contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }}
+                    itemStyle={{ fontWeight: 'bold' }}
+                    labelStyle={{ color: theme.textoSecundario, marginBottom: 4 }}
+                    formatter={(val, name) => {
+                      if (name === 'wins') return [`${val}`, 'Wins (Green)'];
+                      if (name === 'losses') return [`${val}`, 'Losses (Red)'];
+                      if (name === 'count') return [`${val}`, 'Total Trades'];
+                      return [val, name];
+                    }}
+                  />
+                  <Bar dataKey="wins" stackId="a" fill={theme.textoPositivo} stroke={theme.fundoCards} strokeWidth={2} isAnimationActive={false} maxBarSize={50} />
+                  <Bar dataKey="losses" stackId="a" fill={theme.textoNegativo} stroke={theme.fundoCards} strokeWidth={2} radius={[4, 4, 0, 0]} isAnimationActive={false} maxBarSize={50} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -235,6 +259,56 @@ export default function AnalyticsView({
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row gap-4 items-stretch w-full">
+          {/* CHART 7: Cumulative P&L (Equity Curve) */}
+          <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full lg:w-1/2" style={{ ...getGlassStyle(theme.fundoCards), height: isMobile ? 300 : 400 }}>
+            <div className="flex justify-between items-center mb-4 gap-2 shrink-0">
+              <SectionTitle icon={TrendingUp} title="Cumulative P&L" theme={theme} />
+            </div>
+            <div className="w-full flex-1" style={{ minHeight: 0, height: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                <AreaChart data={cumulativePnlData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={theme.linhaGrafico} stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor={theme.linhaGrafico} stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
+                  <XAxis dataKey="name" hide />
+                  <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} tickFormatter={(val) => new Intl.NumberFormat(userLocale, { notation: "compact", compactDisplay: "short", style: "currency", currency: settings.brokerCurrency, currencyDisplay: "narrowSymbol" }).format(val)} />
+                  <RechartsTooltip cursor={{ stroke: theme.contornoGeral, strokeWidth: 1, strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario }} formatter={(val) => formatCurrency(val)} />
+                  <ReferenceLine y={0} stroke={theme.contornoGeral} />
+                  <Area type="monotone" dataKey="cumulativePnl" stroke={theme.linhaGrafico} strokeWidth={2} fillOpacity={1} fill="url(#colorCumulative)" isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* CHART 8: Performance by Day of Week */}
+          <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full lg:w-1/2" style={{ ...getGlassStyle(theme.fundoCards), height: isMobile ? 300 : 400 }}>
+            <div className="flex justify-between items-center mb-4 gap-2 shrink-0">
+              <SectionTitle icon={BarChart2} title="Performance by Day of Week" theme={theme} />
+            </div>
+            <div className="w-full flex-1" style={{ minHeight: 0, height: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                <BarChart data={dayOfWeekData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
+                  <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                  <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} tickFormatter={(val) => new Intl.NumberFormat(userLocale, { notation: "compact", compactDisplay: "short", style: "currency", currency: settings.brokerCurrency, currencyDisplay: "narrowSymbol" }).format(val)} />
+                  <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario }} formatter={(val) => formatCurrency(val)} />
+                  <ReferenceLine y={0} stroke={theme.contornoGeral} />
+                  <Bar dataKey="pnl" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                    {dayOfWeekData?.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 

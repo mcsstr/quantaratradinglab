@@ -30,6 +30,7 @@ export default function SettingsView({
   isSyncing = false,
   t = (k: string, _l?: string) => k,
   lang = 'en',
+  handleImageUpload = null,
 }) {
   const tg = themeGroups || THEME_GROUPS;
 
@@ -251,6 +252,9 @@ export default function SettingsView({
                     type="file"
                     accept="image/*"
                     onChange={(e) => {
+                    if (handleImageUpload) {
+                      handleImageUpload(e);
+                    } else {
                       const file = e.target.files?.[0];
                       if (file) {
                         const reader = new FileReader();
@@ -259,7 +263,8 @@ export default function SettingsView({
                         };
                         reader.readAsDataURL(file);
                       }
-                    }}
+                    }
+                  }}
                     className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600"
                     style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
                   />

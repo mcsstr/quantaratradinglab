@@ -286,6 +286,10 @@ export default function Dashboard() {
       let currentPlan = 'Free';
       if (profile) {
         currentPlan = profile.plan || 'Free';
+        const savedTheme = profile.theme_settings?._theme;
+        if (savedTheme && typeof savedTheme === 'object') {
+          setTheme(prev => ({ ...prev, ...savedTheme }));
+        }
         const profileSettings = {
           ...DEFAULT_SETTINGS,
           appLanguage: profile.app_language,
@@ -294,6 +298,7 @@ export default function Dashboard() {
           userPlan: currentPlan,
           ...profile.theme_settings
         };
+        delete profileSettings._theme; // Remove the embedded theme block from settings
         setSettings(profileSettings);
       }
 
@@ -503,12 +508,12 @@ export default function Dashboard() {
     if (!session) return;
     setIsSyncing(true);
     try {
-      const themeSettings = { ...theme };
+      const themeSnapshot = { ...theme };
       const { error } = await supabase.from('profiles').upsert({
         id: session.user.id,
         app_language: settings.appLanguage,
         date_format: settings.dateFormat,
-        theme_settings: settings, // Store current settings blob
+        theme_settings: { ...settings, _theme: themeSnapshot }, // Store settings + embedded theme
         updated_at: new Date().toISOString()
       });
 
@@ -641,8 +646,21 @@ export default function Dashboard() {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setTheme({ ...theme, backgroundImage: reader.result as string });
+      reader.onloadend = async () => {
+        const newTheme = { ...theme, backgroundImage: reader.result as string };
+        setTheme(newTheme);
+        // Auto-save to Supabase so the background persists across devices
+        if (session) {
+          try {
+            await supabase.from('profiles').upsert({
+              id: session.user.id,
+              theme_settings: { ...settings, _theme: newTheme },
+              updated_at: new Date().toISOString()
+            });
+          } catch (err) {
+            console.error('Error saving background image to Supabase:', err);
+          }
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -2018,12 +2036,48 @@ export default function Dashboard() {
       else if (group === 15) binMin = Math.floor(m / 15) * 15;
 
       const binName = `${String(h).padStart(2, '0')}:${String(binMin).padStart(2, '0')}`;
-      if (!bins[binName]) bins[binName] = { name: binName, count: 0, pnl: 0 };
+      if (!bins[binName]) bins[binName] = { name: binName, count: 0, pnl: 0, wins: 0, losses: 0 };
       bins[binName].count += 1;
-      bins[binName].pnl += (t.pnl - calculateTradeFee(t, accountSettings));
+      const netPnl = t.pnl - calculateTradeFee(t, accountSettings);
+      bins[binName].pnl += netPnl;
+      if (netPnl >= 0) bins[binName].wins += 1;
+      else bins[binName].losses += 1;
     });
     return (Object.values(bins) as any[]).sort((a: any, b: any) => a.name.localeCompare(b.name));
   }, [activeTrades, timeGrouping, accountSettings.feePerTrade]);
+
+  const cumulativePnlData = useMemo(() => {
+    let cumulative = 0;
+    return [...activeTrades]
+      .sort((a, b) => {
+        const timeA = a.entryTimestamp || new Date(a.date + 'T00:00:00').getTime();
+        const timeB = b.entryTimestamp || new Date(b.date + 'T00:00:00').getTime();
+        return timeA - timeB;
+      })
+      .map((t, index) => {
+        cumulative += (t.pnl - calculateTradeFee(t, accountSettings));
+        return {
+          name: `Trade ${index + 1}`,
+          tradeId: t.id,
+          cumulativePnl: cumulative
+        };
+      });
+  }, [activeTrades, accountSettings.feePerTrade]);
+
+  const dayOfWeekData = useMemo(() => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const map = { 'Monday': 0, 'Tuesday': 0, 'Wednesday': 0, 'Thursday': 0, 'Friday': 0, 'Saturday': 0, 'Sunday': 0 };
+    activeTrades.forEach(t => {
+      const d = new Date(t.entryTimestamp || t.date + 'T12:00:00');
+      const dayName = days[d.getDay()];
+      map[dayName] += (t.pnl - calculateTradeFee(t, accountSettings));
+    });
+    // Order: Monday to Friday (ignore weekends if 0)
+    return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => ({
+      name: day.substring(0, 3), // Mon, Tue, etc.
+      pnl: map[day]
+    }));
+  }, [activeTrades, accountSettings.feePerTrade]);
 
 
   if (isAuthChecking) {
@@ -2574,6 +2628,8 @@ export default function Dashboard() {
                     setTradeValuesFilter={setTradeValuesFilter}
                     availableTradePeriods={availableTradePeriods}
                     filteredTradeValuesData={filteredTradeValuesData}
+                    cumulativePnlData={cumulativePnlData}
+                    dayOfWeekData={dayOfWeekData}
                   />
                 )
               }
@@ -2731,6 +2787,7 @@ export default function Dashboard() {
               onEditAccount={openEditAccountForm}
               onDeleteAccount={(id) => setConfirmDeleteAccountId(id)}
               onSaveSettings={handleSaveSettings}
+              handleImageUpload={handleImageUpload}
             />
           )
         }

@@ -5,10 +5,13 @@ import {
 } from '../../components/Icons';
 import { hexToRgba } from '../../utils/constants';
 
-const SectionTitle = ({ icon: Icon, title, theme }) => (
-  <div className="flex items-center gap-2 mb-4">
-    <Icon size={16} style={{ color: theme.textoSecundario }} />
-    <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>{title}</span>
+const SectionTitle = ({ icon: Icon, title, theme, rightElement = null }: any) => (
+  <div className="flex items-center justify-between mb-4 w-full">
+    <div className="flex items-center gap-2">
+      <Icon size={16} style={{ color: theme.textoSecundario }} />
+      <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>{title}</span>
+    </div>
+    {rightElement && <div>{rightElement}</div>}
   </div>
 );
 
@@ -117,6 +120,8 @@ export default function TradesView({
     }
   };
 
+  const filteredTradesPnl = filteredTrades.reduce((acc: number, t: any) => acc + t.pnl + Number(t.commission || 0), 0);
+
   return (
     <div key="trades" className="space-y-6 max-w-[1600px] mx-auto w-full animate-tab-enter">
       {!isMobile && (
@@ -166,6 +171,11 @@ export default function TradesView({
             icon={CalendarDays}
             title="History Filter"
             theme={theme}
+            rightElement={
+              <span className="font-bold text-sm md:text-base" style={{ color: filteredTradesPnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
+                {filteredTradesPnl > 0 ? '+' : ''}{formatCurrency(filteredTradesPnl)}
+              </span>
+            }
           />
           <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4">
             <div className="flex gap-2 w-full flex-1 sm:min-w-[200px]">
