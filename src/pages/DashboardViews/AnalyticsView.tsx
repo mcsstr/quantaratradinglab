@@ -88,12 +88,12 @@ export default function AnalyticsView({
   return (
     <div key="analytics" className="max-w-[1600px] mx-auto w-full animate-tab-enter space-y-6">
 
-      {!isMobile && (
-        <header className="flex flex-col p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
-          <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><BarChart2 size={24} style={{ color: theme.linhaGrafico }} /> Analytics Dashboard</h2>
-          <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>Deep dive into your trading statistics and performance charts.</p>
-        </header>
-      )}
+      <div className="flex items-center gap-3 shrink-0 px-2 md:px-0 mb-2">
+        <BarChart2 size={26} className="text-yellow-500" />
+        <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
+          Analytics Dashboard
+        </h1>
+      </div>
 
       {activeInfoBlock}
 

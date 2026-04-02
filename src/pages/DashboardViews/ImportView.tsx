@@ -83,16 +83,12 @@ export default function ImportView({
 
   return (
     <div key="import" className="max-w-4xl space-y-6 mx-auto w-full animate-tab-enter">
-      {!isMobile && (
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2">
-              <Import size={24} style={{ color: theme.textoAlerta }} /> {t('import.title', lang)}
-            </h2>
-            <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>{t('import.subtitle', lang)}</p>
-          </div>
-        </header>
-      )}
+      <div className="flex items-center gap-3 shrink-0 px-2 md:px-0 mb-2">
+        <Import size={26} className="text-yellow-500" />
+        <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
+          {t('import.title', lang)}
+        </h1>
+      </div>
 
       {/* Step 1: Account — Read-only (usa conta ativa global) */}
       <div className="rounded-xl p-4 md:p-5 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>

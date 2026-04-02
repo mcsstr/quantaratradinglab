@@ -34,10 +34,12 @@ export default function HolidaysView({
   return (
     <div key="holidays" className="max-w-4xl space-y-6 mx-auto w-full animate-tab-enter">
       {!isMobile && (
-        <header className="flex flex-col md:flex-row justify-between p-4 rounded-xl shadow-sm transition-all items-center gap-4" style={getGlassStyle(theme.fundoCards)}>
-          <div className="flex-1">
-            <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><CalendarDays size={24} style={{ color: theme.contornoFeriado }} /> Manage Holidays</h2>
-            <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>Registered dates here will have a highlighted border in the calendar.</p>
+        <header className="flex flex-col md:flex-row justify-between p-2 rounded-xl transition-all items-center gap-4 bg-transparent">
+          <div className="flex items-center gap-3 shrink-0 mb-2">
+            <CalendarDays size={26} className="text-yellow-500" />
+            <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
+              Manage Holidays
+            </h1>
           </div>
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex rounded-lg p-0.5 shadow-sm bg-transparent h-fit" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid' }}>

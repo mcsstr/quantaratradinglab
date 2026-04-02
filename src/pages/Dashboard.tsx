@@ -7,7 +7,7 @@ import {
 import {
   LayoutDashboard, Import, Settings as SettingsIcon, TrendingUp, DollarSign, Percent, Target, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Trash2, ListIcon, Search, Activity, CalendarDays, Plus, Palette, BarChart2, Sun, ShieldAlert, Layers, Banknote, Edit2, Check, X, Download, FileText, ArrowUp, ArrowDown, Newspaper, Folder, MenuIcon, UserIcon, CreditCardIcon, LogOutIcon, GearIcon2, Building2, Monitor, RefreshCcw
 } from '../components/Icons';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Crown, BookOpen } from 'lucide-react';
 import {
   CURRENCIES_LIST, TIMEZONES_LIST, DEFAULT_SETTINGS, DEFAULT_THEME, DEFAULT_ACCOUNT_SETTINGS, THEME_GROUPS, generateId, hexToRgba
 } from '../utils/constants';
@@ -27,12 +27,18 @@ import HolidaysView from './DashboardViews/HolidaysView';
 import ImportView from './DashboardViews/ImportView';
 import SettingsView from './DashboardViews/SettingsView';
 import MobileMenuView from './DashboardViews/MobileMenuView';
+import JournalView from './DashboardViews/JournalView';
+import SetupsView from './DashboardViews/SetupsView';
 import PlanExpiredModal from '../components/PlanExpiredModal';
+import PremiumUpgradeModal from '../components/PremiumUpgradeModal';
+import FreePlanPromoModal from '../components/FreePlanPromoModal';
 
 // Components
 import SearchableSelect from '../components/SearchableSelect';
 import { useNewsRepository } from '../hooks/useNewsRepository';
 import { useHolidaysRepository } from '../hooks/useHolidaysRepository';
+import { useJournalsRepository } from '../hooks/useJournalsRepository';
+import { useSetupsRepository } from '../hooks/useSetupsRepository';
 
 
 // Helper for Universal Commission Deduction
@@ -99,6 +105,8 @@ export default function Dashboard() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hasDismissedModal, setHasDismissedModal] = useState(false);
+  const [premiumUpgradeFeature, setPremiumUpgradeFeature] = useState<string | null>(null);
+  const [promoModal, setPromoModal] = useState<{ show: boolean; isDailyLimit: boolean }>({ show: false, isDailyLimit: false });
   const [toastMessage, setToastMessage] = useState('');
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -113,6 +121,15 @@ export default function Dashboard() {
     return () => { document.body.style.overflow = ''; };
   }, [isFabOpen]);
   const [prevTab, setPrevTab] = useState('dashboard');
+
+  // 1-minute promo timer for Free plan users
+  useEffect(() => {
+    if (!isFreePlan) return;
+    const promoTimer = setInterval(() => {
+      setPromoModal({ show: true, isDailyLimit: false });
+    }, 60 * 1000);
+    return () => clearInterval(promoTimer);
+  }, [settings.userPlan]);
   const scrollRef = useRef(null);
 
   const [miniHistorySort, setMiniHistorySort] = useState('recent');
@@ -139,9 +156,11 @@ export default function Dashboard() {
   const [isAuthChecking, setIsAuthChecking] = useState(true); // Blocks all render until auth verified
   const [planExpiredStatus, setPlanExpiredStatus] = useState<'Suspended' | 'Inactive' | 'Expired' | null>(null);
 
-  const isFreePlan = settings?.userPlan === 'Free';
+  const isFreePlan = settings?.userPlan?.toLowerCase() === 'free';
   const { news, saveNews, deleteNews, saveNewsBulk, overrideNews } = useNewsRepository(session, isFreePlan);
   const { holidays, saveHoliday, deleteHoliday, overrideHolidays } = useHolidaysRepository(session, isFreePlan);
+  const { journals, saveJournal, deleteJournal, overrideJournals, isLoading: journalsLoading } = useJournalsRepository(session, isFreePlan);
+  const { setups, saveSetup, deleteSetup, overrideSetups, isLoading: setupsLoading } = useSetupsRepository(session);
 
   // --- AUTH SESSION CHECK ---
   useEffect(() => {
@@ -369,6 +388,7 @@ export default function Dashboard() {
             sellPrice: t.sell_price != null ? Number(t.sell_price) : null,
             notes: t.notes,
             commission: t.commission !== null && t.commission !== undefined ? Number(t.commission) : null,
+            setup_id: t.setup_id || null,
             rawMetadata: t.raw_metadata || {}
           })));
         }
@@ -498,7 +518,7 @@ export default function Dashboard() {
 
   // Auto-save trades to localStorage when on Free Plan
   useEffect(() => {
-    if (settings.userPlan === 'Free') {
+    if (isFreePlan) {
       localStorage.setItem('tradeJournal_trades', JSON.stringify(trades));
     }
   }, [trades, settings.userPlan]);
@@ -1375,8 +1395,18 @@ export default function Dashboard() {
       const sellT = manualTrade.sellTime || manualTrade.buyTime;
       const dateStr = new Date(buyT).toISOString().split('T')[0];
 
-      let newT;
+      // FREE PLAN: Enforce max 10 trades per day
       if (settings.userPlan === 'Free') {
+        const tradesThisDay = trades.filter(t => t.accountId === selectedImportAccountId && t.date === dateStr);
+        if (tradesThisDay.length >= 10) {
+          setIsSyncing(false);
+          setPromoModal({ show: true, isDailyLimit: true });
+          return;
+        }
+      }
+
+      let newT;
+      if (isFreePlan) {
         newT = {
           id: crypto.randomUUID(),
           accountId: selectedImportAccountId,
@@ -1719,6 +1749,11 @@ export default function Dashboard() {
 
   // --- ACCOUNT CRUD HANDLERS ---
   const openCreateAccountForm = () => {
+    // FREE PLAN: Max 1 account
+    if (isFreePlan && accounts.length >= 1) {
+      setPremiumUpgradeFeature('múltiplas contas');
+      return;
+    }
     setEditingAccount(null);
     setAccountFormData({ name: '', ...DEFAULT_ACCOUNT_SETTINGS });
     setAccountFormError('');
@@ -2267,6 +2302,22 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-[90]" onClick={() => setIsProfileDropdownOpen(false)}></div>
       )}
 
+      {/* OVERLAY MODAL PREMIUM UPGRADE – 2-step flow */}
+      <PremiumUpgradeModal
+        isOpen={premiumUpgradeFeature !== null}
+        onClose={() => setPremiumUpgradeFeature(null)}
+        featureName={premiumUpgradeFeature || undefined}
+        theme={theme}
+      />
+
+      {/* FREE PLAN PROMO MODAL – auto-fires every 1 min + on daily limit */}
+      <FreePlanPromoModal
+        isOpen={promoModal.show}
+        onClose={() => setPromoModal({ show: false, isDailyLimit: false })}
+        theme={theme}
+        isDailyLimit={promoModal.isDailyLimit}
+      />
+
       {/* FAB SPEED DIAL OVERLAY — backdrop separado dos botões */}
       {isFabOpen && (
         <div
@@ -2282,9 +2333,9 @@ export default function Dashboard() {
           style={{ bottom: `calc(var(--nav-bottom-height, 65px) + env(safe-area-inset-bottom, 0px) + 1.5rem)`, gap: `${LAYOUT.fab.gap}rem` }}
         >
           {[
-            { id: 'import', icon: Plus, label: 'Trade', ...LAYOUT.fab.colors.trade, offsetY: LAYOUT.fab.arcOffsets[0] },
-            { id: 'news', icon: Newspaper, label: 'News', ...LAYOUT.fab.colors.news, offsetY: LAYOUT.fab.arcOffsets[1] },
-            { id: 'holidays', icon: CalendarDays, label: 'Holidays', ...LAYOUT.fab.colors.holidays, offsetY: LAYOUT.fab.arcOffsets[2] }
+            { id: 'import', icon: Plus, label: 'Trade', locked: false, ...LAYOUT.fab.colors.trade, offsetY: LAYOUT.fab.arcOffsets[0] },
+            { id: 'news', icon: Newspaper, label: 'News', locked: isFreePlan, ...LAYOUT.fab.colors.news, offsetY: LAYOUT.fab.arcOffsets[1] },
+            { id: 'holidays', icon: CalendarDays, label: 'Holidays', locked: isFreePlan, ...LAYOUT.fab.colors.holidays, offsetY: LAYOUT.fab.arcOffsets[2] }
           ].map((item, idx) => (
             <div
               key={item.id}
@@ -2298,25 +2349,39 @@ export default function Dashboard() {
                 onTouchEnd={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setPrevTab(activeTab);
-                  setActiveTab(item.id);
                   setIsFabOpen(false);
+                  if (item.locked) {
+                    setPremiumUpgradeFeature(item.label);
+                  } else {
+                    setPrevTab(activeTab);
+                    setActiveTab(item.id);
+                  }
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setPrevTab(activeTab);
-                  setActiveTab(item.id);
                   setIsFabOpen(false);
+                  if (item.locked) {
+                    setPremiumUpgradeFeature(item.label);
+                  } else {
+                    setPrevTab(activeTab);
+                    setActiveTab(item.id);
+                  }
                 }}
-                className="rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200 active:scale-90 hover:brightness-125"
+                className="relative rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200 active:scale-90 hover:brightness-125"
                 style={{
                   width: `${LAYOUT.fab.circleSize}rem`,
                   height: `${LAYOUT.fab.circleSize}rem`,
                   backgroundColor: item.bgColor,
-                  border: `${LAYOUT.fab.circleBorderWidth}px solid ${item.borderColor}`
+                  border: `${LAYOUT.fab.circleBorderWidth}px solid ${item.borderColor}`,
+                  opacity: item.locked ? 0.7 : 1
                 }}
               >
                 <item.icon size={LAYOUT.fab.iconSize} style={{ color: item.iconColor }} />
+                {item.locked && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_6px_rgba(234,179,8,0.6)]">
+                    <Crown size={9} className="text-black" />
+                  </span>
+                )}
               </button>
               <span
                 className="font-bold uppercase tracking-widest mt-2"
@@ -2384,26 +2449,40 @@ export default function Dashboard() {
         {/* Centro: Menu Novo Estilo "Pill" (Aparece Apenas no Desktop) */}
         <div className="hidden lg:flex justify-center gap-2 overflow-x-auto hide-scrollbar flex-1">
           {[
-            { id: 'dashboard', icon: LayoutDashboard, title: 'Dashboard' },
-            { id: 'analytics', icon: BarChart2, title: 'Analytics' },
-            { id: 'trades', icon: ListIcon, title: 'Trades' },
-            { id: 'import', icon: Import, title: 'Import' },
-            { id: 'news', icon: Newspaper, title: 'News' },
-            { id: 'holidays', icon: CalendarDays, title: 'Holidays' },
-            { id: 'settings', icon: SettingsIcon, title: 'Settings' }
+            { id: 'dashboard', icon: LayoutDashboard, title: 'Dashboard', locked: false },
+            { id: 'analytics', icon: BarChart2, title: 'Analytics', locked: isFreePlan },
+            { id: 'journal', icon: BookOpen, title: 'Journal', locked: isFreePlan },
+            { id: 'setups', icon: Target, title: 'Setups', locked: false },
+            { id: 'trades', icon: ListIcon, title: 'Trades', locked: false },
+            { id: 'import', icon: Import, title: 'Import', locked: false },
+            { id: 'news', icon: Newspaper, title: 'News', locked: isFreePlan },
+            { id: 'holidays', icon: CalendarDays, title: 'Holidays', locked: isFreePlan },
+            { id: 'settings', icon: SettingsIcon, title: 'Settings', locked: false }
           ].map(item => (
             <button
               key={item.id}
-              title={item.title}
-              onClick={() => startTransition(() => setActiveTab(item.id))}
+              title={item.locked ? `${item.title} — Premium Only` : item.title}
+              onClick={() => {
+                if (item.locked) {
+                  setPremiumUpgradeFeature(item.title);
+                } else {
+                  startTransition(() => setActiveTab(item.id));
+                }
+              }}
               className={`relative flex items-center justify-center gap-2 p-2.5 xl:px-4 xl:py-2 rounded-full transition-all duration-300 shrink-0 ${activeTab === item.id ? 'shadow-sm' : 'hover:bg-white/5'}`}
               style={{
                 backgroundColor: activeTab === item.id ? hexToRgba(theme.linhaGrafico, 0.15) : 'transparent',
-                color: activeTab === item.id ? theme.textoPrincipal : theme.textoSecundario,
-                border: activeTab === item.id ? `1px solid ${hexToRgba(theme.linhaGrafico, 0.3)}` : '1px solid transparent'
+                color: item.locked ? theme.textoSecundario : (activeTab === item.id ? theme.textoPrincipal : theme.textoSecundario),
+                border: activeTab === item.id ? `1px solid ${hexToRgba(theme.linhaGrafico, 0.3)}` : '1px solid transparent',
+                opacity: item.locked ? 0.6 : 1
               }}>
-              <item.icon className={`transition-transform duration-300 ${activeTab === item.id ? 'scale-110' : ''}`} size={16} style={{ color: activeTab === item.id ? theme.linhaGrafico : 'inherit' }} />
+              <item.icon className={`transition-transform duration-300 ${activeTab === item.id ? 'scale-110' : ''}`} size={16} style={{ color: activeTab === item.id && !item.locked ? theme.linhaGrafico : 'inherit' }} />
               <span className="hidden xl:block text-[13px] font-bold tracking-wide font-display">{item.title}</span>
+              {item.locked && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_6px_rgba(234,179,8,0.6)]">
+                  <Crown size={9} className="text-black" />
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -2519,8 +2598,8 @@ export default function Dashboard() {
       {/* CONTEÚDO PRINCIPAL */}
       <main className="flex-1 w-full px-4 lg:px-6 pt-safe-main pb-safe-main main-container" style={{ scrollBehavior: 'smooth' }}>
 
-        {settings.userPlan === 'Free' && (
-          <div className="mx-auto max-w-4xl bg-red-900/20 border border-red-500/30 text-red-200 px-4 py-3 rounded-xl mb-1 mt-2 text-xs md:text-sm font-medium flex items-center justify-center text-center shadow-sm animate-fade-in backdrop-blur-md">
+        {isFreePlan && (
+          <div className="mx-auto max-w-4xl bg-red-900/20 border border-red-500/30 text-red-200 px-4 py-3 rounded-xl mb-4 mt-6 text-xs md:text-sm font-medium flex items-center justify-center text-center shadow-sm animate-fade-in backdrop-blur-md">
             <span><strong className="text-red-400">⚠️ {settings.appLanguage === 'pt' ? 'Aviso Plano Free' : 'Free Plan Notice'}:</strong> {settings.appLanguage === 'pt' ? 'Seus dados de Trades, Notícias e Feriados estão sendo salvos apenas localmente neste dispositivo. Mude para Premium para Sincronização em Nuvem e Backup.' : 'Your Trades, News, and Holidays data are only saved locally on this device. Upgrade to Premium for Cloud Sync and Backup.'}</span>
           </div>
         )}
@@ -2670,6 +2749,7 @@ export default function Dashboard() {
                     setEditFormData={setEditFormData}
                     setIsTradeModalOpen={setIsTradeModalOpen}
                     isMobile={isMobile}
+                    setups={setups}
                     activeAccountId={activeAccountId}
                     supabase={supabase}
                     session={session}
@@ -2678,6 +2758,23 @@ export default function Dashboard() {
                 )
               }
             </>
+          )
+        }
+
+        {
+          activeTab === 'journal' && (
+            <JournalView
+              theme={theme}
+              getGlassStyle={getGlassStyle}
+              settings={settings}
+              t={t}
+              lang={settings.appLanguage}
+              trades={trades}
+              activeAccountId={activeAccountId}
+              journals={journals}
+              saveJournal={saveJournal}
+              deleteJournal={deleteJournal}
+            />
           )
         }
 
@@ -2730,6 +2827,22 @@ export default function Dashboard() {
               saveHoliday={saveHoliday}
               deleteHoliday={deleteHoliday}
               isMobile={isMobile}
+            />
+          )
+        }
+
+        {
+          activeTab === 'setups' && (
+            <SetupsView
+              theme={theme}
+              getGlassStyle={getGlassStyle}
+              settings={settings}
+              t={t}
+              lang={settings.appLanguage}
+              trades={trades}
+              setups={setups}
+              saveSetup={saveSetup}
+              deleteSetup={deleteSetup}
             />
           )
         }
@@ -2795,6 +2908,7 @@ export default function Dashboard() {
               onDeleteAccount={(id) => setConfirmDeleteAccountId(id)}
               onSaveSettings={handleSaveSettings}
               handleImageUpload={handleImageUpload}
+              onLockedTabClick={(feature: string) => setPremiumUpgradeFeature(feature)}
             />
           )
         }

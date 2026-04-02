@@ -45,7 +45,8 @@ export default function TradesView({
   handleExportCSV,
   supabase,
   session,
-  setToastMessage
+  setToastMessage,
+  setups
 }) {
   const [isConfirmDeleteAllOpen, setIsConfirmDeleteAllOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -124,16 +125,12 @@ export default function TradesView({
 
   return (
     <div key="trades" className="space-y-6 max-w-[1600px] mx-auto w-full animate-tab-enter">
-      {!isMobile && (
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2">
-              <ListIcon size={24} style={{ color: theme.textoPrincipal }} /> Trades History
-            </h2>
-            <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>Detailed view of your operations and performance.</p>
-          </div>
-        </header>
-      )}
+      <div className="flex items-center gap-3 shrink-0 px-2 md:px-0 mb-2">
+        <ListIcon size={26} className="text-yellow-500" />
+        <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
+          Trades History
+        </h1>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2">
         {/* Search and Sorting */}
@@ -240,6 +237,7 @@ export default function TradesView({
                 <th className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sell Price</th>
                 <th className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center w-24`}>Fees</th>
                 <th className={`${getColClass('pnl')} px-2 py-3 md:px-4 md:py-4 text-center w-28`}>Gross P&L</th>
+                <th className="px-2 py-3 md:px-4 md:py-4 text-center w-28">Setup</th>
                 <th className={`${getColClass('action')} px-2 py-3 md:px-4 md:py-4 text-center w-20`}>Action</th>
               </tr>
             </thead>
@@ -286,6 +284,21 @@ export default function TradesView({
                   </td>
                   <td className={`${getColClass('pnl')} px-2 py-2.5 md:px-4 md:py-3 font-bold text-center text-[10px] md:text-xs w-28`} style={{ color: trade.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
                     {formatCurrency(trade.pnl)}
+                  </td>
+                  <td className="px-2 py-2.5 md:px-4 md:py-3 text-center">
+                     <select 
+                        value={trade.setup_id || ''}
+                        onChange={async (e) => {
+                           const val = e.target.value || null;
+                           setTrades((prev:any) => prev.map((t:any) => t.id === trade.id ? {...t, setup_id: val} : t));
+                           await supabase.from('trades').update({ setup_id: val }).eq('id', trade.id);
+                        }}
+                        className="bg-transparent w-full text-center outline-none cursor-pointer font-bold text-[7px] border-none hover:opacity-80 transition-opacity appearance-none min-w-[70px]"
+                        style={{ color: theme.textoSecundario }}
+                     >
+                       <option value="">Price Action</option>
+                       {setups?.map((s:any) => <option key={s.id} value={s.id}>{s.title}</option>)}
+                     </select>
                   </td>
                   <td className={`${getColClass('action')} px-2 py-2.5 md:px-4 md:py-3 text-center flex justify-center gap-1 w-20`}>
                     <button onClick={() => { setEditFormData(trade); setIsTradeModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>

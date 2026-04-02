@@ -67,7 +67,7 @@ export default function Auth() {
               first_name: email.split('@')[0], // derived from email
               last_name: '',
               email: email,
-              plan: 'free',
+              plan: '',
               status: 'active',
               trial_end: trialEndIso,
               storage_mode: 'local',
@@ -116,7 +116,7 @@ export default function Auth() {
             .insert({
               id: userId,
               email: email,
-              plan: 'free',
+              plan: '',
               status: 'active',
               trial_end: trialEndIso,
               storage_mode: 'local',
@@ -144,7 +144,7 @@ export default function Auth() {
           }
 
           // Free plan: check if trial has expired
-          if (plan === 'free' || plan === '' ) {
+          if (plan === 'free') {
             if (trialEnd && new Date(trialEnd) < new Date()) {
               navigate('/pricing?reason=trial_expired');
               return;
@@ -152,6 +152,13 @@ export default function Auth() {
           }
         }
       }
+      
+      // If signed up, redirect to pricing
+      if (!isLogin && userId) {
+        navigate('/pricing');
+        return;
+      }
+      
       navigate('/loading');
     } catch (err: any) {
       setError(err.message);

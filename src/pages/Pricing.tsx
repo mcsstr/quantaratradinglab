@@ -92,6 +92,35 @@ function MigrationModal({ type, targetPlan, price, interval, onConfirm, onCancel
   );
 }
 
+// Success modal for Free Plan acquisition
+interface FreePlanModalProps {
+  trialDays: number;
+  trialUnit: string;
+  onUnderstand: () => void;
+}
+
+function FreePlanModal({ trialDays, trialUnit, onUnderstand }: FreePlanModalProps) {
+  return (
+    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="bg-[#111114] border border-[#00B0F0]/30 rounded-2xl w-full max-w-sm shadow-2xl p-8 text-center animate-tab-enter">
+        <div className="w-16 h-16 bg-[#00B0F0]/10 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-[#00B0F0]/30 shadow-[0_0_20px_rgba(0,176,240,0.3)]">
+          <Zap size={32} className="text-[#00B0F0]" />
+        </div>
+        <h3 className="text-2xl font-black font-display mb-2">Plano Grátis Ativado</h3>
+        <p className="text-sm leading-relaxed text-gray-300 mb-6">
+          Você agora está no Plano Grátis! Seu período de testes é válido por <strong>{trialDays} {trialUnit}</strong> a partir de hoje. Ao término, você poderá escolher um upgrade para continuar a usar recursos premium.
+        </p>
+        <button
+          onClick={onUnderstand}
+          className="w-full py-3.5 rounded-xl font-black bg-[#00B0F0] text-black transition-all hover:brightness-110 active:scale-95 shadow-[0_0_15px_rgba(0,176,240,0.4)]"
+        >
+          Ciente
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Pricing() {
   const navigate = useNavigate();
   const { plans, loading: plansLoading } = usePlanConfig();
@@ -109,6 +138,13 @@ export default function Pricing() {
     price: number;
     interval: 'monthly' | 'yearly';
     priceId: string;
+  } | null>(null);
+
+  // Free Plan Success Modal State
+  const [freePlanModal, setFreePlanModal] = useState<{
+    show: boolean;
+    trialDays: number;
+    trialUnit: string;
   } | null>(null);
 
   useEffect(() => {
@@ -142,14 +178,51 @@ export default function Pricing() {
         return;
       }
 
+      const targetPlan = plans.find(p => p.id === planId);
+      if (!targetPlan) throw new Error('Plan configuration not found');
+
       if (planId === 'free') {
-        navigate('/dashboard');
+        const trialValue = targetPlan.trial_duration_value || targetPlan.trial_days;
+        const trialUnit = targetPlan.trial_duration_unit || 'days';
+        
+        let trialEndIso = null;
+        if (trialValue) {
+          const now = new Date();
+          switch(trialUnit) {
+            case 'minutes': now.setMinutes(now.getMinutes() + trialValue); break;
+            case 'hours': now.setHours(now.getHours() + trialValue); break;
+            case 'days': now.setDate(now.getDate() + trialValue); break;
+            case 'months': now.setMonth(now.getMonth() + trialValue); break;
+            case 'years': now.setFullYear(now.getFullYear() + trialValue); break;
+            default: now.setDate(now.getDate() + trialValue); break;
+          }
+          trialEndIso = now.toISOString();
+        }
+
+        // Update profile in database
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            plan: 'free',
+            status: 'active',
+            trial_end: trialEndIso,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', session.user.id);
+          
+        if (profileError) throw profileError;
+
+        // Show the free plan success modal
+        setFreePlanModal({
+          show: true,
+          trialDays: trialValue,
+          trialUnit: trialUnit
+        });
+        
         return;
       }
 
       // Get priceId from the dynamic plans_config
-      const targetPlan = plans.find(p => p.id === planId);
-      if (!targetPlan) throw new Error('Plan configuration not found');
 
       const priceId = isYearlyPlan
         ? targetPlan.stripe_price_yearly
@@ -227,6 +300,18 @@ export default function Pricing() {
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white font-sans relative overflow-hidden flex flex-col items-center justify-center p-4 py-16">
+
+      {/* Free Plan Success Modal */}
+      {freePlanModal?.show && (
+        <FreePlanModal 
+          trialDays={freePlanModal.trialDays} 
+          trialUnit={freePlanModal.trialUnit} 
+          onUnderstand={() => {
+            setFreePlanModal(null);
+            navigate('/dashboard');
+          }} 
+        />
+      )}
 
       {/* Trial Expired Banner */}
       {trialExpired && (

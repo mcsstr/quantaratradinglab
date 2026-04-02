@@ -1,6 +1,6 @@
 import React, { startTransition } from 'react';
 import {
-  Settings, Palette, Folder, Download, LayoutDashboard, ListIcon, ShieldAlert, Layers, Banknote, Target, TrendingUp, Monitor, Braces, User, CreditCard, Building2, Plus, Edit2, Trash2, CheckCircle2, Loader2
+  Settings, Palette, Folder, Download, LayoutDashboard, ListIcon, ShieldAlert, Layers, Banknote, Target, TrendingUp, Monitor, Braces, User, CreditCard, Building2, Plus, Edit2, Trash2, CheckCircle2, Loader2, Crown
 } from 'lucide-react';
 import { hexToRgba, THEME_GROUPS } from '../../utils/constants';
 
@@ -31,16 +31,19 @@ export default function SettingsView({
   t = (k: string, _l?: string) => k,
   lang = 'en',
   handleImageUpload = null,
+  onLockedTabClick = null,
 }) {
   const tg = themeGroups || THEME_GROUPS;
 
   return (
     <div key="settings" className="max-w-6xl space-y-6 mx-auto w-full animate-tab-enter">
       {!isMobile && (
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold font-display capitalize flex items-center gap-2" style={{ color: theme.textoPrincipal }}><Settings size={22} style={{ color: theme.textoSecundario }} /> {t('settings.title', lang)}</h2>
-            <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>{t('settings.subtitle', lang)}</p>
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 p-2 rounded-xl transition-all" style={{ background: 'transparent' }}>
+          <div className="flex items-center gap-3 shrink-0 mb-2">
+            <Settings size={26} className="text-yellow-500" />
+            <h1 className="text-2xl md:text-3xl font-black font-display capitalize tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
+              {t('settings.title', lang)}
+            </h1>
           </div>
         </header>
       )}
@@ -49,15 +52,21 @@ export default function SettingsView({
       {(!isMobile || !settingsHideTabs) && (
         <div className="flex justify-center overflow-x-auto no-scrollbar border-b" style={{ borderColor: theme.contornoGeral }}>
           {[
-            { id: 'account', title: t('settings.account', lang), icon: Settings },
-            { id: 'theme', title: t('settings.theme', lang), icon: Palette },
-            { id: 'database', title: t('settings.database', lang), icon: Folder },
-            { id: 'backup', title: t('settings.backup', lang), icon: Download }
+            { id: 'account', title: t('settings.account', lang), icon: Settings, locked: false },
+            { id: 'theme', title: t('settings.theme', lang), icon: Palette, locked: settings?.userPlan?.toLowerCase() === 'free' },
+            { id: 'database', title: t('settings.database', lang), icon: Folder, locked: false },
+            { id: 'backup', title: t('settings.backup', lang), icon: Download, locked: false }
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => startTransition(() => setActiveSettingsTab(tab.id))}
-              className={`flex items-center gap-2 px-5 py-3 text-xs font-bold transition-all whitespace-nowrap border-b-2 ${activeSettingsTab === tab.id ? '' : 'opacity-50 hover:opacity-80'}`}
+              onClick={() => {
+                if (tab.locked && onLockedTabClick) {
+                  onLockedTabClick('Theme Customization');
+                } else {
+                  startTransition(() => setActiveSettingsTab(tab.id));
+                }
+              }}
+              className={`relative flex items-center gap-2 px-5 py-3 text-xs font-bold transition-all whitespace-nowrap border-b-2 ${activeSettingsTab === tab.id ? '' : 'opacity-50 hover:opacity-80'}`}
               style={{
                 backgroundColor: 'transparent',
                 color: activeSettingsTab === tab.id ? theme.textoPrincipal : theme.textoSecundario,
@@ -66,6 +75,11 @@ export default function SettingsView({
             >
               <tab.icon size={14} />
               {tab.title}
+              {tab.locked && (
+                <span className="ml-1 w-3.5 h-3.5 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_5px_rgba(234,179,8,0.6)]">
+                  <Crown size={8} className="text-black" />
+                </span>
+              )}
             </button>
           ))}
         </div>

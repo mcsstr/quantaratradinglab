@@ -38,10 +38,12 @@ export default function NewsView({
   return (
     <div key="news" className="max-w-4xl space-y-6 mx-auto w-full animate-tab-enter">
       {!isMobile && (
-        <header className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 p-4 rounded-xl shadow-sm transition-all" style={getGlassStyle(theme.fundoCards)}>
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><Newspaper size={24} style={{ color: theme.textoAlerta }} /> Economic Calendar & News</h2>
-            <p className="text-xs md:text-sm mt-1" style={{ color: theme.textoSecundario }}>Track high impact events that may affect your trading day.</p>
+        <header className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 p-2 rounded-xl transition-all bg-transparent">
+          <div className="flex items-center gap-3 shrink-0 mb-2">
+            <Newspaper size={26} className="text-yellow-500" />
+            <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
+              Economic Calendar & News
+            </h1>
           </div>
           {!isAddNewsOpen && (
             <button onClick={() => setIsAddNewsOpen(true)} className="py-2 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-opacity hover:opacity-80 shadow-md h-[40px]" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>

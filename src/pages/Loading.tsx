@@ -115,14 +115,56 @@ export default function Loading() {
       const steps = duration / intervalTime;
       let currentStep = 0;
 
-      const timer = setInterval(() => {
+      const timer = setInterval(async () => {
         currentStep++;
         const newProgress = Math.min(Math.round((currentStep / steps) * 100), 100);
         setProgress(newProgress);
 
         if (currentStep >= steps) {
           clearInterval(timer);
-          setTimeout(() => { navigate('/dashboard'); }, 300);
+          
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+              navigate('/auth');
+              return;
+            }
+
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('plan, status, trial_end')
+              .eq('id', user.id)
+              .single();
+
+            if (profile) {
+              const plan = (profile.plan || '').toLowerCase();
+              const status = profile.status;
+              const trialEnd = profile.trial_end;
+
+              // Force pricing if suspended, inactive, or unselected plan
+              if (!plan || plan === 'none' || status === 'Suspended' || status === 'Inactive') {
+                navigate('/pricing');
+                return;
+              }
+
+              // Free trial expiration check
+              if (plan === 'free') {
+                if (trialEnd && new Date(trialEnd) < new Date()) {
+                  navigate('/pricing?reason=trial_expired');
+                  return;
+                }
+              }
+            } else {
+              // No profile found? Make them pick a plan!
+              navigate('/pricing');
+              return;
+            }
+
+            navigate('/dashboard');
+          } catch (err) {
+            console.error(err);
+            navigate('/dashboard'); // fallback
+          }
         }
       }, intervalTime);
 
