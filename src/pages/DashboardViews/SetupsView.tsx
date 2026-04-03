@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2
 } from 'lucide-react';
@@ -14,10 +14,23 @@ export default function SetupsView({
   trades,
   setups,
   saveSetup,
-  deleteSetup
+  deleteSetup,
+  setupTargets,
+  saveSetupTarget,
+  deleteSetupTarget,
+  activeAccountId,
+  formatDate
 }: any) {
   const [viewMode, setViewMode] = useState<'home'|'create'|'edit'|'view'>('home');
   const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null);
+
+  // Target Form States
+  const [targetDate, setTargetDate] = useState('');
+  const [targetAsset, setTargetAsset] = useState('');
+  const [targetTakes, setTargetTakes] = useState<number | ''>('');
+  const [targetStops, setTargetStops] = useState<number | ''>('');
+  const [targetPnl, setTargetPnl] = useState<number | ''>('');
+  const [targetWinRate, setTargetWinRate] = useState<number | ''>('');
   
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState(''); // Stores Base64
@@ -60,7 +73,28 @@ export default function SetupsView({
            for (let i = 0; i < len; i++) {
              bytes[i] = binaryString.charCodeAt(i);
            }
-           mammoth.convertToHtml({arrayBuffer: bytes.buffer})
+
+           const styleMap = [
+             "p[style-name='Heading 1'] => h1:fresh",
+             "p[style-name='Heading 2'] => h2:fresh",
+             "p[style-name='Heading 3'] => h3:fresh",
+             "p[style-name='Heading 4'] => h4:fresh",
+             "p[style-name='Heading 5'] => h5:fresh",
+             "p[style-name='Heading 6'] => h6:fresh",
+             "p[style-name='Title'] => h1.doc-title:fresh",
+             "p[style-name='Subtitle'] => p.doc-subtitle:fresh",
+             "p[style-name='Quote'] => blockquote:fresh",
+             "p[style-name='Intense Quote'] => blockquote.intense:fresh",
+             "p[style-name='List Paragraph'] => p.list-para:fresh",
+             "r[style-name='Strong'] => strong",
+             "r[style-name='Emphasis'] => em",
+             "table => table",
+             "tr => tr",
+             "td => td",
+             "th => th",
+           ];
+
+           mammoth.convertToHtml({ arrayBuffer: bytes.buffer }, { styleMap })
              .then((result) => {
                  setDocxHtml(result.value);
                  setIsParsingDocx(false);
@@ -120,52 +154,91 @@ export default function SetupsView({
   };
 
   const chartData = useMemo(() => {
-    const allDates = Array.from(new Set(trades.map((t:any) => t.date))).sort();
-    const setupTotals: Record<string, number> = { 'Price Action': 0 };
-    setups.forEach((s:any) => { setupTotals[s.id] = 0; });
+    const validTrades = trades.filter((t:any) => t.date);
+    const validTargets = (setupTargets||[]).filter((t:any) => t.date);
+    const allDates = Array.from(new Set([
+      ...validTrades.map((t:any) => t.date),
+      ...validTargets.map((t:any) => t.date)
+    ])).sort();
+
+    const setupRealTotals: Record<string, number> = { 'Price Action': 0 };
+    const setupTargetTotals: Record<string, number> = {};
+    setups.forEach((s:any) => { 
+       setupRealTotals[s.id] = 0; 
+       setupTargetTotals[s.id] = 0;
+    });
 
     const result = allDates.map((dateStr: any) => {
         const dayObj: any = { date: dateStr };
-        const dayTrades = trades.filter((t:any) => t.date === dateStr);
+        const dayTrades = validTrades.filter((t:any) => t.date === dateStr);
+        const dayTargets = validTargets.filter((t:any) => t.date === dateStr);
         
         dayTrades.forEach((tr:any) => {
             const sid = tr.setup_id && setups.some((s:any)=>s.id === tr.setup_id) ? tr.setup_id : 'Price Action';
-            setupTotals[sid] = (setupTotals[sid] || 0) + (parseFloat(tr.pnl) || 0);
+            setupRealTotals[sid] = (setupRealTotals[sid] || 0) + (parseFloat(tr.pnl) || 0);
         });
 
-        Object.keys(setupTotals).forEach(k => {
-           const title = k === 'Price Action' ? 'Price Action' : setups.find((x:any)=>x.id === k)?.title || k;
-           dayObj[title] = setupTotals[k];
+        dayTargets.forEach((tg:any) => {
+            const sid = tg.setup_id;
+            if (sid) {
+                setupTargetTotals[sid] = (setupTargetTotals[sid] || 0) + (parseFloat(tg.pnl) || 0);
+            }
         });
+
+        Object.keys(setupRealTotals).forEach(k => {
+           const title = k === 'Price Action' ? 'Price Action' : setups.find((x:any)=>x.id === k)?.title || k;
+           dayObj[`${title}_real`] = setupRealTotals[k];
+        });
+
+        Object.keys(setupTargetTotals).forEach(k => {
+           const title = setups.find((x:any)=>x.id === k)?.title || k;
+           dayObj[`${title}_target`] = setupTargetTotals[k];
+        });
+
         return dayObj;
     });
 
     return result;
-  }, [trades, setups]);
+  }, [trades, setups, setupTargets]);
 
-  const currentSetupTrades = useMemo(() => {
+  const currentSetupTargets = useMemo(() => {
     if (viewMode !== 'view' || !selectedSetupId) return [];
-    return trades.filter((t:any) => t.setup_id === selectedSetupId);
-  }, [trades, viewMode, selectedSetupId]);
+    return (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId);
+  }, [setupTargets, viewMode, selectedSetupId]);
+
+  const handleSubmitTarget = () => {
+     if (!targetDate || !targetAsset) return;
+     saveSetupTarget({
+       id: crypto.randomUUID(),
+       setup_id: selectedSetupId as string,
+       account_id: activeAccountId,
+       date: targetDate,
+       asset_str: targetAsset,
+       takes: Number(targetTakes) || 0,
+       stops: Number(targetStops) || 0,
+       pnl: Number(targetPnl) || 0,
+       win_rate: Number(targetWinRate) || 0
+     });
+     setTargetDate('');
+     setTargetAsset('');
+     setTargetTakes('');
+     setTargetStops('');
+     setTargetPnl('');
+     setTargetWinRate('');
+  };
 
   const tableRows = useMemo(() => {
-    const map = new Map();
-    currentSetupTrades.forEach((t:any) => {
-       const dt = t.date;
-       if (!map.has(dt)) map.set(dt, { date: dt, takes: 0, stops: 0, pnl: 0, assets: new Set() });
-       const o = map.get(dt);
-       const val = parseFloat(t.pnl) || 0;
-       if (val >= 0) o.takes++; else o.stops++;
-       o.pnl += val;
-       o.assets.add(t.symbol);
-    });
-    const arr = Array.from(map.values()).sort((a:any, b:any) => a.date.localeCompare(b.date));
-    return arr.map(r => ({
-      ...r,
-      assetStr: Array.from(r.assets).join(', '),
-      winRate: r.takes + r.stops > 0 ? (r.takes / (r.takes + r.stops)) * 100 : 0
+    const arr = [...currentSetupTargets].sort((a:any, b:any) => a.date.localeCompare(b.date));
+    return arr.map(t => ({
+      id: t.id,
+      date: t.date,
+      assetStr: t.asset_str,
+      takes: t.takes,
+      stops: t.stops,
+      pnl: parseFloat(t.pnl) || 0,
+      winRate: parseFloat(t.win_rate) || 0
     }));
-  }, [currentSetupTrades]);
+  }, [currentSetupTargets]);
 
   const grandTotal = tableRows.reduce((acc, r) => {
     acc.takes += r.takes;
@@ -188,7 +261,7 @@ export default function SetupsView({
   };
 
   const renderGlobalChart = () => (
-    <div className="p-6 rounded-2xl border flex flex-col shadow-sm min-h-[450px]" style={{ background: theme.fundoCards, borderColor: theme.contornoGeral }}>
+    <div className="p-6 rounded-2xl border flex flex-col shadow-sm min-h-[450px]" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
         <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
           <TrendingUp size={12} /> Equity Curves Comparison (All Strategies)
@@ -226,29 +299,49 @@ export default function SetupsView({
                itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
                labelStyle={{ fontSize: '10px', color: theme.textoSecundario, marginBottom: '4px' }}
                formatter={(val: number, name: string) => {
-                   if (hiddenSetups.has(name)) return [];
-                   return [`$${val}`, name];
+                   const bareName = name.replace('_real', '').replace('_target', '');
+                   if (hiddenSetups.has(bareName)) return [];
+                   return [`$${val.toFixed(2)}`, name.endsWith('_real') ? `${bareName} (Real)` : `${bareName} (Almejado)`];
                }}
              />
-             {setupNames.filter(name => !hiddenSetups.has(name)).map((name, i) => (
-               <Line 
-                 key={name}
-                 type="monotone" 
-                 dataKey={name} 
-                 stroke={lineColors[setupNames.indexOf(name) % lineColors.length]} 
-                 strokeWidth={name === 'Price Action' ? 1.5 : 2.5} 
-                 dot={false}
-                 strokeDasharray={name === 'Price Action' ? '5 5' : 'none'}
-               />
-             ))}
+             {setupNames.filter(name => !hiddenSetups.has(name)).map((name, i) => {
+               const color = lineColors[setupNames.indexOf(name) % lineColors.length];
+               return (
+                 <React.Fragment key={name}>
+                   <Line 
+                     type="monotone" 
+                     dataKey={`${name}_real`} 
+                     stroke={color} 
+                     strokeWidth={name === 'Price Action' ? 1.5 : 2.5} 
+                     dot={false}
+                   />
+                   {name !== 'Price Action' && (
+                     <Line 
+                       type="monotone" 
+                       dataKey={`${name}_target`} 
+                       stroke={color} 
+                       strokeWidth={2} 
+                       dot={false}
+                       strokeDasharray="5 5"
+                     />
+                   )}
+                 </React.Fragment>
+               );
+             })}
            </LineChart>
          </ResponsiveContainer>
       </div>
-      <div className="flex flex-wrap gap-3 mt-4 overflow-y-auto max-h-16 hide-scrollbar lg:hidden">
+      <div className="flex flex-wrap gap-3 mt-4 overflow-y-auto max-h-16 hide-scrollbar">
          {setupNames.map((name, i) => (
            <div key={name} className="flex items-center gap-1.5 shrink-0">
              <div className="w-3 h-1 rounded-full" style={{ backgroundColor: lineColors[i % lineColors.length] }} />
-             <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>{name}</span>
+             <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>{name} (Real)</span>
+           </div>
+         ))}
+         {setupNames.filter(n => n !== 'Price Action').map((name, i) => (
+           <div key={`${name}-t`} className="flex items-center gap-1.5 shrink-0">
+             <div className="w-3 h-1 rounded-full border-t border-dashed" style={{ borderColor: lineColors[i % lineColors.length] }} />
+             <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>{name} (Almejado)</span>
            </div>
          ))}
       </div>
@@ -258,17 +351,17 @@ export default function SetupsView({
   return (
     <div className="flex w-full min-h-[calc(100vh-140px)] animate-tab-enter relative" style={{ background: theme.fundoGeral }}>
        {/* LEFT SIDEBAR (Infinite) */}
-       <div className="w-16 md:w-64 self-stretch border-r shrink-0 hidden sm:flex flex-col pt-5 pb-0 px-2 md:px-4" style={{ borderColor: theme.contornoGeral, background: theme.fundoCards }}>
+       <div className="w-16 md:w-64 self-stretch border-r shrink-0 hidden sm:flex flex-col pt-5 pb-0 px-2 md:px-4" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
           <button 
             onClick={() => handleSelect('create')}
-            className="w-full flex items-center justify-center md:justify-start gap-2 py-3 md:px-4 mb-4 rounded-xl font-bold text-black transition-transform active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+            className="w-full flex items-center justify-center gap-2 py-3 md:px-4 mb-4 rounded-xl font-bold text-black transition-transform active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)]"
             style={{ background: '#eab308' }}
           >
             <Plus size={18} />
-            <span className="hidden md:block uppercase tracking-wider text-xs">New Setup</span>
+            <span className="hidden md:block uppercase tracking-wider text-xs text-center">New Setup</span>
           </button>
 
-          <div className="text-[10px] uppercase font-bold tracking-widest opacity-40 px-2 mt-4 mb-1 cursor-pointer hover:opacity-100 transition-opacity" style={{ color: theme.textoPrincipal }} onClick={() => handleSelect('home')}>
+          <div className="text-[11px] md:text-xs uppercase font-bold tracking-widest opacity-50 px-2 mt-4 mb-1 cursor-pointer hover:opacity-100 transition-opacity" style={{ color: theme.textoPrincipal }} onClick={() => handleSelect('home')}>
             All Strategies Chart
           </div>
 
@@ -296,7 +389,7 @@ export default function SetupsView({
        </div>
 
       {/* MAIN CONTENT */}
-       <div className="flex-1 flex flex-col p-2 md:p-4 gap-6 max-w-full min-w-0 w-full mb-12">
+       <div className="flex-1 flex flex-col p-2 md:p-4 gap-2 max-w-full min-w-0 w-full mb-12">
           
           {!isExpandedDoc && (
              <div className="flex justify-between items-center z-10 py-2" style={{ background: 'transparent' }}>
@@ -317,13 +410,13 @@ export default function SetupsView({
           {/* DYNAMIC VIEW AREA */}
           <div className="flex-1 flex flex-col min-w-0 gap-6 w-full h-full">
             {viewMode === 'home' && !isExpandedDoc && (
-              <div className="flex-1 flex flex-col min-h-0 h-full w-full">
+              <div className="flex-1 flex flex-col min-h-0 h-full w-full max-w-7xl mx-auto">
                 {renderGlobalChart()}
               </div>
             )}
 
           {(viewMode === 'create' || viewMode === 'edit') && !isExpandedDoc && (
-             <div className="flex-1 max-w-4xl w-full mx-auto p-6 rounded-2xl border flex flex-col gap-6 shadow-sm" style={{ background: theme.fundoCards, borderColor: theme.contornoGeral }}>
+             <div className="flex-1 max-w-4xl w-full mx-auto p-6 rounded-2xl border flex flex-col gap-3 shadow-sm" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
                <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center justify-between" style={{ color: theme.textoPrincipal }}>
                  {viewMode === 'create' ? 'Create New Setup' : 'Edit Setup'}
                </h3>
@@ -380,10 +473,10 @@ export default function SetupsView({
           )}
 
           {viewMode === 'view' && selectedSetupId && (
-            <div className={`flex flex-col gap-6 w-full pb-10 ${isExpandedDoc ? 'h-full max-w-none' : 'max-w-7xl mx-auto'}`}>
+            <div className={`flex flex-col gap-3 w-full pb-10 ${isExpandedDoc ? 'h-full max-w-none' : 'max-w-7xl mx-auto'}`}>
                
                {/* 1. DOCUMENT VIEW CONTAINER */}
-               <div className="rounded-3xl border shadow-sm relative overflow-hidden flex flex-col p-6 md:p-10" style={{ background: theme.fundoCards, borderColor: theme.contornoGeral }}>
+               <div className="rounded-3xl border shadow-sm relative overflow-hidden flex flex-col p-6 md:p-10" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
                   
                   {/* Document Header - always visible */}
                   <div className="flex justify-between items-center">
@@ -420,14 +513,41 @@ export default function SetupsView({
                            </div>
                          </object>
                       ) : formDesc.includes('wordprocessingml') || formFileName.endsWith('.docx') ? (
-                         <div className="bg-white shadow-2xl p-8 md:p-16 text-black prose prose-sm md:prose-base max-w-none">
+                         <div className="bg-white shadow-2xl text-black max-w-none overflow-auto">
                            {isParsingDocx ? (
                               <div className="flex flex-col gap-4 py-10 items-center justify-center opacity-50">
                                  <div className="w-10 h-10 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mb-4" />
                                  <span className="font-bold tracking-widest uppercase text-xs">Parsing DOCX...</span>
                               </div>
                            ) : docxHtml ? (
-                              <div dangerouslySetInnerHTML={{ __html: docxHtml }} />
+                              <>
+                                 <style>{`
+                                   .docx-reader { padding: 48px 64px; max-width: 860px; margin: 0 auto; line-height: 1.75; color: #1a1a1a; font-size: 15px; font-family: Georgia, 'Times New Roman', serif; }
+                                   .docx-reader h1 { font-size: 2rem; font-weight: 900; margin: 1.6em 0 0.5em; color: #111; line-height: 1.2; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
+                                   .docx-reader h2 { font-size: 1.45rem; font-weight: 800; margin: 1.4em 0 0.4em; color: #222; border-bottom: 1px solid #f0f0f0; padding-bottom: 0.2em; }
+                                   .docx-reader h3 { font-size: 1.18rem; font-weight: 700; margin: 1.2em 0 0.3em; color: #333; }
+                                   .docx-reader h4, .docx-reader h5, .docx-reader h6 { font-size: 1rem; font-weight: 700; margin: 0.9em 0 0.2em; color: #444; }
+                                   .docx-reader h1.doc-title { font-size: 2.5rem; text-align: center; border-bottom: none; margin-bottom: 0.2em; }
+                                   .docx-reader p.doc-subtitle { text-align: center; color: #666; font-style: italic; margin-bottom: 2em; font-size: 1.1rem; }
+                                   .docx-reader p { margin: 0.65em 0; }
+                                   .docx-reader strong, .docx-reader b { font-weight: 800; color: #111; }
+                                   .docx-reader em, .docx-reader i { font-style: italic; }
+                                   .docx-reader u { text-decoration: underline; }
+                                   .docx-reader blockquote { margin: 1.2em 0; padding: 0.8em 1.5em; border-left: 4px solid #d1d5db; background: #f9fafb; font-style: italic; color: #555; border-radius: 0 6px 6px 0; }
+                                   .docx-reader blockquote.intense { border-left-color: #3b82f6; background: #eff6ff; color: #1e40af; }
+                                   .docx-reader ul { list-style: disc; padding-left: 2em; margin: 0.6em 0; }
+                                   .docx-reader ol { list-style: decimal; padding-left: 2em; margin: 0.6em 0; }
+                                   .docx-reader li { margin: 0.3em 0; }
+                                   .docx-reader p.list-para { padding-left: 1.5em; }
+                                   .docx-reader table { width: 100%; border-collapse: collapse; margin: 1.2em 0; font-size: 0.9rem; font-family: Arial, sans-serif; }
+                                   .docx-reader th { background: #f3f4f6; font-weight: 800; text-align: left; padding: 10px 14px; border: 1px solid #d1d5db; }
+                                   .docx-reader td { padding: 8px 14px; border: 1px solid #e5e7eb; vertical-align: top; }
+                                   .docx-reader tr:nth-child(even) td { background: #f9fafb; }
+                                   .docx-reader a { color: #2563eb; text-decoration: underline; }
+                                   .docx-reader hr { border: none; border-top: 2px solid #e5e7eb; margin: 2em 0; }
+                                   .docx-reader img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.5em 0; }
+                                 `}</style>
+                                 <div className="docx-reader" dangerouslySetInnerHTML={{ __html: docxHtml }} /></>
                            ) : (
                               <div className="py-10 text-center text-red-500 font-bold">Failed to render DOCX inline. Please download it using the button above.</div>
                            )}
@@ -445,69 +565,116 @@ export default function SetupsView({
                   )}
                </div>
 
-               {/* 2. EQUITY CURVE (GLOBAL) */}
-               {!isExpandedDoc && renderGlobalChart()}
-
-               {/* 3. PERFORMANCE DATA TABLE */}
                {!isExpandedDoc && (
-                 <div className="p-6 rounded-2xl border flex flex-col shadow-sm" style={{ background: theme.fundoCards, borderColor: theme.contornoGeral }}>
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
-                        <CalendarDays size={12} /> Performance Log
-                      </h3>
-                      <div className="flex bg-black/40 p-1 rounded-lg border" style={{ borderColor: theme.contornoGeral }}>
-                        {['Daily', 'Weekly', 'Monthly', 'Yearly'].map(p => (
-                           <button 
-                             key={p} onClick={()=>setFilterPeriod(p.toLowerCase() as any)}
-                             className={`px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider rounded-md transition-all ${filterPeriod === p.toLowerCase() ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                           >
-                             {p}
-                           </button>
-                        ))}
+                 <div className="flex flex-col gap-2 w-full items-start">
+                   {/* 2. EQUITY CURVE */}
+                   <div className="w-full">
+                     {renderGlobalChart()}
+                   </div>
+                   
+                   {/* 3. PERFORMANCE DATA TABLE */}
+                   <div className="w-full p-6 rounded-2xl border flex flex-col shadow-sm" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
+                          <CalendarDays size={12} /> Performance Log
+                        </h3>
+                        <div className="flex bg-black/40 p-1 rounded-lg border flex-wrap" style={{ borderColor: theme.contornoGeral }}>
+                          {['Daily', 'Weekly', 'Monthly'].map(p => (
+                             <button 
+                               key={p} onClick={()=>setFilterPeriod(p.toLowerCase() as any)}
+                               className={`px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider rounded-md transition-all ${filterPeriod === p.toLowerCase() ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                             >
+                               {p}
+                             </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="w-full overflow-x-auto hide-scrollbar">
+                      <div className="w-full overflow-x-auto hide-scrollbar">
+                       {/* TARGET FORM */}
+                       <div className="flex flex-wrap items-end gap-2 p-4 bg-black/10 border-b" style={{ borderColor: theme.contornoGeral }}>
+                         <div className="flex flex-col gap-1 w-28">
+                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Date</label>
+                            <input type="date" className="py-1 px-2 rounded-lg bg-white/5 border text-[9px] font-bold w-full outline-none focus:bg-white/10" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, colorScheme: 'dark' }} value={targetDate} onChange={e => setTargetDate(e.target.value)} />
+                         </div>
+                         <div className="flex flex-col gap-1 w-32">
+                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Asset</label>
+                            <input type="text" placeholder="e.g. EURUSD" className="py-1 px-2 rounded-lg bg-white/5 border text-[9px] font-bold w-full outline-none focus:bg-white/10 uppercase" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetAsset} onChange={e => setTargetAsset(e.target.value.toUpperCase())} />
+                         </div>
+                         <div className="flex flex-col gap-1 w-20">
+                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-green-500">Takes</label>
+                            <input type="number" placeholder="0" className="py-1 px-2 rounded-lg bg-white/5 border border-green-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetTakes} onChange={e => setTargetTakes(e.target.value ? Number(e.target.value) : '')} />
+                         </div>
+                         <div className="flex flex-col gap-1 w-20">
+                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">Stops</label>
+                            <input type="number" placeholder="0" className="py-1 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
+                         </div>
+                         <div className="flex flex-col gap-1 w-28">
+                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Value ($)</label>
+                            <input type="number" step="0.01" placeholder="e.g. 150.00" className="py-1 px-2 rounded-lg bg-white/5 border text-[9px] font-bold w-full outline-none focus:bg-white/10" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPnl} onChange={e => setTargetPnl(e.target.value ? Number(e.target.value) : '')} />
+                         </div>
+                         <div className="flex flex-col gap-1 w-24">
+                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Win Rate (%)</label>
+                            <input type="number" placeholder="e.g. 60" className="py-1 px-2 rounded-lg bg-white/5 border text-[9px] font-bold w-full outline-none focus:bg-white/10" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetWinRate} onChange={e => setTargetWinRate(e.target.value ? Number(e.target.value) : '')} />
+                         </div>
+                         <button 
+                           onClick={handleSubmitTarget}
+                           disabled={!targetDate || !targetAsset}
+                           className="ml-auto px-4 py-1.5 h-[26px] rounded-md bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5"
+                         >
+                           <Plus size={12} /> Inserir
+                         </button>
+                       </div>
+
                        <table className="w-full text-left border-collapse min-w-[700px]">
                           <thead>
-                             <tr className="border-b text-[10px] uppercase font-bold tracking-widest opacity-40" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
-                                <th className="pb-3 px-4 font-bold">Date</th>
-                                <th className="pb-3 px-4 font-bold">Asset</th>
-                                <th className="pb-3 px-4 font-bold text-center">TAKES</th>
-                                <th className="pb-3 px-4 font-bold text-center">STOPS</th>
-                                <th className="pb-3 px-4 font-bold text-right">Value (P&L)</th>
-                                <th className="pb-3 px-4 font-bold text-right">Win Rate</th>
+                             <tr className="border-b text-[11px] md:text-xs uppercase font-bold tracking-widest opacity-50" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
+                                <th className="py-4 px-2 font-bold text-center">Date</th>
+                                <th className="py-4 px-2 font-bold text-center max-w-[150px]">Asset</th>
+                                <th className="py-4 px-2 font-bold text-center">TAKES</th>
+                                <th className="py-4 px-2 font-bold text-center">STOPS</th>
+                                <th className="py-4 px-2 font-bold text-center">Value (P&L)</th>
+                                <th className="py-4 px-2 font-bold text-center">Win Rate</th>
+                                <th className="py-4 px-2 font-bold text-center w-12">Action</th>
                              </tr>
                           </thead>
                           <tbody>
                              {tableRows.map((r, i) => (
                                <tr key={i} className="border-b transition-colors hover:bg-white/5" style={{ borderColor: theme.contornoGeral }}>
-                                  <td className="py-4 px-4 text-xs font-bold" style={{ color: theme.textoPrincipal }}>{r.date}</td>
-                                  <td className="py-4 px-4 text-xs max-w-[200px] truncate" style={{ color: theme.textoPrincipal }} title={r.assetStr}>{r.assetStr}</td>
-                                  <td className="py-4 px-4 text-xs font-black text-green-500 text-center bg-green-500/5">{r.takes}</td>
-                                  <td className="py-4 px-4 text-xs font-black text-red-500 text-center bg-red-500/5">{r.stops}</td>
-                                  <td className={`py-4 px-4 text-xs md:text-sm font-black text-right ${r.pnl >= 0 ? 'text-[#eab308]' : 'text-red-500'}`}>
-                                    {r.pnl >= 0 ? '+' : ''}${parseFloat(r.pnl).toFixed(2)}
+                                  <td className="py-2 px-2 text-xs font-bold text-center" style={{ color: theme.textoPrincipal }}>{formatDate ? formatDate(r.date) : r.date}</td>
+                                  <td className="py-2 px-2 text-xs max-w-[150px] truncate text-center" style={{ color: theme.textoPrincipal }} title={r.assetStr}>{r.assetStr}</td>
+                                  <td className="py-2 px-2 text-xs font-black text-green-500 text-center bg-green-500/5">{r.takes}</td>
+                                  <td className="py-2 px-2 text-xs font-black text-red-500 text-center bg-red-500/5">{r.stops}</td>
+                                  <td className={`py-2 px-2 text-xs md:text-sm font-black text-center ${r.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {r.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(r.pnl)).toFixed(2)}
                                  </td>
-                                  <td className="py-4 px-4 text-xs text-right font-bold" style={{ color: theme.textoPrincipal }}>
+                                  <td className="py-2 px-2 text-xs text-center font-bold" style={{ color: theme.textoPrincipal }}>
                                     {r.winRate.toFixed(1)}%
+                                  </td>
+                                  <td className="py-2 px-2 text-center">
+                                     <button 
+                                       onClick={() => { if(window.confirm('Delete this target entry?')) deleteSetupTarget(r.id); }}
+                                       className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors inline-flex"
+                                     >
+                                        <Trash2 size={13} />
+                                     </button>
                                   </td>
                                </tr>
                              ))}
                              {tableRows.length === 0 && (
-                               <tr><td colSpan={6} className="py-8 text-center text-xs opacity-50 italic" style={{ color: theme.textoPrincipal }}>No trades recorded under this setup yet.</td></tr>
+                               <tr><td colSpan={7} className="py-8 text-center text-xs opacity-50 italic" style={{ color: theme.textoPrincipal }}>No manual targets recorded for this setup yet.</td></tr>
                              )}
                           </tbody>
                           {tableRows.length > 0 && (
                              <tfoot>
                                 <tr className="bg-black/20">
-                                   <td className="py-4 px-4 text-xs font-black uppercase tracking-widest" colSpan={2} style={{ color: theme.textoPrincipal }}>Grand Total</td>
-                                   <td className="py-4 px-4 text-sm font-black text-green-500 text-center">{grandTotal.takes}</td>
-                                   <td className="py-4 px-4 text-sm font-black text-red-500 text-center">{grandTotal.stops}</td>
-                                   <td className={`py-4 px-4 text-lg font-black font-display tracking-tight text-right ${grandTotal.pnl >= 0 ? 'text-[#eab308]' : 'text-red-500'}`}>
-                                     {grandTotal.pnl >= 0 ? '+' : ''}${parseFloat(grandTotal.pnl).toFixed(2)}
+                                   <td className="py-2 px-2 text-xs font-black uppercase tracking-widest text-center" colSpan={2} style={{ color: theme.textoPrincipal }}>Grand Total</td>
+                                   <td className="py-2 px-2 text-sm font-black text-green-500 text-center">{grandTotal.takes}</td>
+                                   <td className="py-2 px-2 text-sm font-black text-red-500 text-center">{grandTotal.stops}</td>
+                                   <td className={`py-2 px-2 text-md font-black font-display tracking-tight text-center ${grandTotal.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                     {grandTotal.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(grandTotal.pnl)).toFixed(2)}
                                    </td>
-                                   <td className="py-4 px-4 text-sm font-black text-right" style={{ color: theme.textoPrincipal }}>
+                                   <td className="py-2 px-2 text-xs font-black text-center" colSpan={2} style={{ color: theme.textoPrincipal }}>
                                      {grandWinRate.toFixed(1)}% Avg
                                    </td>
                                 </tr>
@@ -515,12 +682,16 @@ export default function SetupsView({
                           )}
                        </table>
                     </div>
+                  </div>
                  </div>
                )}
-             </div>
-          )}
-          </div>
-       </div>
-    </div>
+              </div>
+           )}
+           </div>
+        </div>
+     </div>
   );
 }
+
+
+

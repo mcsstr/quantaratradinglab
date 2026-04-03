@@ -6,7 +6,19 @@ import {
   Activity, TrendingUp, DollarSign, Percent, Layers, CalendarDays, Target, AlertTriangle, ShieldAlert, Sun, Banknote, Check,
   BarChart2, ChevronLeft, ChevronRight, Search, ArrowDown, ArrowUp, ListIcon, Newspaper
 } from '../../components/Icons';
+import { Crown } from 'lucide-react';
 import { hexToRgba } from '../../utils/constants';
+
+// Overlay shown when a sub-module is blocked by Admin
+const PremiumLockOverlay = ({ label, onUpgrade }: { label: string; onUpgrade: () => void }) => (
+  <div className="absolute inset-0 z-30 rounded-xl flex flex-col items-center justify-center gap-3 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.65)' }}>
+    <Crown size={28} className="text-yellow-400" />
+    <p className="text-sm font-bold text-white text-center px-4">Upgrade to unlock<br/><span className="text-yellow-400">{label}</span></p>
+    <button onClick={onUpgrade} className="px-4 py-1.5 rounded-lg text-xs font-bold bg-yellow-500 text-black hover:bg-yellow-400 transition-colors">
+      Upgrade Plan
+    </button>
+  </div>
+);
 
 const SectionTitle = ({ icon: Icon, title, theme }) => (
   <div className="flex items-center gap-2 mb-4">
@@ -47,7 +59,9 @@ export default function DashboardHomeView({
   setMiniHistorySort,
   miniSortedTrades,
   formatDate,
-  isMobile
+  isMobile,
+  blockedModules = [],
+  onUpgradeClick = (_feature: string) => {}
 }) {
 
 
@@ -193,7 +207,10 @@ export default function DashboardHomeView({
   const currentMonthPnl = calendarData.flatMap(w => w.days).filter(d => d.isCurrentMonth).reduce((sum, d) => sum + d.netPnl, 0);
 
   const calendarBlock = (
-    <div className="rounded-xl p-4 md:p-6 shadow-sm w-full transition-all h-full flex flex-col" style={getGlassStyle(theme.fundoCards)}>
+    <div className="relative rounded-xl p-4 md:p-6 shadow-sm w-full transition-all h-full flex flex-col" style={getGlassStyle(theme.fundoCards)}>
+      {blockedModules.includes('dashboard_calendar') && (
+        <PremiumLockOverlay label="Performance Calendar" onUpgrade={() => onUpgradeClick('Performance Calendar')} />
+      )}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-4 gap-3 shrink-0">
         {/* Title + inline badge for mobile/tablet */}
         <div className="flex items-center gap-3 min-w-0">
@@ -366,7 +383,10 @@ export default function DashboardHomeView({
   );
 
   const miniHistoryBlock = (
-    <div className="rounded-xl p-6 shadow-xl transition-all h-full flex flex-col" style={getGlassStyle(theme.fundoCards)}>
+    <div className="relative rounded-xl p-6 shadow-xl transition-all h-full flex flex-col" style={getGlassStyle(theme.fundoCards)}>
+      {blockedModules.includes('dashboard_keytrades') && (
+        <PremiumLockOverlay label="Key Trades" onUpgrade={() => onUpgradeClick('Key Trades')} />
+      )}
       <div className="flex items-start justify-between mb-2 shrink-0">
         <SectionTitle
           icon={ListIcon}
@@ -419,7 +439,16 @@ export default function DashboardHomeView({
 
   return (
     <div className="space-y-3 md:space-y-4 max-w-[1600px] mx-auto">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-4 auto-rows-fr">
+      {/* Account stats section */}
+      <div className="relative">
+        {blockedModules.includes('dashboard_account_stats') && (
+          <div className="absolute inset-0 z-30 rounded-xl flex flex-col items-center justify-center gap-3 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
+            <Crown size={24} className="text-yellow-400" />
+            <p className="text-sm font-bold text-white">Upgrade to see Account Stats</p>
+            <button onClick={() => onUpgradeClick('Account Statistics')} className="px-4 py-1.5 rounded-lg text-xs font-bold bg-yellow-500 text-black hover:bg-yellow-400 transition-colors">Upgrade Plan</button>
+          </div>
+        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-4 auto-rows-fr">
 
         {/* 1. Current Balance */}
         <div className="rounded-xl p-3 md:p-4 flex flex-col justify-between shadow-sm group transition-all duration-300 hover:-translate-y-1 w-full h-full min-h-[105px]" style={getGlassStyle(theme.fundoCards)}>
@@ -685,7 +714,8 @@ export default function DashboardHomeView({
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </div>{/* end relative stats wrapper */}
 
       {latestResultsBlock}
 

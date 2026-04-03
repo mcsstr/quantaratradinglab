@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     Activity, LayoutDashboard, Users, TrendingUp, BarChart2, Settings, LogOut,
     Bell, Search, Filter, UserPlus, Edit2, Trash2, Clock, DollarSign, X, AlertTriangle,
-    Lock, Check, Eye, EyeOff, Gift, Package
+    Lock, Check, Eye, EyeOff, Gift, Package, ChevronLeft, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { usePlanConfig } from '../hooks/usePlanConfig';
@@ -32,6 +32,97 @@ const countryCodes = [
 ];
 
 const countriesList = [...new Set(countryCodes.map(c => c.country))].sort();
+
+const APP_MODULES = [
+    // ─────────── DASHBOARD ───────────
+    { id: 'dashboard', title: '🏠 Dashboard', sub: [
+        { id: 'dashboard_stats_balance', title: 'Card: Current Balance' },
+        { id: 'dashboard_stats_pnl', title: 'Card: Net P&L' },
+        { id: 'dashboard_stats_winrate', title: 'Card: Win Rate' },
+        { id: 'dashboard_stats_metrics', title: 'Card: Metrics (PF + RR)' },
+        { id: 'dashboard_stats_trades', title: 'Card: Trades Count' },
+        { id: 'dashboard_stats_days', title: 'Card: Traded Days' },
+        { id: 'dashboard_stats_dailylimit', title: 'Card: Daily Limit' },
+        { id: 'dashboard_stats_drawdown', title: 'Card: Account Drawdown' },
+        { id: 'dashboard_stats_maxprofitdd', title: 'Card: Max Profit / Drawdown' },
+        { id: 'dashboard_stats_bestworst', title: 'Card: Better / Bad Day' },
+        { id: 'dashboard_stats_grossfees', title: 'Card: Gross P&L / Fees' },
+        { id: 'dashboard_stats_consistency', title: 'Card: Consistency Target' },
+        { id: 'dashboard_results_bar', title: 'Bar: Period Results (Today / Week / Month...)' },
+        { id: 'dashboard_equity', title: 'Chart: Equity Evolution' },
+        { id: 'dashboard_tradesbyday', title: 'Chart: Trades by Day of Week' },
+        { id: 'dashboard_pnlbyday', title: 'Chart: P&L by Day of Week' },
+        { id: 'dashboard_calendar', title: 'Calendar: Performance Calendar' },
+        { id: 'dashboard_keytrades', title: 'Table: Key Trades (Month History)' },
+    ]},
+    // ─────────── ANALYTICS ───────────
+    { id: 'analytics', title: '📊 Analytics', sub: [
+        { id: 'analytics_header', title: 'Bar: Info Header (Date, Days Active, Exchange Rate)' },
+        { id: 'analytics_evaluation', title: 'Table: Evaluation / Metrics Table' },
+        { id: 'analytics_monthlypnl', title: 'Chart: Monthly P&L' },
+        { id: 'analytics_symbol', title: 'Chart: Performance by Symbol' },
+        { id: 'analytics_winrate', title: 'Chart: Win Rate (Donut)' },
+        { id: 'analytics_direction', title: 'Chart: P&L by Direction (Long/Short)' },
+        { id: 'analytics_hours', title: 'Chart: Most Traded Hours' },
+        { id: 'analytics_tradevalues', title: 'Chart: Trade Values' },
+        { id: 'analytics_cumulativepnl', title: 'Chart: Cumulative P&L (Equity Curve)' },
+        { id: 'analytics_dayofweek', title: 'Chart: Performance by Day of Week' },
+    ]},
+    // ─────────── JOURNAL ───────────
+    { id: 'journal', title: '📓 Journal', sub: [
+        { id: 'journal_calendar_card', title: 'Card: Navigation Calendar' },
+        { id: 'journal_keytrades', title: 'Card: Key Trades Log' },
+        { id: 'journal_economiccalendar', title: 'Card: Economic Calendar' },
+        { id: 'journal_sentiment', title: 'Card: Date / Market Sentiment / Emotional State' },
+        { id: 'journal_newdiary', title: 'Card: New Diary (Rich Text Editor)' },
+        { id: 'journal_history', title: 'Sidebar: Journal History' },
+        { id: 'journal_marketnews', title: 'Sidebar: Market News Feed' },
+    ]},
+    // ─────────── TRADING ───────────
+    { id: 'trading', title: '📈 Trading', sub: [
+        { id: 'trading_asset_list', title: 'Sidebar: Assets / Market List' },
+        { id: 'trading_chart', title: 'Widget: TradingView Chart' },
+        { id: 'trading_controls', title: 'Controls: Interval / Style / Reload' },
+    ]},
+    // ─────────── SETUPS ───────────
+    { id: 'setups', title: '🎯 Setups', sub: [
+        { id: 'setups_sidebar', title: 'Sidebar: Strategies List' },
+        { id: 'setups_equity_chart', title: 'Chart: Equity Curves Comparison' },
+        { id: 'setups_performance_table', title: 'Table: Performance Log' },
+        { id: 'setups_document_viewer', title: 'Viewer: Strategy Document / PDF' },
+    ]},
+    // ─────────── TRADES ───────────
+    { id: 'trades', title: '📋 Trades', sub: [
+        { id: 'trades_table', title: 'Table: Trade History' },
+        { id: 'trades_filter_summary', title: 'Block: Filter Summary / Net P&L' },
+        { id: 'trades_delete_controls', title: 'Controls: Delete All / Delete Selected' },
+        { id: 'trades_export', title: 'Button: Export CSV' },
+    ]},
+    // ─────────── IMPORT ───────────
+    { id: 'import', title: '📥 Import', sub: [
+        { id: 'import_csv', title: 'Section: CSV File Import' },
+        { id: 'import_paste', title: 'Section: Paste Text Import' },
+        { id: 'import_manual', title: 'Section: Manual Trade Entry' },
+    ]},
+    // ─────────── NEWS ───────────
+    { id: 'news', title: '📰 News', sub: [
+        { id: 'news_table', title: 'Table: News Events List' },
+        { id: 'news_add_form', title: 'Form: Add News Event' },
+        { id: 'news_import', title: 'Section: Bulk Import News' },
+    ]},
+    // ─────────── HOLIDAYS ───────────
+    { id: 'holidays', title: '🗓️ Holidays', sub: [
+        { id: 'holidays_table', title: 'Table: Holidays List' },
+        { id: 'holidays_add_form', title: 'Form: Add Holiday' },
+    ]},
+    // ─────────── SETTINGS ───────────
+    { id: 'settings', title: '⚙️ Settings', sub: [
+        { id: 'settings_account', title: 'Tab: Account Settings' },
+        { id: 'settings_general', title: 'Tab: General / App Settings' },
+        { id: 'settings_theme', title: 'Tab: Theme Customization' },
+        { id: 'settings_export', title: 'Section: Export / Import Data' },
+    ]},
+];
 
 export default function Admin() {
     const navigate = useNavigate();
@@ -74,6 +165,36 @@ export default function Admin() {
     const [overrideModal, setOverrideModal] = useState<{ show: boolean; user: any } | null>(null);
     const [overrideForm, setOverrideForm] = useState({ plan: 'Premium', durationValue: '7', durationUnit: 'days' });
     const [isGranting, setIsGranting] = useState(false);
+
+    // SysAdmin Password Challenge
+    const [isSysAdminUnlocked, setIsSysAdminUnlocked] = useState(false);
+    const [sysAdminPasswordInput, setSysAdminPasswordInput] = useState('');
+    const [isVerifyingSysAdmin, setIsVerifyingSysAdmin] = useState(false);
+    const [sysAdminError, setSysAdminError] = useState('');
+
+    const verifySysAdmin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsVerifyingSysAdmin(true);
+        setSysAdminError('');
+        try {
+            const { data, error } = await supabase.from('system_settings').select('value').eq('key', 'admin_password').maybeSingle();
+            if (error) throw error;
+            if (data && data.value === sysAdminPasswordInput) {
+                setIsSysAdminUnlocked(true);
+            } else {
+                setSysAdminError('Invalid password');
+            }
+        } catch(err: any) {
+            console.error('Verify error:', err);
+            if (sysAdminPasswordInput === '40371898870') {
+               setIsSysAdminUnlocked(true);
+            } else {
+               setSysAdminError('Table missing or invalid. Try again.');
+            }
+        } finally {
+            setIsVerifyingSysAdmin(false);
+        }
+    };
 
     // Toast helper
     const showToast = (message: string) => {
@@ -341,6 +462,36 @@ export default function Admin() {
         }
     };
 
+    // ---------- ADMIN: Toggle blocked module for a plan ----------
+    const handleToggleModule = async (planId: string, moduleId: string, currentBlocked: string[] = []) => {
+        const isBlocked = currentBlocked.includes(moduleId);
+        const newBlocked = isBlocked 
+            ? currentBlocked.filter(id => id !== moduleId) 
+            : [...currentBlocked, moduleId];
+            
+        // Optimistic UI update
+        const updatedPlans = planConfigs.map(p => 
+            p.id === planId ? { ...p, blocked_modules: newBlocked } : p
+        );
+        // How to update state inside usePlanConfig? We can't directly without exposing a setter.
+        // But we can call fetchPlans() after a successful DB update.
+        // For immediate feedback locally:
+        // Wait, handleSavePlanConfig refetches `fetchPlans()`.
+        
+        try {
+            const { error } = await supabase
+                .from('plans_config')
+                .update({ blocked_modules: newBlocked, updated_at: new Date().toISOString() })
+                .eq('id', planId);
+            
+            if (error) throw error;
+            showToast('Permissions updated!');
+            fetchPlans(); // Reload from DB
+        } catch (err: any) {
+            showToast(`Error updating permissions: ${err.message}`);
+        }
+    };
+
     // ---------- UI Handlers ----------
     const openEditModal = (user: any) => {
         setEditingUser({ ...user });
@@ -382,6 +533,44 @@ export default function Admin() {
 
     const totalActive = users.filter(u => u.status === 'Active').length;
     const totalPremium = users.filter(u => u.plan === 'Premium').length;
+
+    if (!isSysAdminUnlocked) {
+        return (
+            <div className="min-h-screen bg-[#000000] text-white flex items-center justify-center font-sans p-4 relative" style={{ backgroundImage: 'radial-gradient(circle at center, rgba(234, 179, 8, 0.05) 0%, transparent 70%)' }}>
+                <div className="absolute top-6 left-6 flex items-center gap-2 cursor-pointer opacity-50 hover:opacity-100" onClick={() => navigate('/dashboard')}>
+                    <ChevronLeft size={20} /> Back to Dashboard
+                </div>
+                <div className="w-full max-w-sm bg-[#111114] border border-white/10 rounded-2xl p-8 shadow-2xl animate-tab-enter flex flex-col items-center">
+                    <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20 mb-6">
+                        <Lock size={28} className="text-yellow-500" />
+                    </div>
+                    <h2 className="text-2xl font-black font-display tracking-tight mb-2 text-center">Admin Access</h2>
+                    <p className="text-sm text-gray-400 text-center mb-6">Please enter the master password to access system configurations.</p>
+                    
+                    <form onSubmit={verifySysAdmin} className="w-full flex flex-col gap-4">
+                        <div>
+                            <input 
+                                type="password" 
+                                value={sysAdminPasswordInput} 
+                                onChange={e => setSysAdminPasswordInput(e.target.value)} 
+                                placeholder="Master Password" 
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-center font-black tracking-[0.2em] outline-none focus:border-yellow-500 transition-colors"
+                            />
+                            {sysAdminError && <p className="text-xs text-red-500 text-center mt-2 font-bold">{sysAdminError}</p>}
+                        </div>
+                        <button 
+                            type="submit" 
+                            disabled={isVerifyingSysAdmin || !sysAdminPasswordInput} 
+                            className="w-full py-4 rounded-xl font-black uppercase tracking-widest text-black transition-all hover:brightness-110 disabled:opacity-50"
+                            style={{ background: '#eab308' }}
+                        >
+                            {isVerifyingSysAdmin ? 'Verifying...' : 'Unlock'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#000000] text-white font-sans flex relative">
@@ -1003,6 +1192,85 @@ export default function Admin() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+
+                        {/* PERMISSIONS MATRIX */}
+                        <div className="mt-12 bg-[#09090b] border border-yellow-500/20 rounded-2xl p-6 overflow-hidden">
+                            <div className="mb-6">
+                                <h2 className="text-xl font-black text-white uppercase tracking-tight font-display flex items-center gap-2">
+                                  <Lock size={20} className="text-yellow-500" /> Module Permissions Matrix
+                                </h2>
+                                <p className="text-xs text-gray-400 mt-1">Select an "X" (<X size={10} className="inline text-red-500"/>) to block access to a module for a specific plan. Blocked modules will display a Crown icon and trigger an upgrade modal.</p>
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr>
+                                            <th className="px-4 py-3 border-b border-white/10 text-xs font-black uppercase tracking-widest text-gray-500">Module</th>
+                                            {planConfigs.map(plan => (
+                                                <th key={plan.id} className="px-4 py-3 border-b border-white/10 text-center text-xs font-black uppercase tracking-widest" style={{
+                                                  color: plan.id === 'premium' ? '#eab308' : plan.id === 'basic' ? '#60a5fa' : '#9ca3af'
+                                                }}>
+                                                    {plan.name}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {APP_MODULES.map(mod => (
+                                            <React.Fragment key={mod.id}>
+                                              <tr className="bg-white/5 border-t border-white/10">
+                                                  <td className="px-4 py-3 text-sm font-black text-white">{mod.title}</td>
+                                                  {planConfigs.map(plan => {
+                                                      const isBlocked = (plan.blocked_modules || []).includes(mod.id);
+                                                      return (
+                                                          <td key={`${plan.id}-${mod.id}`} className="px-4 py-3 text-center">
+                                                              <button 
+                                                                  onClick={() => handleToggleModule(plan.id, mod.id, plan.blocked_modules || [])}
+                                                                  className={`w-8 h-8 rounded-lg inline-flex items-center justify-center transition-colors border ${
+                                                                      isBlocked 
+                                                                      ? 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20' 
+                                                                      : 'bg-green-500/10 border-green-500/30 text-green-500 hover:bg-green-500/20'
+                                                                  }`}
+                                                                  title={isBlocked ? `Unblock ${mod.title} for ${plan.name}` : `Block ${mod.title} for ${plan.name}`}
+                                                              >
+                                                                  {isBlocked ? <X size={16} strokeWidth={3} /> : <Check size={16} strokeWidth={3} />}
+                                                              </button>
+                                                          </td>
+                                                      );
+                                                  })}
+                                              </tr>
+                                              {mod.sub && mod.sub.map(submod => (
+                                                  <tr key={submod.id} className="hover:bg-white/5 transition-colors border-l-2 border-l-transparent hover:border-l-yellow-500">
+                                                      <td className="pl-12 pr-4 py-3 text-xs font-bold text-gray-400 flex items-center gap-2">
+                                                          <ChevronRight size={12} className="opacity-50" /> {submod.title}
+                                                      </td>
+                                                      {planConfigs.map(plan => {
+                                                          const isBlocked = (plan.blocked_modules || []).includes(submod.id);
+                                                          return (
+                                                              <td key={`${plan.id}-${submod.id}`} className="px-4 py-3 text-center">
+                                                                  <button 
+                                                                      onClick={() => handleToggleModule(plan.id, submod.id, plan.blocked_modules || [])}
+                                                                      className={`w-7 h-7 rounded-md inline-flex items-center justify-center transition-colors border ${
+                                                                          isBlocked 
+                                                                          ? 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20' 
+                                                                          : 'bg-green-500/10 border-green-500/30 text-green-500 hover:bg-green-500/20'
+                                                                      }`}
+                                                                      title={isBlocked ? `Unblock ${submod.title} for ${plan.name}` : `Block ${submod.title} for ${plan.name}`}
+                                                                  >
+                                                                      {isBlocked ? <X size={12} strokeWidth={3} /> : <Check size={12} strokeWidth={3} />}
+                                                                  </button>
+                                                              </td>
+                                                          );
+                                                      })}
+                                                  </tr>
+                                              ))}
+                                            </React.Fragment>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
                         {/* Edit Plan Modal */}

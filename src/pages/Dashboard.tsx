@@ -29,9 +29,12 @@ import SettingsView from './DashboardViews/SettingsView';
 import MobileMenuView from './DashboardViews/MobileMenuView';
 import JournalView from './DashboardViews/JournalView';
 import SetupsView from './DashboardViews/SetupsView';
+import TradingPageView from './DashboardViews/TradingPageView';
 import PlanExpiredModal from '../components/PlanExpiredModal';
 import PremiumUpgradeModal from '../components/PremiumUpgradeModal';
 import FreePlanPromoModal from '../components/FreePlanPromoModal';
+import { usePlanConfig } from '../hooks/usePlanConfig';
+import { useSetupTargetsRepository } from '../hooks/useSetupTargetsRepository';
 
 // Components
 import SearchableSelect from '../components/SearchableSelect';
@@ -161,6 +164,12 @@ export default function Dashboard() {
   const { holidays, saveHoliday, deleteHoliday, overrideHolidays } = useHolidaysRepository(session, isFreePlan);
   const { journals, saveJournal, deleteJournal, overrideJournals, isLoading: journalsLoading } = useJournalsRepository(session, isFreePlan);
   const { setups, saveSetup, deleteSetup, overrideSetups, isLoading: setupsLoading } = useSetupsRepository(session);
+  const { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets } = useSetupTargetsRepository(session, accounts.find(a => a.id === activeAccountId)?.storageMode || 'supabase');
+
+  // --- Dynamic Plan Enforcement ---
+  const { plans: planConfigs } = usePlanConfig();
+  const currentPlanObj = planConfigs.find(p => p.name.toLowerCase() === settings?.userPlan?.toLowerCase()) || planConfigs[0];
+  const blockedModules = currentPlanObj?.blocked_modules || [];
 
   // --- AUTH SESSION CHECK ---
   useEffect(() => {
@@ -442,7 +451,7 @@ export default function Dashboard() {
               paymentCurrency: a.payment_currency,
               timezone: a.timezone,
               consistencyTarget: Number(a.consistency_target),
-              profitSplit: Number(a.profit_split),
+              profitSplit: a.profit_split,
               feePerTrade: Number(a.fee_per_trade),
               feeType: a.fee_type,
               dailyLossLimit: Number(a.daily_loss_limit),
@@ -2449,15 +2458,16 @@ export default function Dashboard() {
         {/* Centro: Menu Novo Estilo "Pill" (Aparece Apenas no Desktop) */}
         <div className="hidden lg:flex justify-center gap-2 overflow-x-auto hide-scrollbar flex-1">
           {[
-            { id: 'dashboard', icon: LayoutDashboard, title: 'Dashboard', locked: false },
-            { id: 'analytics', icon: BarChart2, title: 'Analytics', locked: isFreePlan },
-            { id: 'journal', icon: BookOpen, title: 'Journal', locked: isFreePlan },
-            { id: 'setups', icon: Target, title: 'Setups', locked: false },
-            { id: 'trades', icon: ListIcon, title: 'Trades', locked: false },
-            { id: 'import', icon: Import, title: 'Import', locked: false },
-            { id: 'news', icon: Newspaper, title: 'News', locked: isFreePlan },
-            { id: 'holidays', icon: CalendarDays, title: 'Holidays', locked: isFreePlan },
-            { id: 'settings', icon: SettingsIcon, title: 'Settings', locked: false }
+            { id: 'dashboard', icon: LayoutDashboard, title: 'Dashboard', locked: blockedModules.includes('dashboard') },
+            { id: 'analytics', icon: BarChart2, title: 'Analytics', locked: blockedModules.includes('analytics') },
+            { id: 'journal', icon: BookOpen, title: 'Journal', locked: blockedModules.includes('journal') },
+            { id: 'trading', icon: TrendingUp, title: 'Trading', locked: blockedModules.includes('trading') },
+            { id: 'setups', icon: Target, title: 'Setups', locked: blockedModules.includes('setups') },
+            { id: 'trades', icon: ListIcon, title: 'Trades', locked: blockedModules.includes('trades') },
+            { id: 'import', icon: Import, title: 'Import', locked: blockedModules.includes('import') },
+            { id: 'news', icon: Newspaper, title: 'News', locked: blockedModules.includes('news') },
+            { id: 'holidays', icon: CalendarDays, title: 'Holidays', locked: blockedModules.includes('holidays') },
+            { id: 'settings', icon: SettingsIcon, title: 'Settings', locked: blockedModules.includes('settings') }
           ].map(item => (
             <button
               key={item.id}
@@ -2682,6 +2692,8 @@ export default function Dashboard() {
                     miniSortedTrades={miniSortedTrades}
                     formatDate={formatDate}
                     isMobile={isMobile}
+                    blockedModules={blockedModules}
+                    onUpgradeClick={(feature) => setPremiumUpgradeFeature(feature)}
                   />
                 )
               }
@@ -2774,7 +2786,15 @@ export default function Dashboard() {
               journals={journals}
               saveJournal={saveJournal}
               deleteJournal={deleteJournal}
+              setups={setups}
+              formatDate={formatDate}
             />
+          )
+        }
+
+        {
+          activeTab === 'trading' && (
+            <TradingPageView theme={theme} getGlassStyle={getGlassStyle} />
           )
         }
 
@@ -2843,6 +2863,11 @@ export default function Dashboard() {
               setups={setups}
               saveSetup={saveSetup}
               deleteSetup={deleteSetup}
+              setupTargets={setupTargets}
+              saveSetupTarget={saveSetupTarget}
+              deleteSetupTarget={deleteSetupTarget}
+              activeAccountId={activeAccountId}
+              formatDate={formatDate}
             />
           )
         }
@@ -2958,7 +2983,13 @@ export default function Dashboard() {
               );
             }
             const isActive = activeTab === item.id;
+            const isLocked = !item.isFab && blockedModules.includes(item.id);
+            
             const handleNavTap = () => {
+              if (isLocked) {
+                setPremiumUpgradeFeature(item.title);
+                return;
+              }
               if (activeTab !== item.id) {
                 startTransition(() => {
                   setPrevTab(activeTab);
@@ -2970,16 +3001,23 @@ export default function Dashboard() {
             return (
               <button
                 key={item.id}
+                title={isLocked ? `${item.title} — Premium Only` : item.title}
                 onTouchEnd={(e) => { e.preventDefault(); handleNavTap(); }}
                 onClick={handleNavTap}
-                className={`flex flex-col items-center justify-start flex-1 gap-1 transition-all duration-300 active:scale-90 touch-manipulation pt-2 ${isFabOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}
+                className={`flex flex-col relative items-center justify-start flex-1 gap-1 transition-all duration-300 active:scale-90 touch-manipulation pt-2 ${isFabOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`}
                 style={{
                   height: 'var(--nav-bottom-height, 65px)',
-                  color: isActive ? LAYOUT.nav.activeColor : theme.textoSecundario
+                  color: isLocked ? theme.textoSecundario : (isActive ? LAYOUT.nav.activeColor : theme.textoSecundario),
+                  opacity: isLocked ? 0.6 : 1
                 }}
               >
-                <item.icon size={isActive ? LAYOUT.nav.iconSizeActive : LAYOUT.nav.iconSizeInactive} />
+                <item.icon size={isActive && !isLocked ? LAYOUT.nav.iconSizeActive : LAYOUT.nav.iconSizeInactive} />
                 <span className={`font-bold tracking-widest ${LAYOUT.nav.labelUppercase ? 'uppercase' : 'capitalize'}`} style={{ fontSize: `${LAYOUT.nav.labelFontSize}rem` }}>{item.title}</span>
+                {isLocked && (
+                  <span className="absolute top-1 right-2 w-3 h-3 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_6px_rgba(234,179,8,0.6)]">
+                    <Crown size={7} className="text-black" />
+                  </span>
+                )}
               </button>
             );
           })

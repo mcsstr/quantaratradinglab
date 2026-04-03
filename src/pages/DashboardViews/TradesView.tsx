@@ -286,19 +286,21 @@ export default function TradesView({
                     {formatCurrency(trade.pnl)}
                   </td>
                   <td className="px-2 py-2.5 md:px-4 md:py-3 text-center">
-                     <select 
+                    <div style={{ transform: 'scale(0.72)', transformOrigin: 'center', display: 'inline-block', lineHeight: 1 }}>
+                      <select 
                         value={trade.setup_id || ''}
                         onChange={async (e) => {
                            const val = e.target.value || null;
                            setTrades((prev:any) => prev.map((t:any) => t.id === trade.id ? {...t, setup_id: val} : t));
                            await supabase.from('trades').update({ setup_id: val }).eq('id', trade.id);
                         }}
-                        className="bg-transparent w-full text-center outline-none cursor-pointer font-bold text-[7px] border-none hover:opacity-80 transition-opacity appearance-none min-w-[70px]"
-                        style={{ color: theme.textoSecundario }}
-                     >
-                       <option value="">Price Action</option>
-                       {setups?.map((s:any) => <option key={s.id} value={s.id}>{s.title}</option>)}
-                     </select>
+                        className="bg-transparent text-center outline-none cursor-pointer font-mono border-none hover:opacity-80 transition-opacity appearance-none"
+                        style={{ color: theme.textoSecundario, fontSize: '11px', minWidth: '80px' }}
+                      >
+                        <option value="">Price Action</option>
+                        {setups?.map((s:any) => <option key={s.id} value={s.id}>{s.title}</option>)}
+                      </select>
+                    </div>
                   </td>
                   <td className={`${getColClass('action')} px-2 py-2.5 md:px-4 md:py-3 text-center flex justify-center gap-1 w-20`}>
                     <button onClick={() => { setEditFormData(trade); setIsTradeModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>

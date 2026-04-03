@@ -18,6 +18,7 @@ export interface PlanConfig {
   trial_duration_unit: 'minutes' | 'hours' | 'days' | 'months' | 'years';
   is_active: boolean;
   sort_order: number;
+  blocked_modules: string[];
 }
 
 export function usePlanConfig() {
