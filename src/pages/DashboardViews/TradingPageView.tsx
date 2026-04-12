@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, RefreshCw, Plus, X, Trash2, Edit2 } from 'lucide-react';
+import { TrendingUp, RefreshCw, Plus, X, Trash2, Edit2, Target } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -147,26 +147,33 @@ function AssetCard({ asset, isActive, onClick, onDelete, onEdit, theme }: any) {
   );
 }
 
-export default function TradingPageView({ theme, getGlassStyle }: any) {
-  const [assets, setAssets] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem('quantara_trading_assets');
-      return saved ? JSON.parse(saved) : ASSETS;
-    } catch {
-      return ASSETS;
-    }
-  });
+export default function TradingPageView({ 
+  theme, 
+  getGlassStyle, 
+  favorites = [], 
+  onSaveFavorite, 
+  onDeleteFavorite, 
+  onUpdateFavorite 
+}: any) {
+  const assets = favorites;
 
-  useEffect(() => {
-    localStorage.setItem('quantara_trading_assets', JSON.stringify(assets));
-  }, [assets]);
-
-  const [activeSymbol, setActiveSymbol] = useState(
-    assets[0]?.exchange ? `${assets[0].exchange}:${assets[0].symbol}` : (assets[0]?.symbol || ASSETS[0].symbol)
+  const [activeSymbol, setActiveSymbol] = useState<string>(
+    assets[0]?.exchange
+      ? `${assets[0].exchange}:${assets[0].symbol}`
+      : (assets[0]?.symbol || '')
   );
+
+  // Auto-select first asset if activeSymbol is empty and assets available
+  useEffect(() => {
+    if (!activeSymbol && assets.length > 0) {
+      const first = assets[0];
+      const sym = first.exchange ? `${first.exchange}:${first.symbol}` : first.symbol;
+      setActiveSymbol(sym);
+    }
+  }, [assets, activeSymbol]);
   
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingAsset, setEditingAsset] = useState<any | null>(null);
   
   const [newSymbol, setNewSymbol] = useState('');
   const [newExchange, setNewExchange] = useState('');
@@ -174,7 +181,7 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
   const [newType, setNewType] = useState('index');
 
   const openAddModal = () => {
-    setEditingId(null);
+    setEditingAsset(null);
     setNewSymbol('');
     setNewExchange('');
     setNewName('');
@@ -183,7 +190,7 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
   };
 
   const openEditModal = (asset: any) => {
-    setEditingId(asset.symbol); // Unique enough for edit tracking
+    setEditingAsset(asset);
     const cleanedSymbol = asset.symbol.includes(':') ? asset.symbol.split(':')[1] : asset.symbol;
     setNewSymbol(cleanedSymbol);
     setNewExchange(asset.exchange || (asset.symbol.includes(':') ? asset.symbol.split(':')[0] : ''));
@@ -195,28 +202,29 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
   const handleAddAsset = () => {
     if (!newSymbol) return;
     
-    // We should normalize symbol input. If user types "NASDAQ:NDX" in symbol, split it.
     let finalSymbol = newSymbol.toUpperCase();
     let finalExchange = newExchange.toUpperCase();
     if (finalSymbol.includes(':')) {
       [finalExchange, finalSymbol] = finalSymbol.split(':');
     }
 
-    const tType = newType || 'index';
-
-    const newAsset = {
+    const favData = {
       symbol: finalSymbol,
       exchange: finalExchange,
       name: newName || finalSymbol,
-      type: tType,
-      ticker: `${finalSymbol}`, // Store for old sparklines
+      type: newType || 'index',
       color: '#eab308'
     };
 
-    if (editingId) {
-      setAssets(prev => prev.map(a => a.symbol === editingId || a.symbol === editingId.split(':')[1] ? newAsset : a));
+    if (editingAsset) {
+      onUpdateFavorite?.(editingAsset.symbol, editingAsset.exchange, favData);
     } else {
-      setAssets(prev => [...prev, newAsset]);
+      onSaveFavorite?.(favData);
+      // Auto-select if it's the first one
+      if (assets.length === 0) {
+        const sym = finalExchange ? `${finalExchange}:${finalSymbol}` : finalSymbol;
+        setActiveSymbol(sym);
+      }
     }
     
     setShowAddModal(false);
@@ -230,13 +238,13 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
     let tvWidget: any = null;
     const dynamicContainerId = `tv_chart_container_${activeSymbol.replace(/[^a-zA-Z0-9]/g, '_')}`;
     const loadTV = () => {
-       if (window.TradingView) {
+       if (window.TradingView && activeSymbol.trim()) {
          const container = document.getElementById(dynamicContainerId);
          if (container) container.innerHTML = '';
 
          tvWidget = new window.TradingView.widget({
            autosize: true,
-           symbol: activeSymbol,
+           symbol: activeSymbol.trim(),
            interval: "5",
            timezone: "America/New_York",
            theme: "dark",
@@ -284,20 +292,33 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-1 pb-5">
-          {assets.map((asset: any) => {
-            const rawTvSymbol = asset.exchange ? `${asset.exchange}:${asset.symbol}` : asset.symbol;
-            return (
-              <AssetCard
-                key={asset.symbol + (asset.exchange || '')}
-                asset={asset}
-                isActive={activeSymbol === rawTvSymbol}
-                onClick={() => setActiveSymbol(rawTvSymbol)}
-                onDelete={() => setAssets(prev => prev.filter(a => a.symbol !== asset.symbol))}
-                onEdit={() => openEditModal(asset)}
-                theme={theme}
-              />
-            );
-          })}
+          {assets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center flex-1 gap-2 px-3 py-6 text-center opacity-50">
+              <TrendingUp size={28} className="opacity-30" style={{ color: theme.textoPrincipal }} />
+              <p className="text-[9px] font-bold leading-relaxed hidden md:block" style={{ color: theme.textoPrincipal }}>
+                Adicione seus ativos favoritos usando o botão <span className="text-yellow-400">+</span> para carregá-los no widget.
+              </p>
+            </div>
+          ) : (
+            assets.map((asset: any) => {
+              const rawTvSymbol = asset.exchange ? `${asset.exchange}:${asset.symbol}` : asset.symbol;
+              return (
+                <AssetCard
+                  key={asset.symbol + (asset.exchange || '')}
+                  asset={asset}
+                  isActive={activeSymbol === rawTvSymbol}
+                  onClick={() => setActiveSymbol(rawTvSymbol)}
+                  onDelete={() => {
+                    onDeleteFavorite?.(asset.symbol, asset.exchange);
+                    // Clear active if last one is deleted (hook will update props)
+                    if (assets.length <= 1) setActiveSymbol('');
+                  }}
+                  onEdit={() => openEditModal(asset)}
+                  theme={theme}
+                />
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -314,8 +335,13 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
 
           {/* Reload Chart native helper */}
           <button
-            onClick={() => setActiveSymbol(activeSymbol + ' ')} // Force recreation hack if needed
-            className="flex items-center justify-center p-2 rounded-lg bg-black/30 opacity-60 hover:opacity-100 transition-opacity mr-4"
+            onClick={() => {
+              const current = activeSymbol;
+              setActiveSymbol('');
+              setTimeout(() => setActiveSymbol(current), 50);
+            }}
+            disabled={!activeSymbol}
+            className="flex items-center justify-center p-2 rounded-lg bg-black/30 opacity-60 hover:opacity-100 transition-opacity mr-4 disabled:opacity-20"
             title="Reload Widget entirely"
           >
             <RefreshCw size={13} style={{ color: theme.textoPrincipal }} />
@@ -325,10 +351,23 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
         {/* TradingView Chart */}
         <div
           key={activeSymbol}
-          className="flex-1 mx-4 mb-4 rounded-2xl overflow-hidden shadow-sm"
-          style={{ border: `1px solid ${theme.contornoGeral}`, minHeight: '600px', position: 'relative', background: 'rgba(0,0,0,0.5)' }}
-          id={`tv_chart_container_${activeSymbol.replace(/[^a-zA-Z0-9]/g, '_')}`}
+          className="flex-1 mx-4 mb-4 rounded-2xl overflow-hidden shadow-sm flex flex-col items-center justify-center relative"
+          style={{ border: `1px solid ${theme.contornoGeral}`, minHeight: '600px', background: 'rgba(0,0,0,0.5)' }}
+          id={activeSymbol ? `tv_chart_container_${activeSymbol.trim().replace(/[^a-zA-Z0-9]/g, '_')}` : 'tv_chart_empty'}
         >
+          {!activeSymbol && (
+             <div className="flex flex-col items-center gap-4 opacity-30 select-none">
+                <Target size={64} style={{ color: theme.textoPrincipal }} />
+                <p className="font-display font-medium text-lg uppercase tracking-[0.3em]" style={{ color: theme.textoPrincipal }}>Nenhum gráfico selecionado</p>
+                <button 
+                  onClick={openAddModal}
+                  className="px-4 py-2 rounded-lg border text-[10px] uppercase font-bold tracking-widest hover:bg-white/10 transition-colors"
+                  style={{ color: theme.textoPrincipal, borderColor: theme.contornoGeral }}
+                >
+                  Adicionar Carta Favorita
+                </button>
+             </div>
+          )}
         </div>
       </div>
 
@@ -336,7 +375,7 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4 border shadow-2xl animate-fade-in" style={{ ...glassStyle, borderColor: theme.contornoGeral, background: theme.fundoGeral }}>
             <div className="flex justify-between items-center mb-2">
-              <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>{editingId ? 'Edit Chart' : 'Add Chart'}</h2>
+              <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>{editingAsset ? 'Edit Chart' : 'Add Chart'}</h2>
               <button onClick={() => setShowAddModal(false)} className="opacity-50 hover:opacity-100 transition-colors" style={{ color: theme.textoPrincipal }}><X size={16}/></button>
             </div>
             
@@ -366,7 +405,7 @@ export default function TradingPageView({ theme, getGlassStyle }: any) {
               </select>
             </div>
 
-            <button onClick={handleAddAsset} className="mt-2 w-full py-3 rounded-xl font-bold text-black uppercase tracking-widest text-xs transition-transform active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)]" style={{ background: '#eab308' }}>{editingId ? 'Save Changes' : 'Insert Chart'}</button>
+            <button onClick={handleAddAsset} className="mt-2 w-full py-3 rounded-xl font-bold text-black uppercase tracking-widest text-xs transition-transform active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)]" style={{ background: '#eab308' }}>{editingAsset ? 'Save Changes' : 'Insert Chart'}</button>
           </div>
         </div>
       )}

@@ -12,6 +12,7 @@ export interface SetupTarget {
   stops: number;
   pnl: number;
   win_rate: number;
+  group_name?: string;
 }
 
 export function useSetupTargetsRepository(session: any, storageMode: 'local' | 'supabase') {
@@ -97,10 +98,12 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
     }
   };
 
-  const deleteSetupTarget = async (id: string) => {
+  const deleteSetupTarget = async (idOrIds: string | string[]) => {
+    const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+    
     if (storageMode === 'local') {
       setSetupTargets(prev => {
-        const newArr = prev.filter(s => s.id !== id);
+        const newArr = prev.filter(s => !ids.includes(s.id));
         localStorage.setItem('quantara_setup_targets', JSON.stringify(newArr));
         return newArr;
       });
@@ -108,12 +111,12 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
     }
 
     if (!session) return;
-    setSetupTargets(prev => prev.filter(s => s.id !== id));
+    setSetupTargets(prev => prev.filter(s => !ids.includes(s.id)));
     try {
-      const { error } = await supabase.from('setup_targets').delete().eq('id', id);
+      const { error } = await supabase.from('setup_targets').delete().in('id', ids);
       if (error) throw error;
     } catch (err) {
-      console.error('Error deleting setup target:', err);
+      console.error('Error deleting setup target(s):', err);
     }
   };
 
@@ -124,5 +127,68 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
     }
   };
 
-  return { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets, isLoading };
+  const saveBatchSetupTargets = async (targets: SetupTarget[], setup_id: string, group_name: string, original_group_name?: string) => {
+    const targetGroupNameToDelete = original_group_name !== undefined ? original_group_name : group_name;
+
+    if (storageMode === 'local') {
+      setSetupTargets(prev => {
+        // delete old targeting this group or original group
+        const filtered = prev.filter(s => !(s.setup_id === setup_id && (s.group_name === group_name || s.group_name === targetGroupNameToDelete)));
+        const newArr = [...targets, ...filtered];
+        localStorage.setItem('quantara_setup_targets', JSON.stringify(newArr));
+        return newArr;
+      });
+      return;
+    }
+
+    if (!session) return;
+    
+    // Optimistic update
+    setSetupTargets(prev => {
+      const filtered = prev.filter(s => !(s.setup_id === setup_id && (s.group_name === group_name || s.group_name === targetGroupNameToDelete)));
+      return [...targets, ...filtered];
+    });
+
+    try {
+      // Delete old targets matching group and setup
+      // Handle case where group_name may be null in older records
+      let delQuery = supabase
+        .from('setup_targets')
+        .delete()
+        .eq('setup_id', setup_id);
+      
+      if (targetGroupNameToDelete) {
+        delQuery = delQuery.eq('group_name', targetGroupNameToDelete);
+      } else {
+        delQuery = delQuery.is('group_name', null);
+      }
+        
+      const { error: delError } = await delQuery;
+        
+      if (delError) throw delError;
+
+      if (targets.length > 0) {
+        const insertPayload = targets.map(t => ({
+          id: t.id,
+          user_id: session.user.id,
+          setup_id: t.setup_id,
+          account_id: t.account_id,
+          date: t.date,
+          asset_str: t.asset_str,
+          takes: t.takes,
+          stops: t.stops,
+          pnl: t.pnl,
+          win_rate: t.win_rate,
+          group_name: t.group_name
+        }));
+        const { error: insError } = await supabase.from('setup_targets').upsert(insertPayload);
+        if (insError) throw insError;
+      }
+    } catch (err) {
+      console.error('Error saving batch setup targets:', err);
+    }
+  };
+
+  return { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets, saveBatchSetupTargets, isLoading };
 }
+

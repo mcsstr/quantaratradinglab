@@ -1,8 +1,8 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2
+  Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
 import * as mammoth from 'mammoth';
 
 export default function SetupsView({
@@ -17,12 +17,26 @@ export default function SetupsView({
   deleteSetup,
   setupTargets,
   saveSetupTarget,
+  saveBatchSetupTargets,
   deleteSetupTarget,
+  setupConfigLogs,
+  addSetupConfigLog,
+  updateSetupConfigLog,
   activeAccountId,
   formatDate
 }: any) {
   const [viewMode, setViewMode] = useState<'home'|'create'|'edit'|'view'>('home');
   const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null);
+
+  // Table State
+  const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
+  const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<any>({});
+  
+  // Setup Config Modal State
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configDate, setConfigDate] = useState('');
+  const [configNotes, setConfigNotes] = useState('');
 
   // Target Form States
   const [targetDate, setTargetDate] = useState('');
@@ -30,22 +44,45 @@ export default function SetupsView({
   const [targetTakes, setTargetTakes] = useState<number | ''>('');
   const [targetStops, setTargetStops] = useState<number | ''>('');
   const [targetPnl, setTargetPnl] = useState<number | ''>('');
-  const [targetWinRate, setTargetWinRate] = useState<number | ''>('');
+  
+  // Auto-Calc Referencial States
+  const [targetStopPoints, setTargetStopPoints] = useState<number | ''>('');
+  const [targetRiskReward, setTargetRiskReward] = useState<number | ''>('');
+  const [targetPointValue, setTargetPointValue] = useState<number | ''>('');
   
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState(''); // Stores Base64
   const [formFileName, setFormFileName] = useState('');
   
-  const [filterPeriod, setFilterPeriod] = useState<'daily'|'weekly'|'monthly'|'yearly'>('daily');
+  const [filterPeriod, setFilterPeriod] = useState<string>('All Time');
   const [isExpandedDoc, setIsExpandedDoc] = useState(false);
   const [docxHtml, setDocxHtml] = useState('');
   const [isParsingDocx, setIsParsingDocx] = useState(false);
   const [hiddenSetups, setHiddenSetups] = useState<Set<string>>(new Set());
 
+  // Groups and Staging State
+  const [activeGroupName, setActiveGroupName] = useState<string>('');
+  const [originalGroupName, setOriginalGroupName] = useState<string>('');
+  const [stagingTargets, setStagingTargets] = useState<any[]>([]);
+
+  const isAutoCalc = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
+  const [activeChartGroupNames, setActiveChartGroupNames] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('quantara_active_chart_groups') || '{}'); } catch { return {}; }
+  });
+  const [isEditingGroup, setIsEditingGroup] = useState<boolean>(true);
+
+  // Persist activeChartGroupNames to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('quantara_active_chart_groups', JSON.stringify(activeChartGroupNames));
+  }, [activeChartGroupNames]);
+
   const handleSelect = (mode: 'home'|'create'|'edit'|'view', id: string | null = null) => {
     setViewMode(mode);
     setSelectedSetupId(id);
     setIsExpandedDoc(false);
+    setActiveGroupName('');
+    setStagingTargets([]);
+    setIsEditingGroup(true);
     
     if (mode === 'create') {
       setFormTitle('');
@@ -153,12 +190,26 @@ export default function SetupsView({
     setDocxHtml('');
   };
 
+  const setupToActiveGroup = useMemo(() => {
+     const map: Record<string, string> = { ...activeChartGroupNames };
+     setups.forEach((s:any) => {
+       if (!map[s.id]) {
+          const myT = (setupTargets||[]).find((t:any) => t.setup_id === s.id && t.group_name);
+          if (myT) map[s.id] = myT.group_name;
+       }
+     });
+     return map;
+  }, [activeChartGroupNames, setups, setupTargets]);
+
   const chartData = useMemo(() => {
     const validTrades = trades.filter((t:any) => t.date);
     const validTargets = (setupTargets||[]).filter((t:any) => t.date);
+    const validLogs = (setupConfigLogs||[]).filter((l:any) => l.date);
+
     const allDates = Array.from(new Set([
       ...validTrades.map((t:any) => t.date),
-      ...validTargets.map((t:any) => t.date)
+      ...validTargets.map((t:any) => t.date),
+      ...validLogs.map((l:any) => l.date)
     ])).sort();
 
     const setupRealTotals: Record<string, number> = { 'Price Action': 0 };
@@ -181,9 +232,14 @@ export default function SetupsView({
         dayTargets.forEach((tg:any) => {
             const sid = tg.setup_id;
             if (sid) {
-                setupTargetTotals[sid] = (setupTargetTotals[sid] || 0) + (parseFloat(tg.pnl) || 0);
+                const activeGroup = setupToActiveGroup[sid];
+                if ((!tg.group_name && !activeGroup) || tg.group_name === activeGroup) {
+                    setupTargetTotals[sid] = (setupTargetTotals[sid] || 0) + (parseFloat(tg.pnl) || 0);
+                }
             }
         });
+
+        const dayLogs = validLogs.filter((l:any) => l.date === dateStr);
 
         Object.keys(setupRealTotals).forEach(k => {
            const title = k === 'Price Action' ? 'Price Action' : setups.find((x:any)=>x.id === k)?.title || k;
@@ -195,58 +251,228 @@ export default function SetupsView({
            dayObj[`${title}_target`] = setupTargetTotals[k];
         });
 
+        dayLogs.forEach((l:any) => {
+           const activeGroup = setupToActiveGroup[l.setup_id];
+           if ((!l.group_name && !activeGroup) || l.group_name === activeGroup) {
+               const title = setups.find((x:any)=>x.id === l.setup_id)?.title || l.setup_id;
+               dayObj[`${title}_config`] = l;
+           }
+        });
+
         return dayObj;
     });
 
     return result;
-  }, [trades, setups, setupTargets]);
+  }, [trades, setups, setupTargets, setupConfigLogs, setupToActiveGroup]);
 
-  const currentSetupTargets = useMemo(() => {
+  // Groups derived for current selected setup
+  const setupGroups = useMemo(() => {
     if (viewMode !== 'view' || !selectedSetupId) return [];
-    return (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId);
+    const myTargets = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId);
+    
+    const groupsMap: Record<string, { takes: number, stops: number, pnl: number }> = {};
+    
+    const currentSetup = setups.find((s:any) => s.id === selectedSetupId);
+    myTargets.forEach((t:any) => {
+       const g = t.group_name || `Default - ${currentSetup?.title || 'Setup'}`;
+       if (!groupsMap[g]) groupsMap[g] = { takes: 0, stops: 0, pnl: 0 };
+       groupsMap[g].takes += t.takes || 0;
+       groupsMap[g].stops += t.stops || 0;
+       groupsMap[g].pnl += parseFloat(t.pnl) || 0;
+    });
+
+    return Object.keys(groupsMap).map(k => {
+       const takesNum = groupsMap[k].takes;
+       const stopsNum = groupsMap[k].stops;
+       const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
+       return { name: k, pnl: groupsMap[k].pnl, winRate: winRateCalc };
+    }).sort((a,b) => b.pnl - a.pnl);
+  }, [setupTargets, viewMode, selectedSetupId, setups]);
+
+  // Helper: get all DB targets for a specific named group
+  // Handles null group_name for "Default" groups created before group_name was tracked
+  const getTargetsForGroup = (groupName: string): any[] => {
+    const isDefaultGroup = groupName.startsWith('Default');
+    return (setupTargets||[]).filter((t:any) => {
+      if (t.setup_id !== selectedSetupId) return false;
+      if (isDefaultGroup && (!t.group_name || t.group_name === '')) return true;
+      return t.group_name === groupName;
+    });
+  };
+
+  // Table rows depend on stagingTargets now
+  const tableRows = useMemo(() => {
+    let arr = [...stagingTargets];
+    if (filterPeriod !== 'All Time') {
+       arr = arr.filter((t:any) => {
+         if(!t.date) return false;
+         try {
+           const [y, m, d] = t.date.split('-');
+           const dt = new Date(Number(y), Number(m)-1, Number(d));
+           const month = dt.toLocaleString('en-US', { month: 'short' });
+           const year = dt.getFullYear();
+           return `${month} ${year}` === filterPeriod;
+         } catch(e) { return false; }
+       });
+    }
+    return arr.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [stagingTargets, filterPeriod]);
+
+  const availablePeriods = useMemo(() => {
+    if (viewMode !== 'view' || !selectedSetupId) return ['All Time'];
+    const p = new Set<string>();
+    p.add('All Time');
+    const myTargets = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId);
+    myTargets.forEach((t:any) => {
+       if(t.date) {
+         try {
+           const [y, m, d] = t.date.split('-');
+           const dt = new Date(Number(y), Number(m)-1, Number(d));
+           const month = dt.toLocaleString('en-US', { month: 'short' });
+           const year = dt.getFullYear();
+           p.add(`${month} ${year}`);
+         } catch(e){}
+       }
+    });
+    return Array.from(p);
   }, [setupTargets, viewMode, selectedSetupId]);
+
+  // Bulk Actions & Inline Edit Handlers for Staging
+  const toggleRowSelect = (id: string) => {
+    setSelectedTargetIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) setSelectedTargetIds(new Set(stagingTargets.map(r => r.id)));
+    else setSelectedTargetIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTargetIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedTargetIds.size} target(s) from staging?`)) return;
+    setStagingTargets(prev => prev.filter(t => !selectedTargetIds.has(t.id)));
+    setSelectedTargetIds(new Set());
+  };
+
+  const startInlineEdit = (row: any) => {
+    setEditingTargetId(row.id);
+    setEditValues({
+      date: row.date,
+      assetStr: row.asset_str,
+      takes: row.takes,
+      stops: row.stops,
+      pnl: row.pnl
+    });
+  };
+
+  const saveInlineEdit = () => {
+    if (!editingTargetId) return;
+    const takesNum = Number(editValues.takes) || 0;
+    const stopsNum = Number(editValues.stops) || 0;
+    const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
+    
+    setStagingTargets(prev => prev.map(t => {
+       if (t.id === editingTargetId) {
+          return {
+            ...t,
+            date: editValues.date,
+            asset_str: editValues.assetStr,
+            takes: takesNum,
+            stops: stopsNum,
+            pnl: Number(editValues.pnl) || 0,
+            win_rate: winRateCalc
+          };
+       }
+       return t;
+    }));
+    
+    setEditingTargetId(null);
+    setEditValues({});
+  };
+
+  const cancelInlineEdit = () => {
+    setEditingTargetId(null);
+    setEditValues({});
+  };
 
   const handleSubmitTarget = () => {
      if (!targetDate || !targetAsset) return;
-     saveSetupTarget({
+     const takesNum = Number(targetTakes) || 0;
+     const stopsNum = Number(targetStops) || 0;
+     const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
+     
+     const isAutoCalc = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
+     let finalPnl = Number(targetPnl) || 0;
+
+     if (isAutoCalc) {
+        const sp = Number(targetStopPoints) || 0;
+        const rr = Number(targetRiskReward) || 0;
+        const pv = Number(targetPointValue) || 0;
+        const takesValue = takesNum * (sp * rr * pv);
+        const stopsValue = stopsNum * (sp * pv);
+        finalPnl = takesValue - stopsValue;
+     }
+
+     const newTarget = {
        id: crypto.randomUUID(),
        setup_id: selectedSetupId as string,
        account_id: activeAccountId,
+       group_name: activeGroupName || 'Default Group',
        date: targetDate,
        asset_str: targetAsset,
-       takes: Number(targetTakes) || 0,
-       stops: Number(targetStops) || 0,
-       pnl: Number(targetPnl) || 0,
-       win_rate: Number(targetWinRate) || 0
-     });
+       takes: takesNum,
+       stops: stopsNum,
+       pnl: finalPnl,
+       win_rate: winRateCalc
+     };
+
+     setStagingTargets(prev => [newTarget, ...prev]);
+     
      setTargetDate('');
      setTargetAsset('');
      setTargetTakes('');
      setTargetStops('');
      setTargetPnl('');
-     setTargetWinRate('');
+     // Note: We deliberately do not clear targetStopPoints, targetRiskReward, targetPointValue
+     // per user requirement: "servir de referencia temporaria enquanto a tabela é preenchida"
   };
 
-  const tableRows = useMemo(() => {
-    const arr = [...currentSetupTargets].sort((a:any, b:any) => a.date.localeCompare(b.date));
-    return arr.map(t => ({
-      id: t.id,
-      date: t.date,
-      assetStr: t.asset_str,
-      takes: t.takes,
-      stops: t.stops,
-      pnl: parseFloat(t.pnl) || 0,
-      winRate: parseFloat(t.win_rate) || 0
-    }));
-  }, [currentSetupTargets]);
+  const handleSaveStagingTable = async () => {
+    if (!activeGroupName) return;
+    const groupName = activeGroupName;
+    
+    // Assign proper group_name to all staging targets
+    const updatedStaging = stagingTargets.map(t => ({ ...t, group_name: groupName }));
+    
+    await saveBatchSetupTargets(updatedStaging, selectedSetupId as string, groupName, originalGroupName);
+    
+    // Update originalGroupName after save
+    setOriginalGroupName(groupName);
+    
+    // Activate chart for this group initially
+    if (!activeChartGroupNames[selectedSetupId as string]) {
+       setActiveChartGroupNames(prev => ({ ...prev, [selectedSetupId as string]: groupName }));
+    }
+    
+    setIsEditingGroup(false);
+  };
 
-  const grandTotal = tableRows.reduce((acc, r) => {
-    acc.takes += r.takes;
-    acc.stops += r.stops;
-    acc.pnl += r.pnl;
-    return acc;
-  }, { takes: 0, stops: 0, pnl: 0 });
-  const grandWinRate = grandTotal.takes + grandTotal.stops > 0 ? (grandTotal.takes / (grandTotal.takes + grandTotal.stops)) * 100 : 0;
+  const grandTotal = useMemo(() => {
+    return tableRows.reduce((acc, row) => ({
+      takes: acc.takes + (row.takes || 0),
+      stops: acc.stops + (row.stops || 0),
+      pnl: acc.pnl + (parseFloat(row.pnl) || 0)
+    }), { takes: 0, stops: 0, pnl: 0 });
+  }, [tableRows]);
+
+  const grandWinRate = (grandTotal.takes + grandTotal.stops) > 0 
+    ? (grandTotal.takes / (grandTotal.takes + grandTotal.stops)) * 100 
+    : 0;
 
   const setupNames = ['Price Action', ...setups.map((s:any) => s.title)];
   const lineColors = ['#94a3b8', '#eab308', '#3b82f6', '#ef4444', '#10b981', '#a855f7', '#ec4899', '#f97316'];
@@ -308,21 +534,41 @@ export default function SetupsView({
                const color = lineColors[setupNames.indexOf(name) % lineColors.length];
                return (
                  <React.Fragment key={name}>
-                   <Line 
-                     type="monotone" 
-                     dataKey={`${name}_real`} 
-                     stroke={color} 
-                     strokeWidth={name === 'Price Action' ? 1.5 : 2.5} 
-                     dot={false}
-                   />
-                   {name !== 'Price Action' && (
+                   {name === 'Price Action' ? (
+                     <Line 
+                       type="monotone" 
+                       dataKey={`${name}_real`} 
+                       stroke={color} 
+                       strokeWidth={1.5} 
+                       dot={false}
+                     />
+                   ) : (
                      <Line 
                        type="monotone" 
                        dataKey={`${name}_target`} 
                        stroke={color} 
                        strokeWidth={2} 
-                       dot={false}
                        strokeDasharray="5 5"
+                       activeDot={{ r: 6, fill: color }}
+                       dot={(props: any) => {
+                         const { cx, cy, payload } = props;
+                         const configLog = payload[`${name}_config`];
+                         if (configLog) {
+                           return (
+                             <circle 
+                               cx={cx} cy={cy} r={5} 
+                               fill="#eab308" stroke={theme.fundoGeral} strokeWidth={2} 
+                               style={{ cursor: 'pointer' }}
+                               onClick={() => {
+                                 setConfigDate(configLog.date);
+                                 setConfigNotes(configLog.notes);
+                                 setShowConfigModal(true);
+                               }}
+                             />
+                           );
+                         }
+                         return <rect display="none" />;
+                       }}
                      />
                    )}
                  </React.Fragment>
@@ -331,16 +577,14 @@ export default function SetupsView({
            </LineChart>
          </ResponsiveContainer>
       </div>
-      <div className="flex flex-wrap gap-3 mt-4 overflow-y-auto max-h-16 hide-scrollbar">
-         {setupNames.map((name, i) => (
-           <div key={name} className="flex items-center gap-1.5 shrink-0">
-             <div className="w-3 h-1 rounded-full" style={{ backgroundColor: lineColors[i % lineColors.length] }} />
-             <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>{name} (Real)</span>
-           </div>
-         ))}
+      <div className="flex flex-wrap gap-3 mt-4 overflow-y-auto max-h-16 hide-scrollbar justify-center">
+         <div className="flex items-center gap-1.5 shrink-0 mr-4">
+           <div className="w-3 h-1 rounded-full" style={{ backgroundColor: lineColors[0] }} />
+           <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>Price Action (Real)</span>
+         </div>
          {setupNames.filter(n => n !== 'Price Action').map((name, i) => (
            <div key={`${name}-t`} className="flex items-center gap-1.5 shrink-0">
-             <div className="w-3 h-1 rounded-full border-t border-dashed" style={{ borderColor: lineColors[i % lineColors.length] }} />
+             <div className="w-3 h-1 rounded-full border-t border-dashed" style={{ borderColor: lineColors[(i+1) % lineColors.length] }} />
              <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>{name} (Almejado)</span>
            </div>
          ))}
@@ -494,7 +738,7 @@ export default function SetupsView({
                             <span>{isExpandedDoc ? 'Collapse' : 'Read'}</span>
                          </button>
                        )}
-                    </div>
+                     </div>
                   </div>
 
                   {/* Document Content - expanded reader */}
@@ -572,126 +816,484 @@ export default function SetupsView({
                      {renderGlobalChart()}
                    </div>
                    
-                   {/* 3. PERFORMANCE DATA TABLE */}
-                   <div className="w-full p-6 rounded-2xl border flex flex-col shadow-sm" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
-                      <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
-                          <CalendarDays size={12} /> Performance Log
-                        </h3>
-                        <div className="flex bg-black/40 p-1 rounded-lg border flex-wrap" style={{ borderColor: theme.contornoGeral }}>
-                          {['Daily', 'Weekly', 'Monthly'].map(p => (
-                             <button 
-                               key={p} onClick={()=>setFilterPeriod(p.toLowerCase() as any)}
-                               className={`px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider rounded-md transition-all ${filterPeriod === p.toLowerCase() ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                             >
-                               {p}
-                             </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="w-full overflow-x-auto hide-scrollbar">
-                       {/* TARGET FORM */}
-                       <div className="flex flex-wrap items-end gap-2 p-4 bg-black/10 border-b" style={{ borderColor: theme.contornoGeral }}>
-                         <div className="flex flex-col gap-1 w-28">
-                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Date</label>
-                            <input type="date" className="py-1 px-2 rounded-lg bg-white/5 border text-[9px] font-bold w-full outline-none focus:bg-white/10" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, colorScheme: 'dark' }} value={targetDate} onChange={e => setTargetDate(e.target.value)} />
-                         </div>
-                         <div className="flex flex-col gap-1 w-32">
-                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Asset</label>
-                            <input type="text" placeholder="e.g. EURUSD" className="py-1 px-2 rounded-lg bg-white/5 border text-[9px] font-bold w-full outline-none focus:bg-white/10 uppercase" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetAsset} onChange={e => setTargetAsset(e.target.value.toUpperCase())} />
-                         </div>
-                         <div className="flex flex-col gap-1 w-20">
-                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-green-500">Takes</label>
-                            <input type="number" placeholder="0" className="py-1 px-2 rounded-lg bg-white/5 border border-green-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetTakes} onChange={e => setTargetTakes(e.target.value ? Number(e.target.value) : '')} />
-                         </div>
-                         <div className="flex flex-col gap-1 w-20">
-                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">Stops</label>
-                            <input type="number" placeholder="0" className="py-1 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
-                         </div>
-                         <div className="flex flex-col gap-1 w-28">
-                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Value ($)</label>
-                            <input type="number" step="0.01" placeholder="e.g. 150.00" className="py-1 px-2 rounded-lg bg-white/5 border text-[9px] font-bold w-full outline-none focus:bg-white/10" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPnl} onChange={e => setTargetPnl(e.target.value ? Number(e.target.value) : '')} />
-                         </div>
-                         <div className="flex flex-col gap-1 w-24">
-                            <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Win Rate (%)</label>
-                            <input type="number" placeholder="e.g. 60" className="py-1 px-2 rounded-lg bg-white/5 border text-[9px] font-bold w-full outline-none focus:bg-white/10" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetWinRate} onChange={e => setTargetWinRate(e.target.value ? Number(e.target.value) : '')} />
-                         </div>
-                         <button 
-                           onClick={handleSubmitTarget}
-                           disabled={!targetDate || !targetAsset}
-                           className="ml-auto px-4 py-1.5 h-[26px] rounded-md bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5"
-                         >
-                           <Plus size={12} /> Inserir
-                         </button>
+                   {/* 3. PERFORMANCE DATA TABLE (Grid Layout for Versions) */}
+                   <div className="w-full flex flex-col md:flex-row gap-4 mt-4">
+                     
+                     {/* COLUMN 1: Performance Versions Card */}
+                     <div className="w-full md:w-1/3 p-5 rounded-2xl border flex flex-col shadow-sm max-h-[700px] overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
+                       <div className="flex justify-between items-center mb-4">
+                         <h3 className="text-xs font-black tracking-widest uppercase flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
+                           <CalendarDays size={14} className="text-yellow-500" /> Performance Versions
+                         </h3>
                        </div>
 
-                       <table className="w-full text-left border-collapse min-w-[700px]">
-                          <thead>
-                             <tr className="border-b text-[11px] md:text-xs uppercase font-bold tracking-widest opacity-50" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
-                                <th className="py-4 px-2 font-bold text-center">Date</th>
-                                <th className="py-4 px-2 font-bold text-center max-w-[150px]">Asset</th>
-                                <th className="py-4 px-2 font-bold text-center">TAKES</th>
-                                <th className="py-4 px-2 font-bold text-center">STOPS</th>
-                                <th className="py-4 px-2 font-bold text-center">Value (P&L)</th>
-                                <th className="py-4 px-2 font-bold text-center">Win Rate</th>
-                                <th className="py-4 px-2 font-bold text-center w-12">Action</th>
-                             </tr>
-                          </thead>
-                          <tbody>
-                             {tableRows.map((r, i) => (
-                               <tr key={i} className="border-b transition-colors hover:bg-white/5" style={{ borderColor: theme.contornoGeral }}>
-                                  <td className="py-2 px-2 text-xs font-bold text-center" style={{ color: theme.textoPrincipal }}>{formatDate ? formatDate(r.date) : r.date}</td>
-                                  <td className="py-2 px-2 text-xs max-w-[150px] truncate text-center" style={{ color: theme.textoPrincipal }} title={r.assetStr}>{r.assetStr}</td>
-                                  <td className="py-2 px-2 text-xs font-black text-green-500 text-center bg-green-500/5">{r.takes}</td>
-                                  <td className="py-2 px-2 text-xs font-black text-red-500 text-center bg-red-500/5">{r.stops}</td>
-                                  <td className={`py-2 px-2 text-xs md:text-sm font-black text-center ${r.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                    {r.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(r.pnl)).toFixed(2)}
-                                 </td>
-                                  <td className="py-2 px-2 text-xs text-center font-bold" style={{ color: theme.textoPrincipal }}>
-                                    {r.winRate.toFixed(1)}%
-                                  </td>
-                                  <td className="py-2 px-2 text-center">
-                                     <button 
-                                       onClick={() => { if(window.confirm('Delete this target entry?')) deleteSetupTarget(r.id); }}
-                                       className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors inline-flex"
-                                     >
-                                        <Trash2 size={13} />
-                                     </button>
-                                  </td>
-                               </tr>
-                             ))}
-                             {tableRows.length === 0 && (
-                               <tr><td colSpan={7} className="py-8 text-center text-xs opacity-50 italic" style={{ color: theme.textoPrincipal }}>No manual targets recorded for this setup yet.</td></tr>
-                             )}
-                          </tbody>
-                          {tableRows.length > 0 && (
-                             <tfoot>
-                                <tr className="bg-black/20">
-                                   <td className="py-2 px-2 text-xs font-black uppercase tracking-widest text-center" colSpan={2} style={{ color: theme.textoPrincipal }}>Grand Total</td>
-                                   <td className="py-2 px-2 text-sm font-black text-green-500 text-center">{grandTotal.takes}</td>
-                                   <td className="py-2 px-2 text-sm font-black text-red-500 text-center">{grandTotal.stops}</td>
-                                   <td className={`py-2 px-2 text-md font-black font-display tracking-tight text-center ${grandTotal.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                     {grandTotal.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(grandTotal.pnl)).toFixed(2)}
-                                   </td>
-                                   <td className="py-2 px-2 text-xs font-black text-center" colSpan={2} style={{ color: theme.textoPrincipal }}>
-                                     {grandWinRate.toFixed(1)}% Avg
-                                   </td>
-                                </tr>
-                             </tfoot>
+                       <button 
+                         onClick={() => {
+                           // Reset staging table and local states
+                           setActiveGroupName('');
+                           setOriginalGroupName('');
+                           setStagingTargets([]);
+                           setTargetDate('');
+                           setTargetAsset('');
+                           setTargetTakes('');
+                           setTargetStops('');
+                           setTargetPnl('');
+                         }}
+                         className="w-full py-3 mb-4 rounded-xl font-bold text-black transition-all hover:brightness-110 active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.2)] flex justify-center items-center gap-2 text-xs uppercase tracking-widest"
+                         style={{ background: '#eab308' }}
+                       >
+                         <Plus size={16} /> New Performance
+                       </button>
+
+                        <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-3 pb-2 pr-1">
+                          {setupGroups.map((g) => {
+                            const isActiveChart = activeChartGroupNames[selectedSetupId as string] === g.name;
+                            const isSelected = activeGroupName === g.name;
+                            
+                            return (
+                              <div 
+                                key={g.name} 
+                                className={`w-full p-4 rounded-xl border flex flex-col gap-2 transition-all cursor-pointer ${
+                                  isSelected && isEditingGroup ? 'bg-yellow-500/10 border-yellow-500/60'
+                                  : isSelected ? 'bg-white/10 border-white/20'
+                                  : 'bg-black/20 hover:bg-white/5 border-transparent'
+                                }`}
+                                style={{ borderColor: isSelected && isEditingGroup ? undefined : isSelected ? theme.contornoGeral : 'transparent', border: isSelected && isEditingGroup ? '1px solid rgba(234,179,8,0.5)' : undefined }}
+                                onClick={() => {
+                                  // Click on card = read-only view
+                                  setActiveGroupName(g.name);
+                                  setIsEditingGroup(false);
+                                  const myT = getTargetsForGroup(g.name);
+                                  setStagingTargets(myT.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                                  // Also set as active chart group
+                                  setActiveChartGroupNames(prev => ({...prev, [selectedSetupId as string]: g.name}));
+                                }}
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div className="flex flex-col gap-0.5">
+                                    <h4 className="text-xs font-black font-display uppercase truncate" style={{ color: theme.textoPrincipal }} title={g.name}>{g.name}</h4>
+                                    {isActiveChart && <span className="text-[9px] text-yellow-500 font-bold uppercase tracking-widest">◉ Active Chart</span>}
+                                  </div>
+                                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                    {/* Chart toggle icon */}
+                                    <button
+                                      onClick={() => {
+                                        setActiveChartGroupNames(prev => ({
+                                          ...prev,
+                                          [selectedSetupId as string]: isActiveChart ? '' : g.name
+                                        }));
+                                      }}
+                                      className={`p-1.5 rounded-lg transition-colors ${isActiveChart ? 'bg-yellow-500/20 text-yellow-500' : 'hover:bg-white/10 opacity-40 hover:opacity-100'}`}
+                                      style={{ color: isActiveChart ? undefined : theme.textoPrincipal }}
+                                      title={isActiveChart ? 'Desativar do gráfico' : 'Mostrar no gráfico'}
+                                    >
+                                      <TrendingUp size={12} />
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                         setActiveGroupName(g.name);
+                                         setOriginalGroupName(g.name);
+                                         setIsEditingGroup(true);
+                                         const myT = getTargetsForGroup(g.name);
+                                         setStagingTargets(myT.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                                      }}
+                                      className={`p-1.5 rounded-lg transition-colors ${ isSelected && isEditingGroup ? 'bg-yellow-500 text-black' : 'hover:bg-white/10'}`} 
+                                      style={{ color: isSelected && isEditingGroup ? '#000' : theme.textoPrincipal }} 
+                                      title="Edit Version"
+                                    >
+                                      <Edit2 size={12} />
+                                    </button>
+                                    <button 
+                                      onClick={async () => {
+                                        if(window.confirm(`Deletar a versão de performance "${g.name}" e todos seus dados?`)) {
+                                           const myT = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId && t.group_name === g.name);
+                                           if (myT.length > 0) {
+                                              await deleteSetupTarget(myT.map((x:any)=>x.id));
+                                           }
+                                           if (activeGroupName === g.name) {
+                                              setActiveGroupName('');
+                                              setStagingTargets([]);
+                                              setIsEditingGroup(true);
+                                           }
+                                           if (activeChartGroupNames[selectedSetupId as string] === g.name) {
+                                              const rest = setupGroups.find(x => x.name !== g.name);
+                                              setActiveChartGroupNames(prev => ({...prev, [selectedSetupId as string]: rest ? rest.name : ''}));
+                                           }
+                                        }
+                                      }}
+                                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-500 transition-colors"
+                                      title="Deletar Versão"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center text-xs font-black">
+                                  <span className={g.pnl >= 0 ? 'text-green-500' : 'text-red-500'}>{g.pnl < 0 ? '-' : ''}${Math.abs(g.pnl).toFixed(2)}</span>
+                                  <span className={g.winRate >= 50 ? 'text-[#00B0F0]' : 'text-orange-400'}>{g.winRate.toFixed(1)}% WR</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {setupGroups.length === 0 && (
+                            <div className="p-4 text-center opacity-40 text-xs font-bold uppercase tracking-widest mt-10" style={{ color: theme.textoPrincipal }}>
+                              Nenhuma versão salva ainda.
+                            </div>
                           )}
-                       </table>
-                    </div>
+                        </div>
+                     </div>
+
+                     {/* COLUMNS 2 & 3: Performance Staging Data */}
+                     <div className="w-full md:w-2/3 p-5 rounded-2xl border flex flex-col shadow-sm max-h-[700px]" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
+                        <div className="flex justify-between items-center mb-6">
+                          <div className="flex items-center gap-3 w-1/2">
+                          <input
+                            type="text"
+                            value={activeGroupName}
+                            onChange={(e) => setActiveGroupName(e.target.value)}
+                            placeholder="Nome da versão (ex: V1, RR 1:2)"
+                            readOnly={!isEditingGroup}
+                            className={`w-full bg-black/20 border p-2 rounded-xl text-sm font-bold font-display outline-none transition-colors placeholder:text-gray-500 ${
+                              isEditingGroup ? 'focus:border-yellow-500 cursor-text' : 'opacity-70 cursor-default'
+                            }`}
+                            style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
+                          />
+                          </div>
+                                                <div className="flex items-center gap-2">
+                              <div className="flex bg-black/40 rounded-lg border" style={{ borderColor: theme.contornoGeral }}>
+                                <select 
+                                   value={filterPeriod} 
+                                   onChange={(e) => setFilterPeriod(e.target.value)}
+                                   className="bg-transparent text-[9px] font-bold uppercase tracking-wider outline-none px-2 py-1.5"
+                                   style={{ color: theme.textoPrincipal }}
+                                >
+                                   {availablePeriods.map(p => <option key={p} value={p} className="bg-gray-900 normal-case">{p}</option>)}
+                                </select>
+                              </div>
+                              {isEditingGroup ? (
+                                 <>
+                                   <button
+                                      onClick={() => {
+                                         setIsEditingGroup(false);
+                                         const myT = getTargetsForGroup(activeGroupName);
+                                         setStagingTargets(myT.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                                      }}
+                                      className="h-8 w-8 flex items-center justify-center rounded-lg font-bold bg-white/5 hover:bg-red-500/20 text-red-500 border-none transition-all shrink-0"
+                                      title="Cancelar Edições"
+                                   >
+                                      <X size={14} />
+                                   </button>
+                                   <button
+                                     onClick={handleSaveStagingTable}
+                                     disabled={!activeGroupName || stagingTargets.length === 0}
+                                     className="h-8 px-4 rounded-lg font-bold text-black border-none text-[10px] uppercase tracking-widest bg-yellow-500 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shrink-0"
+                                   >
+                                      <Check size={13} /> Save
+                                   </button>
+                                 </>
+                              ) : (
+                                   <button
+                                     onClick={() => setIsEditingGroup(true)}
+                                     disabled={!activeGroupName}
+                                     className="h-8 px-4 rounded-lg font-bold text-black border-none text-[10px] uppercase tracking-widest bg-yellow-500 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0"
+                                   >
+                                      <Edit2 size={13} /> Edit
+                                   </button>
+                              )}
+                              <button
+                                 onClick={() => {
+                                    setConfigDate(new Date().toISOString().split('T')[0]);
+                                    setConfigNotes('');
+                                    setShowConfigModal(true);
+                                 }} 
+                                 className="h-8 px-4 rounded-lg font-bold text-white border-none text-[10px] uppercase tracking-widest bg-blue-500 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0"
+                              >
+                                 <Settings size={13} /> Params
+                              </button>
+                           </div>
+                        </div>
+
+                         <div className="w-full overflow-x-auto hide-scrollbar flex flex-col h-full">
+                         {/* TARGET FORM — only visible in edit mode */}
+                         {isEditingGroup && (
+                         <div className="flex flex-wrap items-end gap-2 p-3 bg-black/20 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
+                            
+                            <div className="flex flex-col gap-1 w-[100px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Pts de Stop</label>
+                               <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetStopPoints} onChange={e => setTargetStopPoints(e.target.value ? Number(e.target.value) : '')} />
+                            </div>
+                            <div className="flex flex-col gap-1 w-[64px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>R/R</label>
+                               <input type="number" step="0.1" placeholder="Ex: 2" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetRiskReward} onChange={e => setTargetRiskReward(e.target.value ? Number(e.target.value) : '')} />
+                            </div>
+                            <div className="flex flex-col gap-1 w-[68px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Val/Pt $</label>
+                               <input type="number" step="0.01" placeholder="0.20" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPointValue} onChange={e => setTargetPointValue(e.target.value ? Number(e.target.value) : '')} />
+                            </div>
+                            
+                            <div className="w-[1px] h-8 bg-white/10 mx-1 mb-0.5"></div>
+
+                            <div className="flex flex-col gap-1 w-[110px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Data</label>
+                               <input type="date" className="h-8 px-2 rounded-lg bg-white/5 border text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, colorScheme: 'dark' }} value={targetDate} onChange={e => setTargetDate(e.target.value)} />
+                            </div>
+                            <div className="flex flex-col gap-1 w-[70px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Ativo</label>
+                               <input type="text" placeholder="Ex: EUR" className="h-8 px-2 rounded-lg bg-white/5 border text-[10px] font-bold w-full outline-none focus:bg-white/10 uppercase" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetAsset} onChange={e => setTargetAsset(e.target.value.toUpperCase())} />
+                            </div>
+                            <div className="flex flex-col gap-1 w-[52px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-green-500">Takes</label>
+                               <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-green-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetTakes} onChange={e => setTargetTakes(e.target.value ? Number(e.target.value) : '')} />
+                            </div>
+                            <div className="flex flex-col gap-1 w-[52px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">Stops</label>
+                               <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
+                            </div>
+                            <div className="flex flex-col gap-1 w-[70px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 flex items-center justify-between" style={{ color: theme.textoPrincipal }}>
+                                 Val $ {isAutoCalc && <span className="text-yellow-500 text-[6px] ml-1">(Auto)</span>}
+                               </label>
+                               <input 
+                                 type={isAutoCalc ? "text" : "number"} 
+                                 step="0.01" 
+                                 placeholder={isAutoCalc ? "-" : "0.00"} 
+                                 className={`h-8 px-2 rounded-lg bg-white/5 border text-[10px] font-bold w-full outline-none focus:bg-white/10 ${isAutoCalc ? 'opacity-30 cursor-not-allowed' : ''}`} 
+                                 style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} 
+                                 value={isAutoCalc ? '' : targetPnl} 
+                                 onChange={e => setTargetPnl(e.target.value ? Number(e.target.value) : '')} 
+                                 disabled={isAutoCalc}
+                               />
+                            </div>
+                            <div className="flex flex-col gap-1 w-[52px]">
+                               <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate title" title="Win Rate">W.Rate</label>
+                               <div className="h-8 px-2 rounded-lg bg-black/20 border text-[10px] font-bold w-full flex items-center justify-center" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
+                                  {targetTakes !== '' && targetStops !== '' && (Number(targetTakes)+Number(targetStops)) > 0 ? ((Number(targetTakes)/(Number(targetTakes)+Number(targetStops)))*100).toFixed(0) + '%' : '-'}
+                               </div>
+                            </div>
+                            <button 
+                              onClick={handleSubmitTarget}
+                              disabled={!targetDate || !targetAsset}
+                              className="h-8 px-4 rounded-lg bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5 shrink-0 mt-auto"
+                            >
+                              <Plus size={12} /> Add
+                            </button>
+                         </div>
+                         )}
+
+                        {/* BULK ACTIONS OR SELECT ALL BAR */}
+                        {(tableRows.length > 0 || selectedTargetIds.size > 0) && isEditingGroup && (
+                          <div className="flex items-center justify-between p-2 mt-2 bg-black/5 rounded-t-lg border-b border-white/5 shrink-0">
+                             <div className="flex items-center gap-2 px-2">
+                                <input 
+                                  type="checkbox" 
+                                  className="cursor-pointer rounded bg-black/40 border-gray-600 focus:ring-yellow-500 text-yellow-500" 
+                                  onChange={handleSelectAll} 
+                                  checked={tableRows.length > 0 && selectedTargetIds.size === tableRows.length} 
+                                />
+                                <span className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Select All</span>
+                             </div>
+                             {selectedTargetIds.size > 0 && (
+                                <button 
+                                  onClick={handleBulkDelete}
+                                  className="px-3 py-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 text-[9px] uppercase font-bold tracking-widest rounded transition-colors flex items-center gap-1.5"
+                                >
+                                  <Trash2 size={12} /> Delete Selected ({selectedTargetIds.size})
+                                </button>
+                             )}
+                          </div>
+                        )}
+
+                        <div className="w-full overflow-y-auto hide-scrollbar flex-1">
+                           <table className="w-full text-left border-collapse min-w-[600px]">
+                              <thead className="sticky top-0 z-10" style={{ backgroundColor: theme.fundoCards || '#0a0a0a' }}>
+                                 <tr className="border-b text-[10px] uppercase font-bold tracking-widest opacity-80" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
+                                   {isEditingGroup && <th className="py-3 px-3 w-8"></th>}
+                                   <th className="py-3 px-2 font-bold text-center">Date</th>
+                                   <th className="py-3 px-2 font-bold text-center">Asset</th>
+                                   <th className="py-3 px-2 font-bold text-center">TAKES</th>
+                                   <th className="py-3 px-2 font-bold text-center">STOPS</th>
+                                   <th className="py-3 px-2 font-bold text-center">P&L</th>
+                                   <th className="py-3 px-2 font-bold text-center">Win Rate</th>
+                                   <th className="py-3 px-2 font-bold text-center w-16">Action</th>
+                                </tr>
+                             </thead>
+                             <tbody>
+                                {tableRows.map((r, i) => {
+                                  const isSelected = selectedTargetIds.has(r.id);
+                                  const isEditing = editingTargetId === r.id;
+                                  return (
+                                    <tr key={r.id} className={`border-b transition-colors ${isSelected ? 'bg-yellow-500/10' : 'hover:bg-white/5'}`} style={{ borderColor: theme.contornoGeral }}>
+                                       {isEditingGroup && (
+                                       <td className="py-1 px-3 text-center">
+                                          <input 
+                                            type="checkbox" 
+                                            className="cursor-pointer rounded bg-black/40 border-gray-600 focus:ring-yellow-500 text-yellow-500"
+                                            checked={isSelected}
+                                            onChange={() => toggleRowSelect(r.id)}
+                                          />
+                                       </td>
+                                       )}
+                                       
+                                       {isEditing ? (
+                                         <>
+                                           <td className="py-1 px-1">
+                                              <input type="date" className="w-full bg-black/30 border border-yellow-500/30 text-[10px] p-1.5 rounded outline-none" style={{ color: theme.textoPrincipal, colorScheme: "dark" }} value={editValues.date || ''} onChange={e => setEditValues({...editValues, date: e.target.value})} />
+                                           </td>
+                                           <td className="py-1 px-1">
+                                              <input type="text" className="w-full bg-black/30 border border-yellow-500/30 text-[10px] p-1.5 rounded outline-none uppercase" style={{ color: theme.textoPrincipal }} value={editValues.assetStr || ''} onChange={e => setEditValues({...editValues, assetStr: e.target.value.toUpperCase()})} />
+                                           </td>
+                                           <td className="py-1 px-1">
+                                              <input type="number" className="w-full bg-black/30 border border-green-500/30 text-[10px] p-1.5 rounded outline-none text-center" style={{ color: theme.textoPrincipal }} value={editValues.takes !== undefined ? editValues.takes : ''} onChange={e => setEditValues({...editValues, takes: e.target.value ? Number(e.target.value) : ''})} />
+                                           </td>
+                                           <td className="py-1 px-1">
+                                              <input type="number" className="w-full bg-black/30 border border-red-500/30 text-[10px] p-1.5 rounded outline-none text-center" style={{ color: theme.textoPrincipal }} value={editValues.stops !== undefined ? editValues.stops : ''} onChange={e => setEditValues({...editValues, stops: e.target.value ? Number(e.target.value) : ''})} />
+                                           </td>
+                                           <td className="py-1 px-1">
+                                              <input type="number" step="0.01" className="w-full bg-black/30 border border-yellow-500/30 text-[10px] p-1.5 rounded outline-none text-center" style={{ color: theme.textoPrincipal }} value={editValues.pnl !== undefined ? editValues.pnl : ''} onChange={e => setEditValues({...editValues, pnl: e.target.value ? Number(e.target.value) : ''})} />
+                                           </td>
+                                           <td className="py-1 px-1 text-xs text-center font-bold opacity-50" style={{ color: theme.textoPrincipal }}>
+                                             Auto
+                                           </td>
+                                           <td className="py-1 px-1 text-center">
+                                              <div className="flex items-center justify-center gap-1.5">
+                                                 <button onClick={saveInlineEdit} className="p-1 rounded bg-green-500/20 text-green-500 hover:bg-green-500/40 transition-colors" title="Save"><Check size={14}/></button>
+                                                 <button onClick={cancelInlineEdit} className="p-1 rounded bg-red-500/20 text-red-500 hover:bg-red-500/40 transition-colors" title="Cancel"><X size={14}/></button>
+                                              </div>
+                                           </td>
+                                         </>
+                                       ) : (
+                                         <>
+                                           <td className="py-2.5 px-2 text-[10px] font-bold text-center" style={{ color: theme.textoPrincipal }}>{formatDate ? formatDate(r.date) : r.date}</td>
+                                           <td className="py-2.5 px-2 text-[10px] max-w-[120px] truncate text-center uppercase" style={{ color: theme.textoPrincipal }} title={r.asset_str}>{r.asset_str}</td>
+                                           <td className="py-2.5 px-2 text-[10px] font-black text-green-500 text-center">{r.takes}</td>
+                                           <td className="py-2.5 px-2 text-[10px] font-black text-red-500 text-center">{r.stops}</td>
+                                           <td className={`py-2.5 px-2 text-[10px] font-black text-center ${r.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                             {r.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(r.pnl)).toFixed(2)}
+                                           </td>
+                                           <td className={`py-2.5 px-2 text-[10px] text-center font-black ${r.win_rate >= 50 ? 'text-green-500' : 'text-red-500'}`}>
+                                             {parseFloat(r.win_rate).toFixed(1)}%
+                                           </td>
+                                           <td className="py-2.5 px-2 text-center">
+                                               {isEditingGroup ? (
+                                               <div className="flex items-center justify-center gap-1">
+                                                  <button onClick={() => startInlineEdit(r)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white inline-flex" title="Editar">
+                                                     <Edit2 size={13} />
+                                                  </button>
+                                                  <button 
+                                                    onClick={() => { if(window.confirm('Remover este registro do staging?')) { setStagingTargets(prev => prev.filter(t => t.id !== r.id)); } }}
+                                                    className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors inline-flex"
+                                                    title="Remover"
+                                                  >
+                                                     <Trash2 size={13} />
+                                                  </button>
+                                               </div>
+                                               ) : (
+                                               <span className="text-[9px] opacity-30" style={{ color: theme.textoPrincipal }}>—</span>
+                                               )}
+                                            </td>
+                                         </>
+                                       )}
+                                    </tr>
+                                  );
+                                })}
+                                {tableRows.length === 0 && (
+                                  <tr><td colSpan={8} className="py-12 text-center text-xs opacity-50 italic" style={{ color: theme.textoPrincipal }}>Staging table is empty. Input below to add rows.</td></tr>
+                                )}
+                             </tbody>
+                              {tableRows.length > 0 && (
+                                 <tfoot className="sticky bottom-0 z-10" style={{ backgroundColor: theme.fundoCards || '#0a0a0a' }}>
+                                   <tr>
+                                      <td className="py-3 px-2 text-[10px] font-black uppercase tracking-widest text-center" colSpan={3} style={{ color: theme.textoPrincipal }}>Grand Total</td>
+                                      <td className="py-3 px-2 text-[10px] font-black text-green-500 text-center">{grandTotal.takes}</td>
+                                      <td className="py-3 px-2 text-[10px] font-black text-red-500 text-center">{grandTotal.stops}</td>
+                                      <td className={`py-3 px-2 text-[11px] font-black font-display tracking-tight text-center ${grandTotal.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                        {grandTotal.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(grandTotal.pnl)).toFixed(2)}
+                                      </td>
+                                      <td className={`py-3 px-2 text-[10px] font-black text-center ${grandWinRate >= 50 ? 'text-[#00B0F0]' : 'text-orange-400'}`} colSpan={2}>
+                                        {grandWinRate.toFixed(1)}% Avg
+                                      </td>
+                                   </tr>
+                                </tfoot>
+                             )}
+                          </table>
+                        </div>
+                     </div>
                   </div>
                  </div>
+               </div>
                )}
               </div>
-           )}
-           </div>
-        </div>
-     </div>
-  );
+            )}
+            </div>
+         </div>
+         
+         {/* Setup Config / Parameters Modal */}
+         {showConfigModal && selectedSetupId && (() => {
+            const myLogs = (setupConfigLogs||[])
+              .filter((l:any) => l.setup_id === selectedSetupId)
+              .sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowConfigModal(false)}>
+               <div className="w-full max-w-2xl flex flex-col shadow-2xl relative border rounded-2xl overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
+                     <h3 className="text-sm font-black tracking-widest uppercase flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
+                        <BookOpen size={16} className="text-blue-400" /> Strategy Log
+                        <span className="text-[10px] opacity-40 font-normal normal-case tracking-normal ml-1">
+                          {setups.find((s:any) => s.id === selectedSetupId)?.title}
+                        </span>
+                     </h3>
+                     <button onClick={() => setShowConfigModal(false)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                        <X size={16} style={{ color: theme.textoPrincipal }} />
+                     </button>
+                  </div>
+                  <div className="flex items-end gap-3 px-6 py-4 border-b shrink-0" style={{ borderColor: theme.contornoGeral, background: 'rgba(0,0,0,0.2)' }}>
+                     <div className="flex flex-col gap-1">
+                        <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Data da entrada</label>
+                        <input type="date" value={configDate} onChange={e => setConfigDate(e.target.value)} className="h-8 px-3 rounded-lg bg-black/30 border text-[11px] font-bold outline-none focus:border-blue-400 w-[150px]" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, colorScheme: 'dark' }} />
+                     </div>
+                     <button disabled={!configDate} onClick={() => {
+                        if (addSetupConfigLog && selectedSetupId && configDate) {
+                           addSetupConfigLog({ setup_id: selectedSetupId, date: configDate, notes: '' });
+                           setConfigDate(new Date().toISOString().split('T')[0]);
+                        }
+                     }} className="h-8 px-4 rounded-lg font-bold text-white text-[10px] uppercase tracking-widest bg-blue-500 hover:brightness-110 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                        <Plus size={13} /> Criar entrada
+                     </button>
+                     <p className="text-[10px] opacity-30 italic mb-1" style={{ color: theme.textoPrincipal }}>O texto e salvo ao sair do campo.</p>
+                  </div>
+                  <div className="flex flex-col gap-3 overflow-y-auto hide-scrollbar px-6 py-4 flex-1" style={{ minHeight: 0 }}>
+                     {myLogs.length === 0 && (
+                        <div className="py-16 flex flex-col items-center gap-3 opacity-30">
+                           <BookOpen size={32} style={{ color: theme.textoPrincipal }} />
+                           <p className="text-xs font-bold uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>Nenhum log ainda. Crie uma entrada acima.</p>
+                        </div>
+                     )}
+                     {myLogs.map((log:any, idx:number) => (
+                        <div key={log.id || idx} className="flex flex-col gap-2 rounded-xl border p-4" style={{ borderColor: theme.contornoGeral, background: 'rgba(0,0,0,0.15)' }}>
+                           <div className="flex items-center gap-2">
+                              <CalendarDays size={12} className="text-blue-400 shrink-0" />
+                              <span className="text-[11px] font-black text-blue-400">{log.date}</span>
+                           </div>
+                           <textarea
+                              defaultValue={log.notes || ''}
+                              onBlur={async (e) => {
+                                 const newNotes = e.target.value;
+                                 if (updateSetupConfigLog && log.id) {
+                                    await updateSetupConfigLog(log.id, newNotes);
+                                 }
+                              }}
+                              rows={5}
+                              placeholder="Escreva suas anotacoes aqui... (ex: Mudei o RR para 1:2, Ajustei a MM...)"
+                              className="w-full bg-black/20 border rounded-lg p-3 text-[11px] font-medium outline-none focus:border-blue-400/60 resize-none leading-relaxed"
+                              style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
+                           />
+                        </div>
+                     ))}
+                  </div>
+               </div>
+            </div>
+            );
+         })()}
+      </div>
+   );
 }
-
-
-

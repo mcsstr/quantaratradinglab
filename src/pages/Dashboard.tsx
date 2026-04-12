@@ -42,6 +42,8 @@ import { useNewsRepository } from '../hooks/useNewsRepository';
 import { useHolidaysRepository } from '../hooks/useHolidaysRepository';
 import { useJournalsRepository } from '../hooks/useJournalsRepository';
 import { useSetupsRepository } from '../hooks/useSetupsRepository';
+import { useSetupConfigLogsRepository } from '../hooks/useSetupConfigLogsRepository';
+import { useTradingFavoritesRepository } from '../hooks/useTradingFavoritesRepository';
 
 
 // Helper for Universal Commission Deduction
@@ -164,7 +166,9 @@ export default function Dashboard() {
   const { holidays, saveHoliday, deleteHoliday, overrideHolidays } = useHolidaysRepository(session, isFreePlan);
   const { journals, saveJournal, deleteJournal, overrideJournals, isLoading: journalsLoading } = useJournalsRepository(session, isFreePlan);
   const { setups, saveSetup, deleteSetup, overrideSetups, isLoading: setupsLoading } = useSetupsRepository(session);
-  const { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets } = useSetupTargetsRepository(session, accounts.find(a => a.id === activeAccountId)?.storageMode || 'supabase');
+  const { favorites: tradingFavorites, saveFavorite: saveTradingFavorite, deleteFavorite: deleteTradingFavorite, updateFavorite: updateTradingFavorite } = useTradingFavoritesRepository(session);
+  const { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets, saveBatchSetupTargets } = useSetupTargetsRepository(session, accounts.find(a => a.id === activeAccountId)?.storageMode || 'supabase');
+  const { setupConfigLogs, addSetupConfigLog, updateSetupConfigLog, overrideSetupConfigLogs } = useSetupConfigLogsRepository(session, accounts.find(a => a.id === activeAccountId)?.storageMode || 'supabase');
 
   // --- Dynamic Plan Enforcement ---
   const { plans: planConfigs } = usePlanConfig();
@@ -365,20 +369,11 @@ export default function Dashboard() {
       // Fetch Trades — filtra por account_id das contas do usuário (trades não tem user_id)
       const accountIds = (dbAccounts || []).map(a => a.id);
 
-      if (currentPlan === 'Free') {
-        const localTrades = localStorage.getItem('tradeJournal_trades');
-        if (localTrades) {
-          setTrades(JSON.parse(localTrades));
-        } else {
-          setTrades([]);
-        }
-      } else {
-        const { data: dbTrades } = accountIds.length > 0
-          ? await supabase
-            .from('trades')
-            .select('*')
-            .in('account_id', accountIds)
-          : { data: [] };
+      if (accountIds.length > 0) {
+        const { data: dbTrades } = await supabase
+          .from('trades')
+          .select('*')
+          .in('account_id', accountIds);
 
         if (dbTrades) {
           setTrades(dbTrades.map(t => ({
@@ -401,6 +396,8 @@ export default function Dashboard() {
             rawMetadata: t.raw_metadata || {}
           })));
         }
+      } else {
+        setTrades([]);
       }
 
       // Initialize Active Account and Selection if not set
@@ -979,12 +976,17 @@ export default function Dashboard() {
       }
     }
 
-    if (points.length < 2) return points;
-    const n = points.length; let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-    points.forEach(p => { sumX += p.x; sumY += p.balance; sumXY += p.x * p.balance; sumX2 += p.x * p.x; });
+    let finalPoints = points;
+    if (points.length === 1) {
+      finalPoints = [...points, { name: 'Current', balance: accountSettings.initialBalance, x: 1 }];
+    }
+
+    if (finalPoints.length < 2) return finalPoints;
+    const n = finalPoints.length; let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    finalPoints.forEach(p => { sumX += p.x; sumY += p.balance; sumXY += p.x * p.balance; sumX2 += p.x * p.x; });
     const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
     const intercept = (sumY - slope * sumX) / n;
-    return points.map(p => ({ ...p, trend: slope * p.x + intercept }));
+    return finalPoints.map(p => ({ ...p, trend: slope * p.x + intercept }));
   }, [activeTrades, accountSettings, equityFilter]);
 
   const isTrendUp = chartData.length > 1 && (chartData[chartData.length - 1].trend >= chartData[0].trend);
@@ -1404,77 +1406,47 @@ export default function Dashboard() {
       const sellT = manualTrade.sellTime || manualTrade.buyTime;
       const dateStr = new Date(buyT).toISOString().split('T')[0];
 
-      // FREE PLAN: Enforce max 10 trades per day
-      if (settings.userPlan === 'Free') {
-        const tradesThisDay = trades.filter(t => t.accountId === selectedImportAccountId && t.date === dateStr);
-        if (tradesThisDay.length >= 10) {
-          setIsSyncing(false);
-          setPromoModal({ show: true, isDailyLimit: true });
-          return;
-        }
-      }
-
       let newT;
-      if (isFreePlan) {
-        newT = {
-          id: crypto.randomUUID(),
-          accountId: selectedImportAccountId,
+      const { data, error: dbError } = await supabase
+        .from('trades')
+        .insert([{
+          account_id: selectedImportAccountId,
           symbol: manualTrade.symbol || '',
           direction: Number(manualTrade.pnl) >= 0 ? 'Long' : 'Short',
           qty: parseInt(manualTrade.qty),
           pnl: parseFloat(manualTrade.pnl),
           date: dateStr,
-          entryTimestamp: new Date(buyT).getTime(),
-          buyPrice: parseFloat(manualTrade.buyPrice) || 0,
-          buyTime: buyT,
+          entry_timestamp: new Date(buyT).toISOString(),
+          buy_price: parseFloat(manualTrade.buyPrice) || 0,
+          buy_time: buyT ? new Date(buyT).toISOString() : null,
           duration: manualTrade.duration || '',
-          sellTime: sellT,
-          sellPrice: parseFloat(manualTrade.sellPrice) || 0,
+          sell_time: sellT ? new Date(sellT).toISOString() : null,
+          sell_price: parseFloat(manualTrade.sellPrice) || 0,
           commission: 0,
-          rawMetadata: {}
-        };
-      } else {
-        const { data, error: dbError } = await supabase
-          .from('trades')
-          .insert([{
-            account_id: selectedImportAccountId,
-            symbol: manualTrade.symbol || '',
-            direction: Number(manualTrade.pnl) >= 0 ? 'Long' : 'Short',
-            qty: parseInt(manualTrade.qty),
-            pnl: parseFloat(manualTrade.pnl),
-            date: dateStr,
-            entry_timestamp: new Date(buyT).toISOString(),
-            buy_price: parseFloat(manualTrade.buyPrice) || 0,
-            buy_time: buyT ? new Date(buyT).toISOString() : null,
-            duration: manualTrade.duration || '',
-            sell_time: sellT ? new Date(sellT).toISOString() : null,
-            sell_price: parseFloat(manualTrade.sellPrice) || 0,
-            commission: 0,
-            raw_metadata: {}
-          }])
-          .select()
-          .single();
+          raw_metadata: {}
+        }])
+        .select()
+        .single();
 
-        if (dbError) throw dbError;
+      if (dbError) throw dbError;
 
-        newT = {
-          id: data.id,
-          accountId: data.account_id,
-          symbol: data.symbol,
-          direction: data.direction,
-          qty: data.qty,
-          pnl: Number(data.pnl),
-          date: data.date,
-          entryTimestamp: new Date(data.entry_timestamp).getTime(),
-          buyPrice: Number(data.buy_price),
-          buyTime: data.buy_time,
-          duration: data.duration,
-          sellTime: data.sell_time,
-          sellPrice: Number(data.sell_price),
-          commission: data.commission !== null ? Number(data.commission) : null,
-          rawMetadata: data.raw_metadata || {}
-        };
-      }
+      newT = {
+        id: data.id,
+        accountId: data.account_id,
+        symbol: data.symbol,
+        direction: data.direction,
+        qty: data.qty,
+        pnl: Number(data.pnl),
+        date: data.date,
+        entryTimestamp: new Date(data.entry_timestamp).getTime(),
+        buyPrice: Number(data.buy_price),
+        buyTime: data.buy_time,
+        duration: data.duration,
+        sellTime: data.sell_time,
+        sellPrice: Number(data.sell_price),
+        commission: data.commission !== null ? Number(data.commission) : null,
+        rawMetadata: data.raw_metadata || {}
+      };
 
       setTrades(prev => [...prev, newT]);
       setManualTrade({ symbol: '', qty: '', buyPrice: '', buyTime: '', duration: '', sellTime: '', sellPrice: '', pnl: '' });
@@ -2670,6 +2642,8 @@ export default function Dashboard() {
                     formatPercent={formatPercent}
                     formatPercentDecimals={formatPercentDecimals}
                     exchangeRate={exchangeRate}
+                    t={t}
+                    lang={settings.appLanguage}
                     getGlassStyle={getGlassStyle}
                     isTrendUp={isTrendUp}
                     chartData={chartData}
@@ -2794,7 +2768,14 @@ export default function Dashboard() {
 
         {
           activeTab === 'trading' && (
-            <TradingPageView theme={theme} getGlassStyle={getGlassStyle} />
+            <TradingPageView
+              theme={theme}
+              getGlassStyle={getGlassStyle}
+              favorites={tradingFavorites}
+              onSaveFavorite={saveTradingFavorite}
+              onDeleteFavorite={deleteTradingFavorite}
+              onUpdateFavorite={updateTradingFavorite}
+            />
           )
         }
 
@@ -2865,7 +2846,11 @@ export default function Dashboard() {
               deleteSetup={deleteSetup}
               setupTargets={setupTargets}
               saveSetupTarget={saveSetupTarget}
+              saveBatchSetupTargets={saveBatchSetupTargets}
               deleteSetupTarget={deleteSetupTarget}
+              setupConfigLogs={setupConfigLogs}
+              addSetupConfigLog={addSetupConfigLog}
+              updateSetupConfigLog={updateSetupConfigLog}
               activeAccountId={activeAccountId}
               formatDate={formatDate}
             />

@@ -38,6 +38,8 @@ export default function DashboardHomeView({
   formatPercent,
   formatPercentDecimals,
   exchangeRate,
+  t,
+  lang,
   getGlassStyle,
   isTrendUp,
   chartData,
@@ -109,7 +111,7 @@ export default function DashboardHomeView({
       <div className="flex items-center justify-between mb-4 shrink-0 gap-3">
         <SectionTitle
           icon={TrendingUp}
-          title="Equity Evolution"
+          title={t('dash.equityEvolution', lang)}
           theme={theme}
         />
         <div className="flex items-center gap-3 shrink-0">
@@ -158,8 +160,12 @@ export default function DashboardHomeView({
 
   const tradesByDayBlock = (
     <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-full overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
-      <div className="flex items-center justify-between mb-4 shrink-0 gap-3">
-        <SectionTitle icon={BarChart2} title="Trades by Day of Week" theme={theme} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
+        <SectionTitle
+          icon={BarChart2}
+          title={t('dash.weeklyTrades', lang)}
+          theme={theme}
+        />
         {weeklyControls}
       </div>
       <div className="w-full flex-1 min-h-[150px] overflow-hidden">
@@ -181,8 +187,12 @@ export default function DashboardHomeView({
 
   const pnlByDayBlock = (
     <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-full overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
-      <div className="flex items-center justify-between mb-4 shrink-0 gap-3">
-        <SectionTitle icon={DollarSign} title="P&L by Day of Week" theme={theme} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
+        <SectionTitle
+          icon={DollarSign}
+          title={t('dash.weeklyPnl', lang)}
+          theme={theme}
+        />
         {weeklyControls}
       </div>
       <div className="w-full flex flex-col gap-4 flex-1 justify-center min-h-[200px]">
@@ -214,7 +224,7 @@ export default function DashboardHomeView({
       <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-4 gap-3 shrink-0">
         {/* Title + inline badge for mobile/tablet */}
         <div className="flex items-center gap-3 min-w-0">
-          <SectionTitle icon={CalendarDays} title="Performance Calendar" theme={theme} />
+          <SectionTitle icon={CalendarDays} title={t('dash.performanceCalendar', lang)} theme={theme} />
           {/* Mobile/tablet: inline P&L badge next to title */}
           <span className="xl:hidden text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
             style={{ color: currentMonthPnl >= 0 ? theme.textoPositivo : theme.textoNegativo, backgroundColor: currentMonthPnl >= 0 ? `${theme.textoPositivo}18` : `${theme.textoNegativo}18` }}>
@@ -318,7 +328,7 @@ export default function DashboardHomeView({
                     </span>
                   </div>
                   <div className="flex flex-col items-center flex-1 justify-center gap-0.5 w-full text-center">
-                    <div className="text-[11px] lg:text-[13px] font-bold tracking-tighter leading-none" style={{ color: week.summary.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{formatCurrency(week.summary.pnl)}</div>
+                    <div className="text-[11px] lg:text-[13px] font-bold tracking-tighter leading-none" style={{ color: week.summary.pnl >= 0 ? theme.textoPositivo : week.summary.pnl < 0 ? theme.textoNegativo : theme.textoSecundario }}>{formatCurrency(week.summary.pnl)}</div>
                     <div className="text-[9px] lg:text-[10px] leading-none whitespace-nowrap mt-0.5" style={{ color: theme.textoSecundario }}>{week.summary.trades} Trades</div>
                     {week.summary.trades > 0 && <div className="text-[9px] lg:text-[10px] font-bold leading-none mt-0.5" style={{ color: week.summary.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{weekPctText}</div>}
                   </div>
@@ -390,7 +400,7 @@ export default function DashboardHomeView({
       <div className="flex items-start justify-between mb-2 shrink-0">
         <SectionTitle
           icon={ListIcon}
-          title={`Month Trades: ${new Intl.DateTimeFormat(userLocale, { month: 'long', year: 'numeric' }).format(currentDate)}`}
+          title={`${t('dash.monthTrades', lang)}: ${new Intl.DateTimeFormat(userLocale, { month: 'long', year: 'numeric' }).format(currentDate)}`}
           theme={theme}
         />
         <button onClick={() => setMiniHistorySort(prev => prev === 'recent' ? 'oldest' : 'recent')} className="text-[10px] px-2 py-1 rounded-lg font-bold transition-all hover:bg-white/10 shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>

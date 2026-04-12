@@ -28,6 +28,11 @@ const translations: Record<string, Record<Lang, string>> = {
     'dash.totalNetLossToday': { en: 'Total Net Loss Today', pt: 'Prejuízo Líquido Hoje', es: 'Pérdida Neta Hoy' },
     'dash.iUnderstand': { en: 'I Understand & Stopping Now', pt: 'Entendi, Parando Agora', es: 'Entendido, Párando Ahora' },
     'dash.loading': { en: 'Loading...', pt: 'Carregando...', es: 'Cargando...' },
+    'dash.equityEvolution': { en: 'Equity Evolution', pt: 'Evolução da Equidade', es: 'Evolución de la Equidad' },
+    'dash.weeklyTrades': { en: 'Weekly Trades Distribution', pt: 'Calendário Semanal Quantitativo', es: 'Distribución Semanal de Operaciones' },
+    'dash.weeklyPnl': { en: 'Weekly P&L Distribution', pt: 'Calendário Semanal de Valores', es: 'Distribución Semanal de P&L' },
+    'dash.performanceCalendar': { en: 'Performance Calendar', pt: 'Calendário de Performance', es: 'Calendario de Rendimiento' },
+    'dash.monthTrades': { en: 'Month Trades', pt: 'Trades do Mês', es: 'Operaciones del Mes' },
 
     // --- Settings ---
     'settings.title': { en: 'App Settings', pt: 'Configurações do App', es: 'Ajustes del App' },
