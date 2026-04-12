@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen
 } from 'lucide-react';
@@ -494,19 +494,19 @@ export default function SetupsView({
     ? (grandTotal.takes / (grandTotal.takes + grandTotal.stops)) * 100 
     : 0;
 
-  const setupNames = ['Price Action', ...setups.map((s:any) => s.title)];
-  const lineColors = ['#94a3b8', '#eab308', '#3b82f6', '#ef4444', '#10b981', '#a855f7', '#ec4899', '#f97316'];
+  const setupNames = useMemo(() => ['Price Action', ...setups.map((s:any) => s.title)], [setups]);
+  const lineColors = useMemo(() => ['#94a3b8', '#eab308', '#3b82f6', '#ef4444', '#10b981', '#a855f7', '#ec4899', '#f97316'], []);
 
-  const toggleSetupVisible = (name: string) => {
+  const toggleSetupVisible = useCallback((name: string) => {
     setHiddenSetups(prev => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
       return next;
     });
-  };
+  }, []);
 
-  const renderGlobalChart = () => (
+  const globalChartNode = useMemo(() => (
     <div className="p-6 rounded-2xl border flex flex-col shadow-sm min-h-[450px]" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
         <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
@@ -604,13 +604,13 @@ export default function SetupsView({
          </div>
          {setupNames.filter(n => n !== 'Price Action').map((name, i) => (
            <div key={`${name}-t`} className="flex items-center gap-1.5 shrink-0">
-             <div className="w-3 h-1 rounded-full border-t border-dashed" style={{ borderColor: lineColors[(i+1) % lineColors.length] }} />
+             <div className="w-3 h-1 rounded-full border-t border-dashed" style={{ borderColor: lineColors[(setupNames.indexOf(name)) % lineColors.length] }} />
              <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>{name} (Almejado)</span>
            </div>
          ))}
       </div>
     </div>
-  );
+  ), [chartData, hiddenSetups, theme, getGlassStyle, lineColors, setupNames, toggleSetupVisible]);
 
   return (
     <div className="flex w-full min-h-[calc(100vh-140px)] animate-tab-enter relative" style={{ background: theme.fundoGeral }}>
@@ -675,7 +675,7 @@ export default function SetupsView({
           <div className="flex-1 flex flex-col min-w-0 gap-6 w-full h-full">
             {viewMode === 'home' && !isExpandedDoc && (
               <div className="flex-1 flex flex-col min-h-0 h-full w-full max-w-7xl mx-auto">
-                {renderGlobalChart()}
+                {globalChartNode}
               </div>
             )}
 
@@ -833,7 +833,7 @@ export default function SetupsView({
                  <div className="flex flex-col gap-2 w-full items-start">
                    {/* 2. EQUITY CURVE */}
                    <div className="w-full">
-                     {renderGlobalChart()}
+                     {globalChartNode}
                    </div>
                    
                    {/* 3. PERFORMANCE DATA TABLE (Grid Layout for Versions) */}
