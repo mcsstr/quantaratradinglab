@@ -39,7 +39,9 @@ export default function SetupsView({
   const [configNotes, setConfigNotes] = useState('');
 
   // Target Form States
-  const [targetDate, setTargetDate] = useState('');
+  const [targetDay, setTargetDay] = useState<number | ''>('');
+  const [targetMonth, setTargetMonth] = useState<number | ''>('');
+  const [targetYear, setTargetYear] = useState<number | ''>('');
   const [targetAsset, setTargetAsset] = useState('');
   const [targetTakes, setTargetTakes] = useState<number | ''>('');
   const [targetStops, setTargetStops] = useState<number | ''>('');
@@ -421,7 +423,14 @@ export default function SetupsView({
   };
 
   const handleSubmitTarget = () => {
-     if (!targetDate || !targetAsset) return;
+     const d = Number(targetDay);
+     const m = Number(targetMonth);
+     const y = Number(targetYear);
+     const hasDate = d > 0 && m > 0 && y > 0;
+     if (!hasDate || !targetAsset) return;
+
+     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
      const takesNum = Number(targetTakes) || 0;
      const stopsNum = Number(targetStops) || 0;
      const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
@@ -443,7 +452,7 @@ export default function SetupsView({
        setup_id: selectedSetupId as string,
        account_id: activeAccountId,
        group_name: activeGroupName || 'Default Group',
-       date: targetDate,
+       date: dateStr,
        asset_str: targetAsset,
        takes: takesNum,
        stops: stopsNum,
@@ -453,13 +462,12 @@ export default function SetupsView({
 
      setStagingTargets(prev => [newTarget, ...prev]);
      
-     setTargetDate('');
-     // setTargetAsset(''); // Removed to keep it persistent per user request
+     // Clear only per-entry fields; day/month/year/asset persist as reference
      setTargetTakes('');
      setTargetStops('');
      setTargetPnl('');
-     // Note: We deliberately do not clear targetStopPoints, targetRiskReward, targetPointValue, targetAsset
-     // per user requirement: "servir de referencia temporaria enquanto a tabela é preenchida"
+     // targetDay, targetMonth, targetYear, targetAsset, targetStopPoints,
+     // targetRiskReward, targetPointValue intentionally kept
   };
 
   const handleSaveStagingTable = async () => {
@@ -853,7 +861,9 @@ export default function SetupsView({
                            setActiveGroupName('');
                            setOriginalGroupName('');
                            setStagingTargets([]);
-                           setTargetDate('');
+                           setTargetDay('');
+                           setTargetMonth('');
+                           setTargetYear('');
                            setTargetAsset('');
                            setTargetTakes('');
                            setTargetStops('');
@@ -1037,73 +1047,107 @@ export default function SetupsView({
                          {/* TARGET FORM — only visible in edit mode */}
                          {isEditingGroup && (
                          <div className="flex flex-col gap-3 p-3 bg-black/20 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
-                            
-                            <div className="flex flex-wrap items-end gap-2">
-                               <div className="flex flex-col gap-1 w-[100px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Pts de Stop</label>
-                                  <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetStopPoints} onChange={e => setTargetStopPoints(e.target.value ? Number(e.target.value) : '')} />
-                               </div>
-                               <div className="flex flex-col gap-1 w-[64px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>R/R</label>
-                                  <input type="number" step="0.1" placeholder="Ex: 2" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetRiskReward} onChange={e => setTargetRiskReward(e.target.value ? Number(e.target.value) : '')} />
-                               </div>
-                               <div className="flex flex-col gap-1 w-[68px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Val/Pt $</label>
-                                  <input type="number" step="0.01" placeholder="0.20" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPointValue} onChange={e => setTargetPointValue(e.target.value ? Number(e.target.value) : '')} />
-                               </div>
-                               <div className="flex flex-col gap-1 w-[90px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Ativo</label>
-                                  <input type="text" placeholder="Ex: EUR" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold uppercase" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetAsset} onChange={e => setTargetAsset(e.target.value.toUpperCase())} />
-                               </div>
-                               <div className="flex flex-col gap-1 ml-auto text-[8px] opacity-30 italic max-w-[200px] text-right pb-1" style={{ color: theme.textoPrincipal }}>
-                                  Preencha para usar como valor padrao
-                               </div>
-                            </div>
-                            
-                            <div className="w-full h-px bg-white/5 my-0.5" style={{ background: theme.contornoGeral }}></div>
+                             {/* ROW 1: Reference fields (persistent) — Dia, Mês, Ano + Stop Pts, R/R, Val/Pt, Ativo */}
+                             <div className="flex flex-wrap items-end gap-2">
+                                <div className="flex flex-col gap-1 w-[44px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Dia</label>
+                                   <input
+                                     type="number" min={1} max={31} placeholder="DD"
+                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold text-center"
+                                     style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
+                                     value={targetDay}
+                                     onChange={e => {
+                                       const v = e.target.value ? Number(e.target.value) : '';
+                                       if (v === '' || (Number(v) >= 1 && Number(v) <= 31)) setTargetDay(v);
+                                     }}
+                                   />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[44px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Mês</label>
+                                   <input
+                                     type="number" min={1} max={12} placeholder="MM"
+                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold text-center"
+                                     style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
+                                     value={targetMonth}
+                                     onChange={e => {
+                                       const v = e.target.value ? Number(e.target.value) : '';
+                                       if (v === '' || (Number(v) >= 1 && Number(v) <= 12)) setTargetMonth(v);
+                                     }}
+                                   />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[58px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Ano</label>
+                                   <input
+                                     type="number" min={2000} max={2099} placeholder="AAAA"
+                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold text-center"
+                                     style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
+                                     value={targetYear}
+                                     onChange={e => setTargetYear(e.target.value ? Number(e.target.value) : '')}
+                                   />
+                                </div>
+                                <div className="w-px h-8 bg-white/10 self-end" />
+                                <div className="flex flex-col gap-1 w-[100px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Pts de Stop</label>
+                                   <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetStopPoints} onChange={e => setTargetStopPoints(e.target.value ? Number(e.target.value) : '')} />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[64px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>R/R</label>
+                                   <input type="number" step="0.1" placeholder="Ex: 2" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetRiskReward} onChange={e => setTargetRiskReward(e.target.value ? Number(e.target.value) : '')} />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[68px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Val/Pt $</label>
+                                   <input type="number" step="0.01" placeholder="0.20" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPointValue} onChange={e => setTargetPointValue(e.target.value ? Number(e.target.value) : '')} />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[90px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Ativo</label>
+                                   <input type="text" placeholder="Ex: EUR" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold uppercase" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetAsset} onChange={e => setTargetAsset(e.target.value.toUpperCase())} />
+                                </div>
+                                <div className="flex flex-col gap-1 ml-auto text-[8px] opacity-30 italic max-w-[160px] text-right pb-1" style={{ color: theme.textoPrincipal }}>
+                                   Referência — persiste entre entradas
+                                </div>
+                             </div>
 
-                            <div className="flex flex-wrap items-end gap-2">
-                               <div className="flex flex-col gap-1 w-[110px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Data</label>
-                                  <input type="date" className="h-8 px-2 rounded-lg bg-white/5 border text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, colorScheme: 'dark' }} value={targetDate} onChange={e => setTargetDate(e.target.value)} />
-                               </div>
-                               <div className="flex flex-col gap-1 w-[52px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-green-500">Takes</label>
-                                  <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-green-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetTakes} onChange={e => setTargetTakes(e.target.value ? Number(e.target.value) : '')} />
-                               </div>
-                               <div className="flex flex-col gap-1 w-[52px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">Stops</label>
-                                  <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
-                               </div>
-                               <div className="flex flex-col gap-1 w-[70px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 flex items-center justify-between" style={{ color: theme.textoPrincipal }}>
-                                    Val $ {isAutoCalc && <span className="text-yellow-500 text-[6px] ml-1">(Auto)</span>}
-                                  </label>
-                                  <input 
-                                    type={isAutoCalc ? "text" : "number"} 
-                                    step="0.01" 
-                                    placeholder={isAutoCalc ? "-" : "0.00"} 
-                                    className={`h-8 px-2 rounded-lg bg-white/5 border text-[10px] font-bold w-full outline-none focus:bg-white/10 ${isAutoCalc ? 'opacity-30 cursor-not-allowed' : ''}`} 
-                                    style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} 
-                                    value={isAutoCalc ? '' : targetPnl} 
-                                    onChange={e => setTargetPnl(e.target.value ? Number(e.target.value) : '')} 
-                                    disabled={isAutoCalc}
-                                  />
-                               </div>
-                               <div className="flex flex-col gap-1 w-[52px]">
-                                  <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate title" title="Win Rate">W.Rate</label>
-                                  <div className="h-8 px-2 rounded-lg bg-black/20 border text-[10px] font-bold w-full flex items-center justify-center" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
-                                     {targetTakes !== '' && targetStops !== '' && (Number(targetTakes)+Number(targetStops)) > 0 ? ((Number(targetTakes)/(Number(targetTakes)+Number(targetStops)))*100).toFixed(0) + '%' : '-'}
-                                  </div>
-                               </div>
-                               <button 
-                                 onClick={handleSubmitTarget}
-                                 disabled={!targetDate || !targetAsset}
-                                 className="h-8 px-4 flex-1 sm:flex-none rounded-lg bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5 shrink-0 mt-auto ml-auto"
-                               >
-                                 <Plus size={12} /> Add
-                               </button>
-                            </div>
+                             <div className="w-full h-px bg-white/5 my-0.5" style={{ background: theme.contornoGeral }}></div>
+
+                             {/* ROW 2: Per-entry fields (cleared after each Add) */}
+                             <div className="flex flex-wrap items-end gap-2">
+                                <div className="flex flex-col gap-1 w-[52px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-green-500">Takes</label>
+                                   <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-green-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetTakes} onChange={e => setTargetTakes(e.target.value ? Number(e.target.value) : '')} />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[52px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">Stops</label>
+                                   <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[70px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 flex items-center justify-between" style={{ color: theme.textoPrincipal }}>
+                                     Val $ {isAutoCalc && <span className="text-yellow-500 text-[6px] ml-1">(Auto)</span>}
+                                   </label>
+                                   <input 
+                                     type={isAutoCalc ? "text" : "number"} 
+                                     step="0.01" 
+                                     placeholder={isAutoCalc ? "-" : "0.00"} 
+                                     className={`h-8 px-2 rounded-lg bg-white/5 border text-[10px] font-bold w-full outline-none focus:bg-white/10 ${isAutoCalc ? 'opacity-30 cursor-not-allowed' : ''}`} 
+                                     style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} 
+                                     value={isAutoCalc ? '' : targetPnl} 
+                                     onChange={e => setTargetPnl(e.target.value ? Number(e.target.value) : '')} 
+                                     disabled={isAutoCalc}
+                                   />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[52px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate" title="Win Rate">W.Rate</label>
+                                   <div className="h-8 px-2 rounded-lg bg-black/20 border text-[10px] font-bold w-full flex items-center justify-center" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
+                                      {targetTakes !== '' && targetStops !== '' && (Number(targetTakes)+Number(targetStops)) > 0 ? ((Number(targetTakes)/(Number(targetTakes)+Number(targetStops)))*100).toFixed(0) + '%' : '-'}
+                                   </div>
+                                </div>
+                                <button 
+                                  onClick={handleSubmitTarget}
+                                  disabled={!(Number(targetDay) > 0 && Number(targetMonth) > 0 && Number(targetYear) > 0) || !targetAsset}
+                                  className="h-8 px-4 flex-1 sm:flex-none rounded-lg bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5 shrink-0 mt-auto ml-auto"
+                                >
+                                  <Plus size={12} /> Add
+                                </button>
+                             </div>
                          </div>
                          )}
 
