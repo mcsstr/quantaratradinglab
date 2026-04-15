@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen
+  Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen, Search
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
 import * as mammoth from 'mammoth';
@@ -51,6 +51,7 @@ export default function SetupsView({
   const [targetStopPoints, setTargetStopPoints] = useState<number | ''>('');
   const [targetRiskReward, setTargetRiskReward] = useState<number | ''>('');
   const [targetPointValue, setTargetPointValue] = useState<number | ''>('');
+  const [targetCommission, setTargetCommission] = useState<number | ''>('');
   
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState(''); // Stores Base64
@@ -77,6 +78,75 @@ export default function SetupsView({
   useEffect(() => {
     localStorage.setItem('quantara_active_chart_groups', JSON.stringify(activeChartGroupNames));
   }, [activeChartGroupNames]);
+
+  // Open a read-only preview of a group's targets in a new tab
+  const handleOpenPreview = useCallback((groupName: string, setupTitle: string) => {
+    const myTargets = (setupTargets || []).filter(
+      (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName
+    );
+    if (myTargets.length === 0) return;
+
+    // Convert targets to synthetic trades
+    // qty = takes + stops (each is 1 trade), commission per trade = t.commission
+    const syntheticTrades = myTargets.map((t: any) => ({
+      id: `synth-${t.id}`,
+      date: t.date,
+      symbol: t.asset_str || 'SETUP',
+      pnl: parseFloat(t.pnl) || 0,                // gross pnl
+      qty: (t.takes || 0) + (t.stops || 0) || 1,  // total ops
+      takes: t.takes || 0,
+      stops: t.stops || 0,
+      commission_per_trade: parseFloat(t.commission) || 0,
+    }));
+
+    // Filter real trades to only the active account and normalize fields
+    const activeAccountTrades = (trades || [])
+      .filter((t: any) => !activeAccountId || t.accountId === activeAccountId)
+      .filter((t: any) => t.date && t.pnl != null)
+      .map((t: any) => ({
+        date: typeof t.date === 'string' ? t.date.slice(0, 10) : '',
+        pnl: Number(t.pnl) || 0,
+        commission: Number(t.commission) || 0,
+        qty: Number(t.qty) || 1,
+      }))
+      .filter((t: any) => t.date);
+
+    const previewKey = `preview_${crypto.randomUUID()}`;
+    const payload = {
+      syntheticTrades,
+      accountHistory: activeAccountTrades,
+      setupTitle,
+      groupName,
+      settings,
+      theme,
+    };
+    
+    const request = indexedDB.open('QuantaraPreviewDB', 1);
+    request.onupgradeneeded = (e: any) => {
+      e.target.result.createObjectStore('previews');
+    };
+    request.onsuccess = (e: any) => {
+      const db = e.target.result;
+      const tx = db.transaction('previews', 'readwrite');
+      const store = tx.objectStore('previews');
+      store.put(payload, previewKey);
+      tx.oncomplete = () => {
+        window.open(`/setup-preview?key=${previewKey}`, '_blank');
+      };
+      tx.onerror = () => {
+        alert('Erro ao salvar dados de preview no IndexedDB.');
+      };
+    };
+    request.onerror = () => {
+      try {
+        sessionStorage.setItem(previewKey, JSON.stringify(payload));
+        window.open(`/setup-preview?key=${previewKey}`, '_blank');
+      } catch {
+        alert('Erro ao abrir preview: dados muito grandes para sessionStorage e falha no IndexedDB.');
+      }
+    };
+  }, [setupTargets, selectedSetupId, settings, theme, trades, activeAccountId]);
+
 
   const handleSelect = (mode: 'home'|'create'|'edit'|'view', id: string | null = null) => {
     setViewMode(mode);
@@ -388,7 +458,8 @@ export default function SetupsView({
       assetStr: row.asset_str,
       takes: row.takes,
       stops: row.stops,
-      pnl: row.pnl
+      pnl: row.pnl,
+      commission: row.commission
     });
   };
 
@@ -407,6 +478,7 @@ export default function SetupsView({
             takes: takesNum,
             stops: stopsNum,
             pnl: Number(editValues.pnl) || 0,
+            commission: Number(editValues.commission) || 0,
             win_rate: winRateCalc
           };
        }
@@ -457,17 +529,18 @@ export default function SetupsView({
        takes: takesNum,
        stops: stopsNum,
        pnl: finalPnl,
-       win_rate: winRateCalc
+       win_rate: winRateCalc,
+       commission: Number(targetCommission) || 0
      };
 
      setStagingTargets(prev => [newTarget, ...prev]);
      
-     // Clear only per-entry fields; day/month/year/asset persist as reference
+     // Clear only per-entry fields; day/month/year/asset/commission persist as reference
      setTargetTakes('');
      setTargetStops('');
      setTargetPnl('');
      // targetDay, targetMonth, targetYear, targetAsset, targetStopPoints,
-     // targetRiskReward, targetPointValue intentionally kept
+     // targetRiskReward, targetPointValue, targetCommission intentionally kept
   };
 
   const handleSaveStagingTable = async () => {
@@ -494,9 +567,12 @@ export default function SetupsView({
     return tableRows.reduce((acc, row) => ({
       takes: acc.takes + (row.takes || 0),
       stops: acc.stops + (row.stops || 0),
-      pnl: acc.pnl + (parseFloat(row.pnl) || 0)
-    }), { takes: 0, stops: 0, pnl: 0 });
+      pnl: acc.pnl + (parseFloat(row.pnl) || 0),
+      commission: acc.commission + ((parseFloat(row.commission) || 0) * ((row.takes || 0) + (row.stops || 0)))
+    }), { takes: 0, stops: 0, pnl: 0, commission: 0 });
   }, [tableRows]);
+
+  const grandNetPnl = grandTotal.pnl - grandTotal.commission;
 
   const grandWinRate = (grandTotal.takes + grandTotal.stops) > 0 
     ? (grandTotal.takes / (grandTotal.takes + grandTotal.stops)) * 100 
@@ -905,6 +981,15 @@ export default function SetupsView({
                                     {isActiveChart && <span className="text-[9px] text-yellow-500 font-bold uppercase tracking-widest">◉ Active Chart</span>}
                                   </div>
                                   <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                     {/* Preview button */}
+                                     <button
+                                       onClick={() => handleOpenPreview(g.name, formTitle)}
+                                       className="p-1.5 rounded-lg transition-colors hover:bg-purple-500/20 opacity-60 hover:opacity-100"
+                                       style={{ color: '#a855f7' }}
+                                       title="Abrir preview do dashboard nesta versão"
+                                     >
+                                       <Search size={12} />
+                                     </button>
                                     {/* Chart toggle icon */}
                                     <button
                                       onClick={() => {
@@ -1049,11 +1134,11 @@ export default function SetupsView({
                          <div className="flex flex-col gap-3 p-3 bg-black/20 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
                              {/* ROW 1: Reference fields (persistent) — Dia, Mês, Ano + Stop Pts, R/R, Val/Pt, Ativo */}
                              <div className="flex flex-wrap items-end gap-2">
-                                <div className="flex flex-col gap-1 w-[44px]">
+                                <div className="flex flex-col gap-1 w-[52px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Dia</label>
                                    <input
                                      type="number" min={1} max={31} placeholder="DD"
-                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold text-center"
+                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold text-center"
                                      style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
                                      value={targetDay}
                                      onChange={e => {
@@ -1062,11 +1147,11 @@ export default function SetupsView({
                                      }}
                                    />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[44px]">
+                                <div className="flex flex-col gap-1 w-[52px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Mês</label>
                                    <input
                                      type="number" min={1} max={12} placeholder="MM"
-                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold text-center"
+                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold text-center"
                                      style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
                                      value={targetMonth}
                                      onChange={e => {
@@ -1075,34 +1160,38 @@ export default function SetupsView({
                                      }}
                                    />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[58px]">
+                                <div className="flex flex-col gap-1 w-[68px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Ano</label>
                                    <input
                                      type="number" min={2000} max={2099} placeholder="AAAA"
-                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold text-center"
+                                     className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold text-center"
                                      style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
                                      value={targetYear}
                                      onChange={e => setTargetYear(e.target.value ? Number(e.target.value) : '')}
                                    />
                                 </div>
                                 <div className="w-px h-8 bg-white/10 self-end" />
-                                <div className="flex flex-col gap-1 w-[100px]">
+                                <div className="flex flex-col gap-1 w-[110px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Pts de Stop</label>
-                                   <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetStopPoints} onChange={e => setTargetStopPoints(e.target.value ? Number(e.target.value) : '')} />
+                                   <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetStopPoints} onChange={e => setTargetStopPoints(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[64px]">
+                                <div className="flex flex-col gap-1 w-[72px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>R/R</label>
-                                   <input type="number" step="0.1" placeholder="Ex: 2" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetRiskReward} onChange={e => setTargetRiskReward(e.target.value ? Number(e.target.value) : '')} />
+                                   <input type="number" step="0.1" placeholder="Ex: 2" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetRiskReward} onChange={e => setTargetRiskReward(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[68px]">
+                                <div className="flex flex-col gap-1 w-[80px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Val/Pt $</label>
-                                   <input type="number" step="0.01" placeholder="0.20" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPointValue} onChange={e => setTargetPointValue(e.target.value ? Number(e.target.value) : '')} />
+                                   <input type="number" step="0.01" placeholder="0.20" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPointValue} onChange={e => setTargetPointValue(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[90px]">
+                                <div className="flex flex-col gap-1 w-[80px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Comissão</label>
+                                   <input type="number" step="0.01" placeholder="Ex: 1.50" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetCommission} onChange={e => setTargetCommission(e.target.value ? Number(e.target.value) : '')} />
+                                </div>
+                                <div className="flex flex-col gap-1 w-[120px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Ativo</label>
-                                   <input type="text" placeholder="Ex: EUR" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[10px] font-bold uppercase" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetAsset} onChange={e => setTargetAsset(e.target.value.toUpperCase())} />
+                                   <input type="text" placeholder="Ex: EURUSD" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold uppercase" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetAsset} onChange={e => setTargetAsset(e.target.value.toUpperCase())} />
                                 </div>
-                                <div className="flex flex-col gap-1 ml-auto text-[8px] opacity-30 italic max-w-[160px] text-right pb-1" style={{ color: theme.textoPrincipal }}>
+                                <div className="flex flex-col gap-1 ml-auto text-[8px] opacity-30 italic max-w-[140px] text-right pb-1" style={{ color: theme.textoPrincipal }}>
                                    Referência — persiste entre entradas
                                 </div>
                              </div>
@@ -1111,39 +1200,39 @@ export default function SetupsView({
 
                              {/* ROW 2: Per-entry fields (cleared after each Add) */}
                              <div className="flex flex-wrap items-end gap-2">
-                                <div className="flex flex-col gap-1 w-[52px]">
+                                <div className="flex flex-col gap-1 w-[64px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-green-500">Takes</label>
-                                   <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-green-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetTakes} onChange={e => setTargetTakes(e.target.value ? Number(e.target.value) : '')} />
+                                   <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-green-500/20 text-[9px] font-mono font-bold w-full outline-none focus:bg-white/10 text-center" style={{ color: theme.textoPrincipal }} value={targetTakes} onChange={e => setTargetTakes(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[52px]">
+                                <div className="flex flex-col gap-1 w-[64px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">Stops</label>
-                                   <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[10px] font-bold w-full outline-none focus:bg-white/10" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
+                                   <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[9px] font-mono font-bold w-full outline-none focus:bg-white/10 text-center" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[70px]">
+                                <div className="flex flex-col gap-1 w-[84px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 flex items-center justify-between" style={{ color: theme.textoPrincipal }}>
                                      Val $ {isAutoCalc && <span className="text-yellow-500 text-[6px] ml-1">(Auto)</span>}
                                    </label>
                                    <input 
                                      type={isAutoCalc ? "text" : "number"} 
                                      step="0.01" 
-                                     placeholder={isAutoCalc ? "-" : "0.00"} 
-                                     className={`h-8 px-2 rounded-lg bg-white/5 border text-[10px] font-bold w-full outline-none focus:bg-white/10 ${isAutoCalc ? 'opacity-30 cursor-not-allowed' : ''}`} 
+                                     placeholder={isAutoCalc ? "—" : "0.00"} 
+                                     className={`h-8 px-2 rounded-lg bg-white/5 border text-[9px] font-mono font-bold w-full outline-none focus:bg-white/10 ${isAutoCalc ? 'opacity-30 cursor-not-allowed' : ''}`} 
                                      style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} 
                                      value={isAutoCalc ? '' : targetPnl} 
                                      onChange={e => setTargetPnl(e.target.value ? Number(e.target.value) : '')} 
                                      disabled={isAutoCalc}
                                    />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[52px]">
+                                <div className="flex flex-col gap-1 w-[64px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate" title="Win Rate">W.Rate</label>
-                                   <div className="h-8 px-2 rounded-lg bg-black/20 border text-[10px] font-bold w-full flex items-center justify-center" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
-                                      {targetTakes !== '' && targetStops !== '' && (Number(targetTakes)+Number(targetStops)) > 0 ? ((Number(targetTakes)/(Number(targetTakes)+Number(targetStops)))*100).toFixed(0) + '%' : '-'}
+                                   <div className="h-8 px-2 rounded-lg bg-black/20 border text-[9px] font-mono font-bold w-full flex items-center justify-center" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
+                                      {targetTakes !== '' && targetStops !== '' && (Number(targetTakes)+Number(targetStops)) > 0 ? ((Number(targetTakes)/(Number(targetTakes)+Number(targetStops)))*100).toFixed(0) + '%' : '—'}
                                    </div>
                                 </div>
                                 <button 
                                   onClick={handleSubmitTarget}
                                   disabled={!(Number(targetDay) > 0 && Number(targetMonth) > 0 && Number(targetYear) > 0) || !targetAsset}
-                                  className="h-8 px-4 flex-1 sm:flex-none rounded-lg bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5 shrink-0 mt-auto ml-auto"
+                                  className="h-8 px-5 flex-1 sm:flex-none rounded-lg bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5 shrink-0 mt-auto ml-auto"
                                 >
                                   <Plus size={12} /> Add
                                 </button>
@@ -1183,7 +1272,9 @@ export default function SetupsView({
                                    <th className="py-3 px-2 font-bold text-center">Asset</th>
                                    <th className="py-3 px-2 font-bold text-center">TAKES</th>
                                    <th className="py-3 px-2 font-bold text-center">STOPS</th>
-                                   <th className="py-3 px-2 font-bold text-center">P&L</th>
+                                   <th className="py-3 px-2 font-bold text-center">Gross P&L</th>
+                                   <th className="py-3 px-2 font-bold text-center text-orange-400">Comissão</th>
+                                   <th className="py-3 px-2 font-bold text-center">Net P&L</th>
                                    <th className="py-3 px-2 font-bold text-center">Win Rate</th>
                                    <th className="py-3 px-2 font-bold text-center w-16">Action</th>
                                 </tr>
@@ -1222,6 +1313,12 @@ export default function SetupsView({
                                            <td className="py-1 px-1">
                                               <input type="number" step="0.01" className="w-full bg-black/30 border border-yellow-500/30 text-[10px] p-1.5 rounded outline-none text-center" style={{ color: theme.textoPrincipal }} value={editValues.pnl !== undefined ? editValues.pnl : ''} onChange={e => setEditValues({...editValues, pnl: e.target.value ? Number(e.target.value) : ''})} />
                                            </td>
+                                           <td className="py-1 px-1">
+                                              <input type="number" step="0.01" className="w-full bg-black/30 border border-orange-500/30 text-[10px] p-1.5 rounded outline-none text-center" style={{ color: theme.textoPrincipal }} value={editValues.commission !== undefined ? editValues.commission : ''} onChange={e => setEditValues({...editValues, commission: e.target.value ? Number(e.target.value) : ''})} />
+                                           </td>
+                                           <td className="py-1 px-1 text-xs text-center font-bold opacity-50" style={{ color: theme.textoPrincipal }}>
+                                             Auto
+                                           </td>
                                            <td className="py-1 px-1 text-xs text-center font-bold opacity-50" style={{ color: theme.textoPrincipal }}>
                                              Auto
                                            </td>
@@ -1238,10 +1335,16 @@ export default function SetupsView({
                                            <td className="py-2.5 px-2 text-[10px] max-w-[120px] truncate text-center uppercase" style={{ color: theme.textoPrincipal }} title={r.asset_str}>{r.asset_str}</td>
                                            <td className="py-2.5 px-2 text-[10px] font-black text-green-500 text-center">{r.takes}</td>
                                            <td className="py-2.5 px-2 text-[10px] font-black text-red-500 text-center">{r.stops}</td>
-                                           <td className={`py-2.5 px-2 text-[10px] font-black text-center ${r.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                             {r.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(r.pnl)).toFixed(2)}
+                                           <td className={`py-2.5 px-2 text-[10px] font-black text-center ${parseFloat(r.pnl) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                             {parseFloat(r.pnl) < 0 ? '-' : ''}${Math.abs(parseFloat(r.pnl)).toFixed(2)}
                                            </td>
-                                           <td className={`py-2.5 px-2 text-[10px] text-center font-black ${r.win_rate >= 50 ? 'text-green-500' : 'text-red-500'}`}>
+                                           <td className="py-2.5 px-2 text-[10px] font-bold text-center text-orange-400">
+                                             {(parseFloat(r.commission) || 0) > 0 ? `-$${((parseFloat(r.commission) || 0) * ((r.takes || 0) + (r.stops || 0))).toFixed(2)}` : '—'}
+                                           </td>
+                                           <td className={`py-2.5 px-2 text-[10px] font-black text-center ${(parseFloat(r.pnl) - (parseFloat(r.commission)||0)*((r.takes||0)+(r.stops||0))) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                             {(() => { const net = parseFloat(r.pnl) - (parseFloat(r.commission)||0)*((r.takes||0)+(r.stops||0)); return `${net < 0 ? '-' : ''}$${Math.abs(net).toFixed(2)}`; })()}
+                                           </td>
+                                           <td className={`py-2.5 px-2 text-[10px] text-center font-black ${parseFloat(r.win_rate) >= 50 ? 'text-green-500' : 'text-red-500'}`}>
                                              {parseFloat(r.win_rate).toFixed(1)}%
                                            </td>
                                            <td className="py-2.5 px-2 text-center">
@@ -1268,7 +1371,7 @@ export default function SetupsView({
                                   );
                                 })}
                                 {tableRows.length === 0 && (
-                                  <tr><td colSpan={8} className="py-12 text-center text-xs opacity-50 italic" style={{ color: theme.textoPrincipal }}>Staging table is empty. Input below to add rows.</td></tr>
+                                  <tr><td colSpan={9} className="py-12 text-center text-xs opacity-50 italic" style={{ color: theme.textoPrincipal }}>Staging table is empty. Input below to add rows.</td></tr>
                                 )}
                              </tbody>
                               {tableRows.length > 0 && (
@@ -1279,6 +1382,12 @@ export default function SetupsView({
                                       <td className="py-3 px-2 text-[10px] font-black text-red-500 text-center">{grandTotal.stops}</td>
                                       <td className={`py-3 px-2 text-[11px] font-black font-display tracking-tight text-center ${grandTotal.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                                         {grandTotal.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(grandTotal.pnl)).toFixed(2)}
+                                      </td>
+                                      <td className="py-3 px-2 text-[11px] font-black text-orange-400 text-center">
+                                        {grandTotal.commission > 0 ? `-$${grandTotal.commission.toFixed(2)}` : '—'}
+                                      </td>
+                                      <td className={`py-3 px-2 text-[11px] font-black font-display tracking-tight text-center ${grandNetPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                        {grandNetPnl < 0 ? '-' : ''}${Math.abs(grandNetPnl).toFixed(2)}
                                       </td>
                                       <td className={`py-3 px-2 text-[10px] font-black text-center ${grandWinRate >= 50 ? 'text-[#00B0F0]' : 'text-orange-400'}`} colSpan={2}>
                                         {grandWinRate.toFixed(1)}% Avg

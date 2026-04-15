@@ -12,6 +12,7 @@ export interface SetupTarget {
   stops: number;
   pnl: number;
   win_rate: number;
+  commission?: number;
   group_name?: string;
 }
 
@@ -90,7 +91,8 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
         takes: target.takes,
         stops: target.stops,
         pnl: target.pnl,
-        win_rate: target.win_rate
+        win_rate: target.win_rate,
+        commission: target.commission ?? 0
       });
       if (error) throw error;
     } catch (err) {
@@ -179,6 +181,7 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
           stops: t.stops,
           pnl: t.pnl,
           win_rate: t.win_rate,
+          commission: t.commission ?? 0,
           group_name: t.group_name
         }));
         const { error: insError } = await supabase.from('setup_targets').upsert(insertPayload);

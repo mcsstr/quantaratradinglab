@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Account from './pages/Account';
 import Admin from './pages/Admin';
 import Pricing from './pages/Pricing';
+import SetupPreviewPage from './pages/SetupPreviewPage';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/account" element={<Account />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/setup-preview" element={<SetupPreviewPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
