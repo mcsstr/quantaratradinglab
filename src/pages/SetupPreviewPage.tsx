@@ -227,8 +227,16 @@ function buildWeeklyData(trades: any[], weekStart: Date | null) {
     daysData[dow].trades += (parseInt(t.qty) || 1);
   }
 
-  const maxAbsPnl = Math.max(...daysData.map(d => Math.abs(d.pnl)), 0.01);
-  return { daysData, maxAbsPnl };
+  // Omit weekends if there is no trading volume
+  const filteredDaysData = daysData.filter(d => {
+    if (d.id === 0 || d.id === 6) {
+      return d.trades > 0;
+    }
+    return true;
+  });
+
+  const maxAbsPnl = Math.max(...filteredDaysData.map(d => Math.abs(d.pnl)), 0.01);
+  return { daysData: filteredDaysData, maxAbsPnl };
 }
 
 
@@ -360,6 +368,14 @@ function PreviewDashboard({
   const calendarData = useMemo(() => buildCalendar(trades, currentDate), [trades, currentDate]);
   const periods = useMemo(() => getPeriodStats(metrics.dailyPnl, metrics.netPnl, settings.profitSplit || 0), [metrics.dailyPnl, metrics.netPnl, settings.profitSplit]);
   const weeklyData = useMemo(() => buildWeeklyData(trades, selectedWeekDate), [trades, selectedWeekDate]);
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    const [y, m, d] = dateStr.split('-');
+    if (settings.dateFormat === 'US') return `${m}/${d}/${y}`;
+    if (settings.dateFormat === 'BR') return `${d}/${m}/${y}`;
+    return `${y}-${m}-${d}`;
+  };
 
   // COMBINE curves
   const chartPoints = useMemo(() => {
@@ -737,7 +753,7 @@ function PreviewDashboard({
                       const net = gross - fee;
                       return (
                         <tr key={r.id} className="border-b transition-colors hover:bg-white/5 group" style={{ borderColor: theme.contornoGeral }}>
-                          <td className="py-3 px-3 text-center font-semibold text-xs" style={{ color: theme.textoPrincipal }}>{r.date}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-xs" style={{ color: theme.textoPrincipal }}>{formatDate(r.date)}</td>
                           <td className="py-3 px-2 text-center font-bold text-sm" style={{ color: theme.textoPositivo }}>{take}</td>
                           <td className="py-3 px-2 text-center font-bold text-sm" style={{ color: theme.textoNegativo }}>{loss}</td>
                           <td className="py-3 px-3 text-right font-bold text-xs" style={{ color: gross >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
