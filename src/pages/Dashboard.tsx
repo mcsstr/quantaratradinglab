@@ -2838,6 +2838,7 @@ export default function Dashboard() {
               theme={theme}
               getGlassStyle={getGlassStyle}
               settings={settings}
+              accountSettings={accountSettings}
               t={t}
               lang={settings.appLanguage}
               trades={trades}

@@ -9,6 +9,7 @@ export default function SetupsView({
   theme,
   getGlassStyle,
   settings,
+  accountSettings,
   t,
   lang,
   trades,
@@ -117,7 +118,7 @@ export default function SetupsView({
       accountHistory: activeAccountTrades,
       setupTitle,
       groupName,
-      settings,
+      settings: { ...settings, ...accountSettings },
       theme,
     };
     
@@ -145,7 +146,7 @@ export default function SetupsView({
         alert('Erro ao abrir preview: dados muito grandes para sessionStorage e falha no IndexedDB.');
       }
     };
-  }, [setupTargets, selectedSetupId, settings, theme, trades, activeAccountId]);
+  }, [setupTargets, selectedSetupId, settings, accountSettings, theme, trades, activeAccountId]);
 
 
   const handleSelect = (mode: 'home'|'create'|'edit'|'view', id: string | null = null) => {
