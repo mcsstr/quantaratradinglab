@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useTransition, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
+import jsPDF from 'jspdf';
+import { toJpeg } from 'html-to-image';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList, PieChart, Pie, AreaChart, Area
 } from 'recharts';
@@ -69,6 +71,36 @@ export default function Dashboard() {
   const [activeAccountId, setActiveAccountId] = useState(null);
   const [isAccountSwitcherOpen, setIsAccountSwitcherOpen] = useState(false);
   const [isAccountFormOpen, setIsAccountFormOpen] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const mainContentRef = useRef<HTMLElement>(null);
+
+  const generateDashboardPdf = async () => {
+    if (!mainContentRef.current) return;
+    setIsGeneratingPdf(true);
+    try {
+      const dataUrl = await toJpeg(mainContentRef.current, {
+        quality: 1.0,
+        pixelRatio: 2, // Use 2 to balance quality and file size for long dashboards
+        backgroundColor: theme.fundoPrincipal || '#000000'
+      });
+
+      const w = mainContentRef.current.offsetWidth;
+      const h = mainContentRef.current.offsetHeight;
+      const pdf = new jsPDF({
+        orientation: w > h ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [w, h]
+      });
+
+      pdf.addImage(dataUrl, 'JPEG', 0, 0, w, h);
+      pdf.save(`Quantara_Dashboard_${settings.userName || 'User'}_${new Date().toISOString().slice(0,10)}.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alert('Failed to generate PDF. Try again.');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
   const [editingAccount, setEditingAccount] = useState(null);
   const [accountFormData, setAccountFormData] = useState({ name: '', ...DEFAULT_ACCOUNT_SETTINGS });
   const [accountFormError, setAccountFormError] = useState('');
@@ -2560,6 +2592,15 @@ export default function Dashboard() {
                     </button>
                   )}
                   <button onClick={() => {
+                    generateDashboardPdf();
+                  }}
+                    disabled={isGeneratingPdf}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all hover:bg-white/5 group ${isGeneratingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <Download size={18} style={{ color: '#22c55e' }} className={isGeneratingPdf ? 'animate-pulse' : 'group-hover:scale-110 transition-transform'} />
+                    <span style={{ color: theme.textoPrincipal }}>{isGeneratingPdf ? 'Generating...' : 'Generate PDF Report'}</span>
+                  </button>
+                  <div className="mx-1 my-1 border-t" style={{ borderColor: theme.contornoGeral }} />
+                  <button onClick={() => {
                     if (window.confirm('Are you sure you want to sign out?')) {
                       setIsProfileDropdownOpen(false);
                       navigate('/');
@@ -2578,7 +2619,7 @@ export default function Dashboard() {
       </header >
 
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 w-full px-4 lg:px-6 pt-safe-main pb-safe-main main-container" style={{ scrollBehavior: 'smooth' }}>
+      <main ref={mainContentRef} className="flex-1 w-full px-4 lg:px-6 pt-safe-main pb-safe-main main-container" style={{ scrollBehavior: 'smooth' }}>
 
         {isFreePlan && (
           <div className="mx-auto max-w-4xl bg-red-900/20 border border-red-500/30 text-red-200 px-4 py-3 rounded-xl mb-4 mt-6 text-xs md:text-sm font-medium flex items-center justify-center text-center shadow-sm animate-fade-in backdrop-blur-md">

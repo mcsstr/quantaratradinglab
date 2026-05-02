@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList
 } from 'recharts';
 import {
   Activity, TrendingUp, DollarSign, Percent, Layers, CalendarDays, Target, AlertTriangle, ShieldAlert, Sun, Banknote, Check,
-  BarChart2, ChevronLeft, ChevronRight, Search, ArrowDown, ArrowUp, ListIcon, Newspaper
+  BarChart2, ChevronLeft, ChevronRight, Search, ArrowDown, ArrowUp, ListIcon, Newspaper, ZoomIn, X
 } from '../../components/Icons';
 import { Crown } from 'lucide-react';
 import { hexToRgba } from '../../utils/constants';
@@ -66,6 +66,19 @@ export default function DashboardHomeView({
   onUpgradeClick = (_feature: string) => {}
 }) {
 
+  const [zoomedChart, setZoomedChart] = useState<string | null>(null);
+
+  // Helper: zoom button shown only on desktop
+  const ZoomBtn = ({ id }: { id: string }) => (
+    <button
+      className="hidden lg:flex items-center justify-center w-7 h-7 rounded-lg transition-all hover:bg-white/15 active:scale-90 shrink-0"
+      style={{ color: theme.textoSecundario }}
+      title="Expand chart"
+      onClick={() => setZoomedChart(id)}
+    >
+      <ZoomIn size={15} />
+    </button>
+  );
 
   const latestResultsData = [
     { label: 'Today', value: timeMetrics.profitToday },
@@ -106,7 +119,7 @@ export default function DashboardHomeView({
     </div>
   );
 
-  const equityBlock = (
+  const renderEquityBlock = () => (
     <div className="rounded-xl p-4 md:p-6 shadow-sm transition-all w-full h-full flex flex-col overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
       <div className="flex items-center justify-between mb-4 shrink-0 gap-3">
         <SectionTitle
@@ -126,6 +139,7 @@ export default function DashboardHomeView({
             <option value="monthly" className="bg-gray-900">Monthly View</option>
             <option value="yearly" className="bg-gray-900">Yearly View</option>
           </select>
+          <ZoomBtn id="equity" />
         </div>
       </div>
       <div className="w-full flex-1 min-h-[150px] overflow-hidden">
@@ -158,7 +172,7 @@ export default function DashboardHomeView({
     </div>
   );
 
-  const tradesByDayBlock = (
+  const renderTradesByDayBlock = () => (
     <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-full overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
         <SectionTitle
@@ -166,7 +180,10 @@ export default function DashboardHomeView({
           title={t('dash.weeklyTrades', lang)}
           theme={theme}
         />
-        {weeklyControls}
+        <div className="flex items-center gap-2">
+          {weeklyControls}
+          <ZoomBtn id="tradesByDay" />
+        </div>
       </div>
       <div className="w-full flex-1 min-h-[150px] overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
@@ -185,7 +202,7 @@ export default function DashboardHomeView({
     </div>
   );
 
-  const pnlByDayBlock = (
+  const renderPnlByDayBlock = () => (
     <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-full overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
         <SectionTitle
@@ -193,7 +210,10 @@ export default function DashboardHomeView({
           title={t('dash.weeklyPnl', lang)}
           theme={theme}
         />
-        {weeklyControls}
+        <div className="flex items-center gap-2">
+          {weeklyControls}
+          <ZoomBtn id="pnlByDay" />
+        </div>
       </div>
       <div className="w-full flex flex-col gap-4 flex-1 justify-center min-h-[200px]">
         {performanceWeeklyData.daysData.map((day) => {
@@ -216,7 +236,7 @@ export default function DashboardHomeView({
 
   const currentMonthPnl = calendarData.flatMap(w => w.days).filter(d => d.isCurrentMonth).reduce((sum, d) => sum + d.netPnl, 0);
 
-  const calendarBlock = (
+  const renderCalendarBlock = () => (
     <div className="relative rounded-xl p-4 md:p-6 shadow-sm w-full transition-all h-full flex flex-col" style={getGlassStyle(theme.fundoCards)}>
       {blockedModules.includes('dashboard_calendar') && (
         <PremiumLockOverlay label="Performance Calendar" onUpgrade={() => onUpgradeClick('Performance Calendar')} />
@@ -241,14 +261,17 @@ export default function DashboardHomeView({
         </div>
 
         {/* Nav controls always on right */}
-        <div className="flex gap-1 items-center rounded-lg p-1 w-full xl:w-auto justify-between shadow-sm border" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), borderColor: theme.contornoGeral }}>
+        <div className="flex items-center gap-2">
+          <ZoomBtn id="calendar" />
+          <div className="flex gap-1 items-center rounded-lg p-1 w-full xl:w-auto justify-between shadow-sm border" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), borderColor: theme.contornoGeral }}>
           <div className="flex items-center">
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronLeft size={14} /></button>
-            <span className="capitalize font-bold px-2 min-w-[110px] text-center text-[10px]" style={{ color: theme.textoPrincipal }}>{new Intl.DateTimeFormat(userLocale, { month: 'long', year: 'numeric' }).format(currentDate)}</span>
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronRight size={14} /></button>
+              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronLeft size={14} /></button>
+              <span className="capitalize font-bold px-2 min-w-[110px] text-center text-[10px]" style={{ color: theme.textoPrincipal }}>{new Intl.DateTimeFormat(userLocale, { month: 'long', year: 'numeric' }).format(currentDate)}</span>
+              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronRight size={14} /></button>
+            </div>
+            <div className="w-px h-3 opacity-30 mx-1" style={{ backgroundColor: theme.contornoGeral }}></div>
+            <button onClick={() => setCurrentDate(new Date())} className="text-[10px] px-2 py-1 font-bold rounded-md hover:bg-white/10 transition-colors whitespace-nowrap" style={{ color: theme.linhaGrafico }}>This Month</button>
           </div>
-          <div className="w-px h-3 opacity-30 mx-1" style={{ backgroundColor: theme.contornoGeral }}></div>
-          <button onClick={() => setCurrentDate(new Date())} className="text-[10px] px-2 py-1 font-bold rounded-md hover:bg-white/10 transition-colors whitespace-nowrap" style={{ color: theme.linhaGrafico }}>This Month</button>
         </div>
       </div>
 
@@ -276,7 +299,7 @@ export default function DashboardHomeView({
                   let corContorno = theme.contornoGeral;
                   let espessuraContorno = settings.borderWidthGeral;
 
-                  // A Notícia não altera mais a cor do contorno
+                  // A NotÃ­cia nÃ£o altera mais a cor do contorno
                   if (day.isToday) { corContorno = theme.contornoHoje; espessuraContorno = settings.borderWidthHoje; }
                   else if (day.isHoliday) { corContorno = theme.contornoFeriado; espessuraContorno = settings.borderWidthFeriado; }
                   else if (day.netPnl > 0) { corContorno = theme.contornoPositivo; espessuraContorno = settings.borderWidthPositivo; }
@@ -349,7 +372,7 @@ export default function DashboardHomeView({
             let corContorno = theme.contornoGeral;
             let espessuraContorno = settings.borderWidthGeral;
 
-            // A Notícia não altera mais a cor do contorno
+            // A NotÃ­cia nÃ£o altera mais a cor do contorno
             if (day.isToday) { corContorno = theme.contornoHoje; espessuraContorno = settings.borderWidthHoje; }
             else if (day.isHoliday) { corContorno = theme.contornoFeriado; espessuraContorno = settings.borderWidthFeriado; }
             else if (day.netPnl > 0) { corContorno = theme.contornoPositivo; espessuraContorno = settings.borderWidthPositivo; }
@@ -732,30 +755,30 @@ export default function DashboardHomeView({
       {settings.dashboardLayout === 'layout1' ? (
         <div className="space-y-4 mt-4">
           <div className="h-[300px] md:h-[400px]">
-            {equityBlock}
+            {renderEquityBlock()}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="h-[300px] md:h-[350px]">{tradesByDayBlock}</div>
-            <div className="h-[300px] md:h-[350px]">{pnlByDayBlock}</div>
+            <div className="h-[300px] md:h-[350px]">{renderTradesByDayBlock()}</div>
+            <div className="h-[300px] md:h-[350px]">{renderPnlByDayBlock()}</div>
           </div>
-          {calendarBlock}
+          {renderCalendarBlock()}
         </div>
       ) : (
         <div className="space-y-4 mt-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 auto-rows-fr">
             <div className="lg:col-span-1 h-[300px] md:h-[350px]">
-              {equityBlock}
+              {renderEquityBlock()}
             </div>
             <div className="lg:col-span-1 h-[300px] md:h-[350px]">
-              {tradesByDayBlock}
+              {renderTradesByDayBlock()}
             </div>
             <div className="lg:col-span-1 h-[300px] md:h-[350px]">
-              {pnlByDayBlock}
+              {renderPnlByDayBlock()}
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className={isMobile ? "lg:col-span-3" : "lg:col-span-2"}>
-              {calendarBlock}
+              {renderCalendarBlock()}
             </div>
             {!isMobile && (
               <div className="lg:col-span-1 h-[400px] lg:h-auto relative">
@@ -767,6 +790,55 @@ export default function DashboardHomeView({
           </div>
         </div>
       )}
+      {/* Chart Zoom Modal - desktop only */}
+      {zoomedChart && (() => {
+        const titles: Record<string, string> = {
+          equity: t('dash.equityEvolution', lang),
+          tradesByDay: t('dash.weeklyTrades', lang),
+          pnlByDay: t('dash.weeklyPnl', lang),
+          calendar: t('dash.performanceCalendar', lang),
+        };
+        const contents: Record<string, React.ReactNode> = {
+          equity: renderEquityBlock(),
+          tradesByDay: renderTradesByDayBlock(),
+          pnlByDay: renderPnlByDayBlock(),
+          calendar: renderCalendarBlock(),
+        };
+        return (
+          <div
+            className="hidden lg:flex fixed inset-0 z-[200] items-center justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', animation: 'fadeIn 0.22s ease' }}
+            onClick={() => setZoomedChart(null)}
+          >
+            <style>{`
+              @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+              @keyframes scaleIn { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: scale(1); } }
+            `}</style>
+            <div
+              className="relative w-[90vw] max-w-[1200px] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              style={{
+                backgroundColor: theme.fundoCards,
+                border: `1px solid ${theme.contornoGeral}`,
+                animation: 'scaleIn 0.22s cubic-bezier(0.34,1.56,0.64,1)',
+                minHeight: zoomedChart === 'calendar' ? '70vh' : '60vh',
+                maxHeight: '88vh',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: `1px solid ${theme.contornoGeral}` }}>
+                <span className="text-base font-bold" style={{ color: theme.textoPrincipal }}>{titles[zoomedChart]}</span>
+                <button onClick={() => setZoomedChart(null)} className="p-2 rounded-xl transition-all hover:bg-white/10 active:scale-90" style={{ color: theme.textoSecundario }}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto p-6" style={{ minHeight: 0 }}>
+                {contents[zoomedChart]}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
+

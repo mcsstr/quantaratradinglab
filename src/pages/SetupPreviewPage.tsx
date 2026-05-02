@@ -1,11 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList
+  Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList, Legend, ReferenceLine
 } from 'recharts';
 import { hexToRgba, DEFAULT_THEME, DEFAULT_SETTINGS } from '../utils/constants';
-import { Eye, TrendingUp, DollarSign, Percent, Activity, CalendarDays, Layers, AlertTriangle, Target, Shield, ShieldAlert, Banknote, List, Edit2, Trash2, ChevronLeft, ChevronRight, BarChart2, Sun, Check } from 'lucide-react';
+import { Eye, TrendingUp, DollarSign, Percent, Activity, CalendarDays, Layers, AlertTriangle, Target, Shield, ShieldAlert, Banknote, List, Edit2, Trash2, ChevronLeft, ChevronRight, BarChart2, Sun, Check, Download, PawPrint } from 'lucide-react';
+import { toJpeg } from 'html-to-image';
+import jsPDF from 'jspdf';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -443,6 +445,48 @@ function PreviewDashboard({
   selectedWeekDate, setSelectedWeekDate
 }: any) {
   const [isMobile, setIsMobile] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  const generatePdf = async () => {
+    if (!printRef.current) return;
+    setIsGeneratingPdf(true);
+    try {
+      const dataUrl = await toJpeg(printRef.current, {
+        quality: 1.0,
+        pixelRatio: 4, // High resolution for A4 print
+        backgroundColor: '#ffffff'
+      });
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [794, 1123] // A4 standard 96 DPI
+      });
+
+      const pages = Array.from(printRef.current.querySelectorAll('.pdf-page'));
+      
+      if (pages.length > 0) {
+        for (let i = 0; i < pages.length; i++) {
+          const pageEl = pages[i] as HTMLElement;
+          const pageDataUrl = await toJpeg(pageEl, { quality: 1.0, pixelRatio: 4, backgroundColor: '#ffffff' });
+          if (i > 0) pdf.addPage();
+          pdf.addImage(pageDataUrl, 'JPEG', 0, 0, 794, 1123);
+        }
+      } else {
+        const dataUrl = await toJpeg(printRef.current, { quality: 1.0, pixelRatio: 4, backgroundColor: '#ffffff' });
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, 794, printRef.current.offsetHeight * (794 / printRef.current.offsetWidth));
+      }
+
+      pdf.save(`Quantara_${setupTitle || 'Report'}_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err: any) {
+      console.error('Error generating PDF:', err);
+      alert('Houve um erro ao gerar o PDF.\n\nDetalhe: ' + (err.message || 'Erro desconhecido ao renderizar a imagem.'));
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
     handleResize();
@@ -575,6 +619,22 @@ function PreviewDashboard({
 
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed" style={bgStyle}>
+      <div style={{ position: 'fixed', left: '-9999px', top: '0', zIndex: -1000, pointerEvents: 'none' }}>
+        <PrintableReport 
+          ref={printRef} 
+          setupTitle={setupTitle} 
+          groupName={groupName} 
+          metrics={metrics} 
+          chartPoints={chartPoints}
+          weeklyData={weeklyData}
+          calendarData={calendarData}
+          settings={settings}
+          initialBalance={initialBalance}
+          periods={periods}
+          exchangeRate={exchangeRate}
+          calendarMonth={new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(currentDate)}
+        />
+      </div>
       <div className="min-h-screen relative">
 
         {/* Header Bar */}
@@ -588,16 +648,29 @@ function PreviewDashboard({
           }}>
 
           {/* LOGO na esquerda */}
-          <div className="flex items-center gap-3 h-full pb-0 lg:pb-0 pt-0 lg:pt-0">
-            <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 object-contain rounded-lg drop-shadow-md" onError={(e: any) => { e.target.style.display = 'none'; if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex'; }} />
-            <div className="hidden items-center justify-center w-8 h-8 rounded-xl" style={{ backgroundColor: theme.fundoPerfil || '#222' }}>
-              <span className="font-bold text-xs" style={{ color: theme.textoPerfil || '#fff' }}>Q</span>
+          <div className="flex items-center gap-2 lg:gap-3 lg:w-[160px] xl:w-[220px] h-full pb-0 lg:pb-0 pt-0 lg:pt-0">
+            <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 lg:w-9 lg:h-9 object-contain drop-shadow-md z-10 rounded-xl" onError={(e: any) => { e.target.style.display = 'none'; if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex'; }} />
+            <div style={{ display: 'none' }} className="w-8 h-8 lg:w-9 lg:h-9 bg-yellow-500 rounded-xl items-center justify-center text-[#121C30] z-0 drop-shadow-md font-bold">
+              🐾
             </div>
-            <span className="font-black tracking-widest uppercase hidden md:block text-sm" style={{ color: theme.textoPrincipal }}>Quantara</span>
+            <span className="text-lg lg:text-xl font-extrabold tracking-tight font-display hidden md:block" style={{ color: theme.textoPrincipal }}>Quantara</span>
           </div>
 
           {/* DADOs na direita */}
           <div className="flex items-center justify-end text-right h-full">
+            <button
+              id="pdf-button"
+              onClick={generatePdf}
+              disabled={isGeneratingPdf}
+              className={`mr-3 md:mr-4 flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-300 shadow-sm ${isGeneratingPdf ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}`}
+              style={{
+                backgroundColor: theme.linhaGrafico || '#3b82f6',
+                color: '#fff'
+              }}
+            >
+              <Download size={14} className={isGeneratingPdf ? 'animate-bounce' : ''} />
+              <span className="hidden sm:inline">{isGeneratingPdf ? 'Gerando...' : 'Gerar PDF'}</span>
+            </button>
             <span className="mr-4 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-purple-500/20 text-purple-400 border border-purple-500/30 hidden sm:inline-block">
               Preview Temporário
             </span>
@@ -1187,7 +1260,7 @@ function MetricCard({ theme, settings, color, icon: Icon, label, main, sub, sub2
         </div>
       </div>
       <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-1.5 sm:gap-0">
-        <div className="flex flex-col items-center sm:items-start w-full">
+                    <div className="flex flex-col items-center sm:items-start w-full">
           <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color }}>{main}</span>
           {sub && <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>{sub}</span>}
         </div>
@@ -1218,3 +1291,379 @@ function WeekNav({ selectedWeekDate, setSelectedWeekDate, theme }: any) {
     </div>
   );
 }
+
+const PrintableReport = React.forwardRef(({ setupTitle, groupName, metrics, chartPoints, weeklyData, calendarData, settings, initialBalance, periods, exchangeRate, calendarMonth }: any, ref: any) => {
+  const fmt = (v: number) => formatCurrency(v);
+  const fmtPct = (v: number) => `${v.toFixed(1)}%`;
+
+  const accountInitialBalance = settings?.initialBalance || initialBalance;
+  const dailyLossLimitAmount = settings?.dailyLossLimitType === '%'
+    ? (accountInitialBalance * Number(settings?.dailyLossLimit || 0)) / 100
+    : Number(settings?.dailyLossLimit || 0);
+  const remainingDailyLimit = dailyLossLimitAmount + (metrics.todayPnl ?? metrics.lastDayPnl ?? 0);
+
+  const totalStopLossAmount = settings?.totalStopLossType === '%'
+    ? (initialBalance * Number(settings?.totalStopLoss || 0)) / 100
+    : Number(settings?.totalStopLoss || 0);
+  const accountStopRemaining = metrics.netPnl < 0 ? totalStopLossAmount + metrics.netPnl : totalStopLossAmount;
+  const accountStopRemainingPct = totalStopLossAmount > 0 ? (accountStopRemaining / totalStopLossAmount) * 100 : 0;
+  
+  const pageStyle = {
+    width: '794px',
+    height: '1123px', // Exactly A4 height
+    backgroundColor: '#ffffff',
+    color: '#000000',
+    padding: '40px',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    boxSizing: 'border-box' as const,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    position: 'relative' as const,
+    overflow: 'hidden' as const
+  };
+
+  return (
+    <div ref={ref}>
+      {/* PAGE 1: Header, Metrics, Results, Chart */}
+      <div className="pdf-page" style={pageStyle}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <img src="/logo.png" alt="Quantara Logo" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '12px' }} />
+            <div>
+              <h1 style={{ fontSize: '20px', fontFamily: '"Outfit", system-ui, sans-serif', fontWeight: 800, letterSpacing: '-0.025em', margin: 0, color: '#111827' }}>Quantara</h1>
+              <h2 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: '#4b5563' }}>Analytical report</h2>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: 0 }}>{setupTitle}</h3>
+            <p style={{ fontSize: '12px', fontWeight: 700, color: '#4b5563', margin: '4px 0 0' }}>{groupName}</p>
+            <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0' }}>{settings?.dateFormat === 'US' ? new Date().toLocaleDateString('en-US') : new Date().toLocaleDateString('pt-BR')}</p>
+          </div>
+        </div>
+
+        {/* Metrics Grid 3x4 (12 Cards) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+           {/* 1. Current Balance */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Current balance</p>
+             <p style={{ fontSize: '16px', fontWeight: 700, color: '#3b82f6', margin: 0 }}>{fmt(metrics.currentBalance)}</p>
+             <p style={{ fontSize: '10px', color: '#6b7280', margin: '4px 0 0' }}>Initial: {fmt(initialBalance)}</p>
+           </div>
+           
+           {/* 2. Net P&L */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Net P&L</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+               <div>
+                 <p style={{ fontSize: '16px', fontWeight: 700, color: metrics.netPnl >= 0 ? '#16a34a' : '#dc2626', margin: 0 }}>{fmt(metrics.netPnl)}</p>
+                 <p style={{ fontSize: '10px', color: '#6b7280', margin: '4px 0 0' }}>Fees: {fmt(metrics.totalFees)}</p>
+               </div>
+               <span style={{ fontSize: '12px', fontWeight: 700, color: metrics.netPnl >= 0 ? '#16a34a' : '#dc2626' }}>{fmtPct(initialBalance > 0 ? (metrics.netPnl / initialBalance) * 100 : 0)}</span>
+             </div>
+           </div>
+
+           {/* 3. Win Rate */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Win rate</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+               <div>
+                 <p style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: 0 }}>{fmtPct(metrics.winRate)}</p>
+                 <p style={{ fontSize: '10px', color: '#6b7280', margin: '4px 0 0' }}>{metrics.totalOps} Ops</p>
+               </div>
+               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                 <span style={{ fontSize: '8px', fontWeight: 700, color: '#4b5563' }}>Daily</span>
+                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#111827' }}>{fmtPct(metrics.dayWinRate)}</span>
+               </div>
+             </div>
+           </div>
+
+           {/* 4. Metrics */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Metrics</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+               <div style={{ flex: 1, textAlign: 'center' }}>
+                 <p style={{ fontSize: '14px', fontWeight: 700, color: metrics.profitFactor >= 1 ? '#16a34a' : '#dc2626', margin: 0 }}>{Number(metrics.profitFactor).toFixed(2)}</p>
+                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0' }}>Profit factor</p>
+               </div>
+               <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb', margin: '0 8px' }}></div>
+               <div style={{ flex: 1, textAlign: 'center' }}>
+                 <p style={{ fontSize: '14px', fontWeight: 700, color: metrics.avgRR >= 1 ? '#16a34a' : '#dc2626', margin: 0 }}>{Number(metrics.avgRR).toFixed(2)}</p>
+                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0' }}>Average RR</p>
+               </div>
+             </div>
+           </div>
+
+           {/* 5. Trades */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Trades</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+               <p style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: 0 }}>{metrics.totalOps}</p>
+               <div style={{ display: 'flex', gap: '12px' }}>
+                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                   <span style={{ fontSize: '8px', fontWeight: 700, color: '#16a34a' }}>Win</span>
+                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#111827' }}>{metrics.winOps}</span>
+                 </div>
+                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                   <span style={{ fontSize: '8px', fontWeight: 700, color: '#dc2626' }}>Loss</span>
+                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#111827' }}>{metrics.lossOps}</span>
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           {/* 6. Traded Days */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Traded days</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+               <p style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: 0 }}>{metrics.totalDays}</p>
+               <div style={{ display: 'flex', gap: '12px' }}>
+                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                   <span style={{ fontSize: '8px', fontWeight: 700, color: '#16a34a' }}>Win</span>
+                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#111827' }}>{metrics.winDays}</span>
+                 </div>
+                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                   <span style={{ fontSize: '8px', fontWeight: 700, color: '#dc2626' }}>Loss</span>
+                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#111827' }}>{metrics.lossDays}</span>
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           {/* 7. Daily Limit */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Daily limit</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+               <div>
+                 <p style={{ fontSize: '16px', fontWeight: 700, color: remainingDailyLimit < 0 ? '#dc2626' : (remainingDailyLimit < dailyLossLimitAmount ? '#eab308' : '#16a34a'), margin: 0 }}>{fmt(remainingDailyLimit)}</p>
+                 <p style={{ fontSize: '10px', color: '#6b7280', margin: '4px 0 0' }}>Base: {fmt(settings?.dailyLossLimit || 0)}</p>
+               </div>
+               <span style={{ fontSize: '12px', fontWeight: 700, color: '#111827' }}>{fmtPct(dailyLossLimitAmount > 0 ? (remainingDailyLimit / dailyLossLimitAmount) * 100 : 0)}</span>
+             </div>
+           </div>
+
+           {/* 8. Account Drawdown */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Account drawdown</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+               <div>
+                 <p style={{ fontSize: '16px', fontWeight: 700, color: accountStopRemaining <= 0 ? '#dc2626' : (accountStopRemainingPct < 30 ? '#eab308' : '#16a34a'), margin: 0 }}>{fmt(accountStopRemaining)}</p>
+                 <p style={{ fontSize: '10px', color: '#6b7280', margin: '4px 0 0' }}>Stop: {fmt(totalStopLossAmount)}</p>
+               </div>
+               <span style={{ fontSize: '12px', fontWeight: 700, color: '#111827' }}>{fmtPct(accountStopRemainingPct)}</span>
+             </div>
+           </div>
+
+           {/* 9. Max Profit / Drawdown */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Max profit / drawdown</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+               <div style={{ flex: 1, textAlign: 'center' }}>
+                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#16a34a', margin: 0 }}>{fmt(metrics.maxProfit)}</p>
+                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0' }}>{fmtPct(initialBalance > 0 ? (metrics.maxProfit / initialBalance) * 100 : 0)}</p>
+               </div>
+               <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb', margin: '0 8px' }}></div>
+               <div style={{ flex: 1, textAlign: 'center' }}>
+                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#dc2626', margin: 0 }}>-{fmt(metrics.maxDrawdown)}</p>
+                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0' }}>{fmtPct(metrics.peakBalance > 0 ? (metrics.maxDrawdown / metrics.peakBalance) * 100 : 0)}</p>
+               </div>
+             </div>
+           </div>
+
+           {/* 10. Better / Bad Day */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Better / bad day</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+               <div style={{ flex: 1, textAlign: 'center' }}>
+                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#16a34a', margin: 0 }}>{fmt(metrics.betterDay)}</p>
+                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0' }}>{fmtPct(metrics.betterDayPct)}</p>
+               </div>
+               <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb', margin: '0 8px' }}></div>
+               <div style={{ flex: 1, textAlign: 'center' }}>
+                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#dc2626', margin: 0 }}>{metrics.badDay < 0 ? '' : '-'}{fmt(Math.abs(metrics.badDay))}</p>
+                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0' }}>{fmtPct(metrics.badDayPct)}</p>
+               </div>
+             </div>
+           </div>
+
+           {/* 11. Gross P&L / Fees */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Gross P&L / fees</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+               <div style={{ flex: 1, textAlign: 'center' }}>
+                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#16a34a', margin: 0 }}>{fmt(metrics.totalGrossProfit)}</p>
+                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0' }}>Gross win</p>
+               </div>
+               <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb', margin: '0 8px' }}></div>
+               <div style={{ flex: 1, textAlign: 'center' }}>
+                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#dc2626', margin: 0 }}>-{fmt(metrics.totalGrossLoss)}</p>
+                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0' }}>Gross loss</p>
+               </div>
+             </div>
+           </div>
+
+           {/* 12. Consistency Target */}
+           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+             <p style={{ fontSize: '10px', fontWeight: 700, color: '#4b5563', margin: '0 0 8px 0' }}>Consistency target</p>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+               <div>
+                 <p style={{ fontSize: '16px', fontWeight: 700, color: metrics.consistencyPct <= Number(settings?.consistencyTarget || 100) ? '#16a34a' : '#dc2626', margin: 0 }}>{fmtPct(metrics.consistencyPct)}</p>
+                 <p style={{ fontSize: '10px', color: '#6b7280', margin: '4px 0 0' }}>Target: {settings?.consistencyTarget || 0}%</p>
+               </div>
+             </div>
+           </div>
+        </div>
+
+        {/* LATEST RESULTS BAR */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9fafb', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '24px' }}>
+          {[
+            { label: 'Today', value: periods?.todayPnl || 0 },
+            { label: 'Yesterday', value: periods?.yestPnl || 0 },
+            { label: 'This week', value: periods?.weekPnl || 0 },
+            { label: 'Last week', value: periods?.lastWeekPnl || 0 },
+            { label: 'This month', value: periods?.monthPnl || 0 },
+            { label: 'Last month', value: periods?.lastMonthPnl || 0 },
+            { label: 'Profit split', value: (periods?.profitSplitVal || 0) * (exchangeRate || 1), customColor: '#3b82f6', isBrl: true },
+          ].map((item: any, idx, arr) => (
+            <React.Fragment key={item.label}>
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: item.customColor ? item.customColor : (item.value >= 0 ? '#16a34a' : '#dc2626') }}>
+                  {item.isBrl ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'BRL' }).format(item.value) : fmt(item.value)}
+                </p>
+                <p style={{ fontSize: '9px', fontWeight: 700, color: '#4b5563', margin: '4px 0 0' }}>{item.label}</p>
+              </div>
+              {idx < arr.length - 1 && (
+                <div style={{ width: '1px', height: '24px', backgroundColor: '#e5e7eb' }}></div>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* Chart */}
+        <div style={{ marginBottom: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>Capital curve</h4>
+          <div style={{ width: '100%', flex: 1, minHeight: '280px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartPoints} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                 <XAxis dataKey="name" hide />
+                 <YAxis domain={['auto','auto']} tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(v)=>fmt(v).replace(/[.]\d+/, '')} width={80} axisLine={false} tickLine={false} />
+                 <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                 <Line type="monotone" name="Setup" dataKey="balance" stroke="#111827" strokeWidth={2} dot={false} isAnimationActive={false} />
+                 <Line type="monotone" name="Master account" dataKey="accountBalance" stroke="#4b5563" strokeWidth={2} strokeDasharray="5 5" dot={false} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 'auto', borderTop: '1px solid #e5e7eb', paddingTop: '16px', textAlign: 'center', fontSize: '10px', color: '#6b7280' }}>
+           Document generated by Quantara Trading Lab • quantaratradinglab.com • Page 1/2
+        </div>
+      </div>
+
+      {/* PAGE 2: Weekly Charts + Calendar */}
+      <div className="pdf-page" style={pageStyle}>
+        
+        {/* Weekly Charts */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '32px' }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', height: '220px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#4b5563', marginBottom: '12px' }}>Trades by day of week</h4>
+            <div style={{ width: '100%', flex: 1 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyData.daysData} margin={{ top: 15, right: 0, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis dataKey="name" tick={{fontSize: 10, fill: '#6b7280'}} axisLine={false} tickLine={false} />
+                  <Bar dataKey="trades" fill="#3b82f6" isAnimationActive={false}>
+                    <LabelList dataKey="trades" position="top" offset={5} fill="#111827" fontSize={10} fontWeight="bold" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', height: '220px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#4b5563', marginBottom: '12px' }}>P&L by day of week</h4>
+            <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '8px' }}>
+              {weeklyData.daysData.map((day: any) => {
+                const widthPct = weeklyData.maxAbsPnl > 0 ? (Math.abs(day.pnl) / weeklyData.maxAbsPnl) * 100 : 0;
+                const pos = day.pnl >= 0;
+                return (
+                  <div key={day.id} style={{ display: 'flex', alignItems: 'center', w: '100%' }}>
+                    <div style={{ minWidth: '40px', fontSize: '11px', textAlign: 'right', paddingRight: '12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{day.name}</div>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', height: '14px' }}>
+                      <div style={{ width: '50%', display: 'flex', justifyContent: 'flex-end', paddingRight: '1px', height: '100%' }}>
+                        {!pos && day.pnl !== 0 && (<div style={{ height: '100%', borderRadius: '2px 0 0 2px', width: `${widthPct}%`, backgroundColor: '#ef4444' }}></div>)}
+                      </div>
+                      <div style={{ width: '50%', display: 'flex', justifyContent: 'flex-start', paddingLeft: '1px', height: '100%' }}>
+                        {pos && day.pnl !== 0 && (<div style={{ height: '100%', borderRadius: '0 2px 2px 0', width: `${widthPct}%`, backgroundColor: '#10b981' }}></div>)}
+                      </div>
+                    </div>
+                    <div style={{ minWidth: '60px', fontSize: '10px', textAlign: 'right', fontWeight: 'bold', paddingLeft: '12px', whiteSpace: 'nowrap', color: pos ? '#10b981' : '#ef4444' }}>
+                      {pos ? '' : '-'} {fmt(Math.abs(day.pnl))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Calendar Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
+           <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#1f2937', margin: 0 }}>Monthly performance</h4>
+           <div style={{ fontSize: '12px', fontWeight: 700, color: '#4b5563', textTransform: 'capitalize' }}>{calendarMonth}</div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '8px' }}>
+            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'WEEK'].map(d => (
+              <span key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#6b7280', padding: '8px', borderBottom: '2px solid #e5e7eb' }}>{d}</span>
+            ))}
+          </div>
+          {calendarData.map((week: any, widx: number) => {
+             const wPnl = week.summary.pnl;
+             const wBg = wPnl > 0 ? '#dcfce7' : wPnl < 0 ? '#fee2e2' : '#f9fafb';
+             const wText = wPnl > 0 ? '#16a34a' : wPnl < 0 ? '#dc2626' : '#6b7280';
+             const wBorder = wPnl > 0 ? '#bbf7d0' : wPnl < 0 ? '#fecaca' : '#e5e7eb';
+             return (
+               <div key={widx} style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '8px' }}>
+                 {week.days.map((day: any, j: number) => {
+                   const isPlaceholder = !day.isCurrentMonth;
+                   const isWin = day.netPnl > 0;
+                   const isLoss = day.netPnl < 0;
+                   const bg = isPlaceholder ? 'transparent' : (isWin ? '#dcfce7' : (isLoss ? '#fee2e2' : '#f9fafb'));
+                   const text = isPlaceholder ? 'transparent' : (isWin ? '#16a34a' : (isLoss ? '#dc2626' : '#6b7280'));
+                   const borderColor = isPlaceholder ? 'transparent' : (isWin ? '#bbf7d0' : (isLoss ? '#fecaca' : '#e5e7eb'));
+                   return (
+                     <div key={j} style={{ backgroundColor: bg, border: `1px solid ${borderColor}`, borderRadius: '6px', padding: '6px', height: '90px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', opacity: isPlaceholder ? 0.3 : 1 }}>
+                        <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 'bold' }}>{day.date.getDate()}</span>
+                        {!isPlaceholder && day.tradesCount > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: text }}>{fmt(day.netPnl)}</span>
+                            <span style={{ fontSize: '8px', color: '#6b7280', fontWeight: 'bold' }}>{day.tradesCount} TRDS</span>
+                          </div>
+                        )}
+                     </div>
+                   )
+                 })}
+                 {/* Week Summary */}
+                 <div style={{ backgroundColor: wBg, border: `1px solid ${wBorder}`, borderRadius: '6px', padding: '6px', height: '90px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 'bold' }}>W{widx + 1}</span>
+                    {week.summary.trades > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: wText }}>{fmt(wPnl)}</span>
+                        <span style={{ fontSize: '8px', color: '#6b7280', fontWeight: 'bold' }}>{week.summary.trades} TRDS</span>
+                      </div>
+                    )}
+                 </div>
+               </div>
+             );
+          })}
+        </div>
+
+        <div style={{ marginTop: 'auto', borderTop: '1px solid #e5e7eb', paddingTop: '16px', textAlign: 'center', fontSize: '10px', color: '#6b7280' }}>
+           Document generated by Quantara Trading Lab • quantaratradinglab.com • Page 2/2
+        </div>
+      </div>
+    </div>
+  );
+});
