@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, LabelList
 } from 'recharts';
@@ -119,7 +119,7 @@ export default function DashboardHomeView({
     </div>
   );
 
-  const renderEquityBlock = () => (
+  const renderEquityBlock = (isZoomed = false) => (
     <div className="rounded-xl p-4 md:p-6 shadow-sm transition-all w-full h-full flex flex-col overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
       <div className="flex items-center justify-between mb-4 shrink-0 gap-3">
         <SectionTitle
@@ -142,9 +142,8 @@ export default function DashboardHomeView({
           <ZoomBtn id="equity" />
         </div>
       </div>
-      <div className="w-full flex-1 min-h-[150px] overflow-hidden">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+      <div className={`w-full flex-1 overflow-hidden ${isZoomed ? "min-h-[400px]" : "min-h-[150px]"}`}>
+        <ResponsiveContainer key={`equity-${isZoomed}`} width="100%" height="99%"><LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
             <XAxis dataKey="name" hide />
             <YAxis domain={['auto', 'auto']} stroke={theme.textoSecundario} fontSize={10} tickFormatter={(value) => new Intl.NumberFormat(userLocale, { style: 'currency', currency: settings.brokerCurrency, currencyDisplay: 'narrowSymbol', maximumFractionDigits: 0 }).format(value)} axisLine={false} tickLine={false} />
@@ -172,7 +171,7 @@ export default function DashboardHomeView({
     </div>
   );
 
-  const renderTradesByDayBlock = () => (
+  const renderTradesByDayBlock = (isZoomed = false) => (
     <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-full overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
         <SectionTitle
@@ -185,9 +184,8 @@ export default function DashboardHomeView({
           <ZoomBtn id="tradesByDay" />
         </div>
       </div>
-      <div className="w-full flex-1 min-h-[150px] overflow-hidden">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={performanceWeeklyData.daysData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
+      <div className={`w-full flex-1 overflow-hidden ${isZoomed ? "min-h-[400px]" : "min-h-[150px]"}`}>
+        <ResponsiveContainer key={`trades-${isZoomed}`} width="100%" height="99%"><BarChart data={performanceWeeklyData.daysData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
             <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
             <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
@@ -202,7 +200,7 @@ export default function DashboardHomeView({
     </div>
   );
 
-  const renderPnlByDayBlock = () => (
+  const renderPnlByDayBlock = (isZoomed = false) => (
     <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-full overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
         <SectionTitle
@@ -215,7 +213,7 @@ export default function DashboardHomeView({
           <ZoomBtn id="pnlByDay" />
         </div>
       </div>
-      <div className="w-full flex flex-col gap-4 flex-1 justify-center min-h-[200px]">
+      <div className={`w-full flex flex-col flex-1 ${isZoomed ? "gap-4 lg:gap-6 justify-center min-h-[300px]" : "gap-4 justify-center min-h-[200px]"}`}>
         {performanceWeeklyData.daysData.map((day) => {
           const widthPct = (Math.abs(day.pnl) / performanceWeeklyData.maxAbsPnl) * 100;
           const isPositive = day.pnl >= 0;
@@ -236,7 +234,7 @@ export default function DashboardHomeView({
 
   const currentMonthPnl = calendarData.flatMap(w => w.days).filter(d => d.isCurrentMonth).reduce((sum, d) => sum + d.netPnl, 0);
 
-  const renderCalendarBlock = () => (
+  const renderCalendarBlock = (isZoomed = false) => (
     <div className="relative rounded-xl p-4 md:p-6 shadow-sm w-full transition-all h-full flex flex-col" style={getGlassStyle(theme.fundoCards)}>
       {blockedModules.includes('dashboard_calendar') && (
         <PremiumLockOverlay label="Performance Calendar" onUpgrade={() => onUpgradeClick('Performance Calendar')} />
@@ -299,7 +297,7 @@ export default function DashboardHomeView({
                   let corContorno = theme.contornoGeral;
                   let espessuraContorno = settings.borderWidthGeral;
 
-                  // A NotÃ­cia nÃ£o altera mais a cor do contorno
+                  // A NotÃƒÆ’Ã‚Â­cia nÃƒÆ’Ã‚Â£o altera mais a cor do contorno
                   if (day.isToday) { corContorno = theme.contornoHoje; espessuraContorno = settings.borderWidthHoje; }
                   else if (day.isHoliday) { corContorno = theme.contornoFeriado; espessuraContorno = settings.borderWidthFeriado; }
                   else if (day.netPnl > 0) { corContorno = theme.contornoPositivo; espessuraContorno = settings.borderWidthPositivo; }
@@ -311,7 +309,7 @@ export default function DashboardHomeView({
                   }
 
                   return (
-                    <div key={`day-${day.dateStr}-${didx}`} style={{ backgroundColor: day.isCurrentMonth ? bgDia : 'transparent', borderColor: corContorno, borderWidth: (day.isToday || day.isHoliday || day.netPnl !== 0) ? espessuraContorno : settings.borderWidthGeral, borderStyle: 'solid', opacity: day.isCurrentMonth ? 1 : 0.1 }} className="relative p-1 lg:p-2 rounded-lg aspect-square flex flex-col justify-between transition-all shadow-sm hover:scale-[1.03] hover:z-50">
+                    <div key={`day-${day.dateStr}-${didx}`} style={{ backgroundColor: day.isCurrentMonth ? bgDia : 'transparent', borderColor: corContorno, borderWidth: (day.isToday || day.isHoliday || day.netPnl !== 0) ? espessuraContorno : settings.borderWidthGeral, borderStyle: 'solid', opacity: day.isCurrentMonth ? 1 : 0.1 }} className={`relative p-1 lg:p-2 rounded-lg flex flex-col ${isZoomed ? "h-full min-h-[60px]" : "aspect-square"} justify-between transition-all shadow-sm hover:scale-[1.03] hover:z-50`}>
                       <div className="flex justify-between items-start w-full">
                         <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: theme.textoSecundario }}>
                           {day.date.getDate()}
@@ -344,7 +342,7 @@ export default function DashboardHomeView({
                     </div>
                   )
                 })}
-                <div key={`summary-${widx}`} className="relative p-1 lg:p-2 rounded-lg aspect-square flex flex-col justify-between transition-all shadow-sm hover:scale-[1.03] hover:z-50" style={{ backgroundColor: bgSemana, borderColor: corContornoSemana, borderWidth: week.summary.pnl !== 0 ? espessuraSemana : settings.borderWidthGeral, borderStyle: 'solid' }}>
+                <div key={`summary-${widx}`} className={`relative p-1 lg:p-2 rounded-lg flex flex-col ${isZoomed ? "h-full min-h-[60px]" : "aspect-square"} justify-between transition-all shadow-sm hover:scale-[1.03] hover:z-50`} style={{ backgroundColor: bgSemana, borderColor: corContornoSemana, borderWidth: week.summary.pnl !== 0 ? espessuraSemana : settings.borderWidthGeral, borderStyle: 'solid' }}>
                   <div className="flex justify-between items-start w-full">
                     <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: theme.textoSecundario }}>
                       W{widx + 1}
@@ -372,7 +370,7 @@ export default function DashboardHomeView({
             let corContorno = theme.contornoGeral;
             let espessuraContorno = settings.borderWidthGeral;
 
-            // A NotÃ­cia nÃ£o altera mais a cor do contorno
+            // A NotÃƒÆ’Ã‚Â­cia nÃƒÆ’Ã‚Â£o altera mais a cor do contorno
             if (day.isToday) { corContorno = theme.contornoHoje; espessuraContorno = settings.borderWidthHoje; }
             else if (day.isHoliday) { corContorno = theme.contornoFeriado; espessuraContorno = settings.borderWidthFeriado; }
             else if (day.netPnl > 0) { corContorno = theme.contornoPositivo; espessuraContorno = settings.borderWidthPositivo; }
@@ -799,10 +797,10 @@ export default function DashboardHomeView({
           calendar: t('dash.performanceCalendar', lang),
         };
         const contents: Record<string, React.ReactNode> = {
-          equity: renderEquityBlock(),
-          tradesByDay: renderTradesByDayBlock(),
-          pnlByDay: renderPnlByDayBlock(),
-          calendar: renderCalendarBlock(),
+          equity: renderEquityBlock(true),
+          tradesByDay: renderTradesByDayBlock(true),
+          pnlByDay: renderPnlByDayBlock(true),
+          calendar: renderCalendarBlock(true),
         };
         return (
           <div
@@ -820,8 +818,8 @@ export default function DashboardHomeView({
                 backgroundColor: theme.fundoCards,
                 border: `1px solid ${theme.contornoGeral}`,
                 animation: 'scaleIn 0.22s cubic-bezier(0.34,1.56,0.64,1)',
-                minHeight: zoomedChart === 'calendar' ? '70vh' : '60vh',
-                maxHeight: '88vh',
+                minHeight: zoomedChart === 'calendar' ? '88vh' : '60vh',
+                maxHeight: zoomedChart === 'calendar' ? '92vh' : '88vh',
               }}
               onClick={e => e.stopPropagation()}
             >
@@ -831,7 +829,7 @@ export default function DashboardHomeView({
                   <X size={20} />
                 </button>
               </div>
-              <div className="flex-1 overflow-auto p-6" style={{ minHeight: 0 }}>
+              <div className="flex-1 overflow-hidden p-6 flex flex-col" style={{ minHeight: 0 }}>
                 {contents[zoomedChart]}
               </div>
             </div>
@@ -841,4 +839,7 @@ export default function DashboardHomeView({
     </div>
   );
 }
+
+
+
 
