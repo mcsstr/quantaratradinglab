@@ -15,7 +15,29 @@ export default function MobileMenuView({
     activeTab
 }) {
     return (
-        <div key="mobile_menu" className="space-y-6 pb-20 animate-tab-enter max-w-md mx-auto w-full">
+        <div key="mobile_menu" className="space-y-6 pb-20 animate-tab-enter max-w-md mx-auto w-full pt-4">
+            {/* Main Pages */}
+            <div className="space-y-3">
+                <button
+                    onClick={() => {
+                        startTransition(() => {
+                            setPrevTab(activeTab);
+                            setActiveTab('setups');
+                        });
+                    }}
+                    className="w-full flex items-center justify-between p-4 rounded-xl shadow-xl transition-all border border-white/5 active:scale-[0.98]"
+                    style={getGlassStyle(theme.fundoCards)}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg" style={{ backgroundColor: theme.linhaGrafico + '15', color: theme.linhaGrafico }}>
+                            <Folder size={20} />
+                        </div>
+                        <span className="font-bold text-sm" style={{ color: theme.textoPrincipal }}>Setups & Strategies</span>
+                    </div>
+                    <ChevronRight size={18} style={{ color: theme.textoSecundario }} />
+                </button>
+            </div>
+
             {/* Settings Options */}
             <div className="space-y-3">
                 {[

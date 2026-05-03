@@ -23,7 +23,7 @@ export default function Landing() {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-4 max-w-7xl mx-auto header-safe">
+      <header className="relative z-10 flex items-center justify-between px-5 sm:px-6 pt-10 pb-4 md:py-6 max-w-7xl mx-auto header-safe">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
           <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-xl font-bold font-display">Quantara</span>
@@ -35,7 +35,7 @@ export default function Landing() {
           <a href="#" className="hover:text-white transition-colors">Pricing</a>
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <button onClick={() => navigate('/auth')} className="text-sm font-medium hover:text-gray-300 transition-colors">Login</button>
           <button onClick={() => navigate('/auth')} className="bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-bold hover:bg-yellow-400 transition-colors">Start Free</button>
         </div>

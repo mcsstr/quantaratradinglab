@@ -592,7 +592,7 @@ export default function SetupsView({
   }, []);
 
   const globalChartNode = useMemo(() => (
-    <div className="p-6 rounded-2xl border flex flex-col shadow-sm min-h-[450px]" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
+    <div className="p-2 md:p-6 rounded-2xl border flex flex-col shadow-sm min-h-[450px]" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
         <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
           <TrendingUp size={12} /> Equity Curves Comparison (All Strategies)
@@ -741,7 +741,7 @@ export default function SetupsView({
        <div className="flex-1 flex flex-col p-2 md:p-4 gap-2 max-w-full min-w-0 w-full mb-12">
           
           {!isExpandedDoc && (
-             <div className="flex justify-between items-center z-10 py-2" style={{ background: 'transparent' }}>
+             <div className="hidden md:flex justify-between items-center z-10 py-2" style={{ background: 'transparent' }}>
                 <div className="flex items-center gap-3">
                   <Target size={28} className="text-yellow-500" />
                   <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight flex items-center gap-3" style={{ color: theme.textoPrincipal }}>
