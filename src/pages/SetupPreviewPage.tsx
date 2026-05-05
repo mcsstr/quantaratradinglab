@@ -588,11 +588,11 @@ function PreviewDashboard({
 
   const grandTotal = useMemo(() => {
     return tableRows.reduce((acc, r: any) => {
-      const op = r.qty || 1;
-      const take = r.takes || 0;
-      const loss = r.stops || 0;
+      const op = parseInt(r.qty) || 1;
+      const take = parseInt(r.takes) || 0;
+      const loss = parseInt(r.stops) || 0;
       const gross = parseFloat(r.pnl) || 0;
-      const fee = (parseFloat(r.commission_per_trade) || 0) * op;
+      const fee = (parseFloat(r.commission_per_trade) || parseFloat(r.commission) || 0) * op;
       return {
         takes: acc.takes + take,
         stops: acc.stops + loss,
@@ -1192,27 +1192,28 @@ function PreviewDashboard({
                             <th className="px-2 py-3 md:px-4 md:py-4 text-center">Date</th>
                             <th className="px-2 py-3 md:px-4 md:py-4 text-center text-green-400">Take</th>
                             <th className="px-2 py-3 md:px-4 md:py-4 text-center text-red-400">Loss</th>
-                            <th className="px-2 py-3 md:px-4 md:py-4 text-right">Gross</th>
-                            <th className="px-2 py-3 md:px-4 md:py-4 text-right text-orange-400">Fee</th>
                             <th className="px-2 py-3 md:px-4 md:py-4 text-right">Net</th>
+                            <th className="px-2 py-3 md:px-4 md:py-4 text-right text-orange-400">Fee</th>
+                            <th className="px-2 py-3 md:px-4 md:py-4 text-right">Win Rate</th>
                           </tr>
                         </thead>
                         <tbody>
                           {tableRows.map((r: any, index: number) => {
-                            const op = r.qty;
-                            const take = r.takes || 0;
-                            const loss = r.stops || 0;
+                            const op = parseInt(r.qty) || 1;
+                            const take = parseInt(r.takes) || 0;
+                            const loss = parseInt(r.stops) || 0;
                             const gross = parseFloat(r.pnl) || 0;
-                            const c = parseFloat(r.commission) || 0;
-                            const net = parseFloat(r.net) || 0;
+                            const fee = (parseFloat(r.commission_per_trade) || parseFloat(r.commission) || 0) * op;
+                            const net = gross - fee;
+                            const winRate = (take + loss) > 0 ? (take / (take + loss)) * 100 : 0;
                             return (
                               <tr key={index} className="transition-colors hover:bg-white/10" style={{ backgroundColor: index % 2 === 0 ? 'transparent' : 'rgba(128, 128, 128, 0.04)' }}>
-                                <td className="px-2 py-2.5 md:px-4 md:py-3 font-mono text-[8px] sm:text-[9px] md:text-[10px] text-center" style={{ color: theme.textoPrincipal }}>{r.date}</td>
+                                <td className="px-2 py-2.5 md:px-4 md:py-3 font-mono text-[8px] sm:text-[9px] md:text-[10px] text-center" style={{ color: theme.textoPrincipal }}>{formatDate(r.date?.slice(0, 10))}</td>
                                 <td className="px-2 py-2.5 md:px-4 md:py-3 text-center text-[10px] md:text-xs font-bold text-green-400">{take}</td>
                                 <td className="px-2 py-2.5 md:px-4 md:py-3 text-center text-[10px] md:text-xs font-bold text-red-400">{loss}</td>
-                                <td className="px-2 py-2.5 md:px-4 md:py-3 text-right text-[10px] md:text-xs font-bold" style={{ color: gross >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{fmt(gross)}</td>
-                                <td className="px-2 py-2.5 md:px-4 md:py-3 text-right text-[10px] md:text-xs font-bold text-orange-400">{fmt(c)}</td>
                                 <td className="px-2 py-2.5 md:px-4 md:py-3 text-right text-[10px] md:text-xs font-bold" style={{ color: net >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{fmt(net)}</td>
+                                <td className="px-2 py-2.5 md:px-4 md:py-3 text-right text-[10px] md:text-xs font-bold text-orange-400">{fmt(fee)}</td>
+                                <td className="px-2 py-2.5 md:px-4 md:py-3 text-right text-[10px] md:text-xs font-bold" style={{ color: theme.textoPrincipal }}>{fmtPct(winRate)}</td>
                               </tr>
                             );
                           })}
@@ -1226,9 +1227,11 @@ function PreviewDashboard({
                               <td className="px-2 py-3 md:px-4 md:py-4 text-center">TOTAL</td>
                               <td className="px-2 py-3 md:px-4 md:py-4 text-center text-green-400">{grandTotal.takes}</td>
                               <td className="px-2 py-3 md:px-4 md:py-4 text-center text-red-400">{grandTotal.stops}</td>
-                              <td className="px-2 py-3 md:px-4 md:py-4 text-right" style={{ color: grandTotal.gross >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{fmt(grandTotal.gross)}</td>
-                              <td className="px-2 py-3 md:px-4 md:py-4 text-right text-orange-400">{fmt(grandTotal.fee)}</td>
                               <td className="px-2 py-3 md:px-4 md:py-4 text-right" style={{ color: grandTotal.net >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{fmt(grandTotal.net)}</td>
+                              <td className="px-2 py-3 md:px-4 md:py-4 text-right text-orange-400">{fmt(grandTotal.fee)}</td>
+                              <td className="px-2 py-3 md:px-4 md:py-4 text-right" style={{ color: theme.textoPrincipal }}>
+                                {fmtPct((grandTotal.takes + grandTotal.stops) > 0 ? (grandTotal.takes / (grandTotal.takes + grandTotal.stops)) * 100 : 0)}
+                              </td>
                             </tr>
                           </tfoot>
                         )}

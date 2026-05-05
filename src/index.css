@@ -109,6 +109,11 @@ input[type=range]::-webkit-slider-runnable-track {
   animation: fadeInSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* 
+  AJUSTE DA SAFE AREA DO CABEÇALHO (Espaço entre o topo da tela e os botões):
+  - Altere o '0.25rem' para um valor maior (ex: 1.5rem, 2.5rem, 3rem) se quiser forçar o cabeçalho mais para baixo no celular.
+  - O 'env(safe-area-inset-top)' garante que o conteúdo não fique escondido atrás do notch/câmera do celular.
+*/
 .header-safe {
   padding-top: max(0.25rem, env(safe-area-inset-top));
   padding-bottom: 0.5rem;

@@ -23,7 +23,12 @@ export default function Landing() {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-5 sm:px-6 pt-10 pb-4 md:py-6 max-w-7xl mx-auto header-safe">
+      {/* 
+        AJUSTE DE ALTURA DO CABEÇALHO (MOBILE/DESKTOP):
+        - Para descer mais o cabeçalho no celular, aumente o valor 'pt-16' (ex: pt-20, pt-24).
+        - O 'md:py-6' controla o espaçamento no computador. 
+      */}
+      <header className="relative z-10 flex items-center justify-between px-5 sm:px-6 pt-16 pb-4 md:py-6 max-w-7xl mx-auto header-safe">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
           <img src="/logo.png" alt="Quantara Logo" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-xl font-bold font-display">Quantara</span>
