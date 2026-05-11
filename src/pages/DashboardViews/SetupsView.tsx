@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+﻿import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen, Search
 } from 'lucide-react';
@@ -718,14 +718,14 @@ export default function SetupsView({
              {setups.map((s:any) => {
                 const isActive = selectedSetupId === s.id;
                 return (
-                  <div key={s.id} className="flex gap-1 items-center">
+                  <div key={s.id} className="flex gap-1 items-center min-w-0">
                     <button 
                       onClick={() => handleSelect('view', s.id)}
-                      className={`flex-1 flex items-center justify-start gap-2 py-2.5 px-3 rounded-lg transition-all ${isActive ? 'bg-white/10 opacity-100 border' : 'hover:bg-white/5 opacity-60 hover:opacity-100 border border-transparent'}`}
+                      className={`flex-1 flex items-center justify-start gap-2 py-2.5 px-3 rounded-lg transition-all min-w-0 ${isActive ? 'bg-white/10 opacity-100 border' : 'hover:bg-white/5 opacity-60 hover:opacity-100 border border-transparent'}`}
                       style={{ borderColor: isActive ? theme.contornoGeral : 'transparent' }}
                     >
-                      <Target size={12} style={{ color: isActive ? '#eab308' : theme.textoSecundario }} />
-                      <span className="hidden md:block text-[10px] sm:text-[11px] font-bold line-clamp-1 text-left" style={{ color: theme.textoPrincipal }}>{s.title}</span>
+                      <Target size={12} className="shrink-0" style={{ color: isActive ? '#eab308' : theme.textoSecundario }} />
+                      <span className="hidden md:block text-[10px] sm:text-[11px] font-bold truncate text-left" style={{ color: theme.textoPrincipal }}>{s.title}</span>
                     </button>
                     <div className="flex items-center justify-center gap-0.5">
                       <button onClick={(e) => { e.stopPropagation(); handleSelect('edit', s.id); }} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors" style={{ color: theme.textoPrincipal }} title="Edit Setup"><Edit2 size={11} /></button>
@@ -783,23 +783,27 @@ export default function SetupsView({
                </div>
                
                <div className="flex-1 flex flex-col">
-                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 mb-2 block" style={{ color: theme.textoPrincipal }}>Strategy Document (PDF or DOCX)</span>
+                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 mb-2 block" style={{ color: theme.textoPrincipal }}>Strategy Document (PDF, DOCX or Image)</span>
                  
                  {!formDesc ? (
                    <label className="flex-1 w-full min-h-[300px] border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors bg-black/10 hover:bg-black/20" style={{ borderColor: theme.contornoGeral }}>
                      <Upload size={40} className="mb-4 opacity-50" style={{ color: theme.textoPrincipal }} />
                      <span className="text-sm font-bold opacity-70 mb-2" style={{ color: theme.textoPrincipal }}>Click or drag a file to upload</span>
-                     <span className="text-xs opacity-40 uppercase tracking-widest font-bold" style={{ color: theme.textoPrincipal }}>Accepts .pdf, .docx</span>
-                     <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleFileUpload} />
+                     <span className="text-xs opacity-40 uppercase tracking-widest font-bold" style={{ color: theme.textoPrincipal }}>Accepts .pdf, .docx, .jpg, .png</span>
+                     <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/jpeg,image/png" className="hidden" onChange={handleFileUpload} />
                    </label>
                  ) : (
                    <div className="flex-1 w-full min-h-[300px] border rounded-xl flex flex-col items-center justify-center bg-black/30 p-8" style={{ borderColor: theme.contornoGeral }}>
-                     <FileText size={48} className="mb-4 text-blue-500" />
-                     <span className="text-lg font-bold mb-6 text-center break-all" style={{ color: theme.textoPrincipal }}>{formFileName || 'Document Loaded'}</span>
+                     {formDesc.startsWith('data:image/') ? (
+                       <img src={formDesc} alt={formFileName} className="max-h-48 max-w-full rounded-xl object-contain mb-4 border" style={{ borderColor: theme.contornoGeral }} />
+                     ) : (
+                       <FileText size={48} className="mb-4 text-blue-500" />
+                     )}
+                     <span className="text-lg font-bold mb-6 text-center break-all" style={{ color: theme.textoPrincipal }}>{formFileName || 'File Loaded'}</span>
                      <div className="flex gap-4">
                        <label className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors uppercase text-[10px] font-bold tracking-widest cursor-pointer" style={{ color: theme.textoPrincipal }}>
                          Change File
-                         <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleFileUpload} />
+                         <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/jpeg,image/png" className="hidden" onChange={handleFileUpload} />
                        </label>
                        <button onClick={removeFile} className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-500 transition-colors uppercase text-[10px] font-bold tracking-widest">
                          Remove File
@@ -901,6 +905,11 @@ export default function SetupsView({
                               <div className="py-10 text-center text-red-500 font-bold">Failed to render DOCX inline. Please download it using the button above.</div>
                            )}
                          </div>
+                      ) : formDesc.startsWith('data:image/') ? (
+                         <div className="flex flex-col items-center justify-center gap-6 bg-white p-8 min-h-[500px]">
+                           <img src={formDesc} alt={formFileName} className="max-w-full max-h-[800px] object-contain rounded-xl shadow-lg" />
+                           <p className="text-xs font-bold text-gray-400 tracking-widest uppercase">{formFileName}</p>
+                         </div>
                       ) : (
                          <div className="py-16 flex flex-col items-center justify-center gap-6 bg-white">
                            <div className="w-14 h-14 bg-blue-500/20 text-blue-500 rounded-full flex items-center justify-center"><FileText size={28} /></div>
@@ -976,12 +985,12 @@ export default function SetupsView({
                                   setActiveChartGroupNames(prev => ({...prev, [selectedSetupId as string]: g.name}));
                                 }}
                               >
-                                <div className="flex justify-between items-start">
-                                  <div className="flex flex-col gap-0.5">
+                                <div className="flex items-start gap-2 min-w-0">
+                                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                                     <h4 className="text-xs font-black font-display uppercase truncate" style={{ color: theme.textoPrincipal }} title={g.name}>{g.name}</h4>
                                     {isActiveChart && <span className="text-[9px] text-yellow-500 font-bold uppercase tracking-widest">◉ Active Chart</span>}
                                   </div>
-                                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                                      {/* Preview button */}
                                      <button
                                        onClick={() => handleOpenPreview(g.name, formTitle)}
