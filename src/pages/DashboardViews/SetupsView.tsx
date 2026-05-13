@@ -46,6 +46,7 @@ export default function SetupsView({
   const [targetAsset, setTargetAsset] = useState('');
   const [targetTakes, setTargetTakes] = useState<number | ''>('');
   const [targetStops, setTargetStops] = useState<number | ''>('');
+  const [targetBreakevens, setTargetBreakevens] = useState<number | ''>('');
   const [targetPnl, setTargetPnl] = useState<number | ''>('');
   
   // Auto-Calc Referencial States
@@ -94,9 +95,10 @@ export default function SetupsView({
       date: t.date,
       symbol: t.asset_str || 'SETUP',
       pnl: parseFloat(t.pnl) || 0,                // gross pnl
-      qty: (t.takes || 0) + (t.stops || 0) || 1,  // total ops
+      qty: (t.takes || 0) + (t.stops || 0) + (t.breakevens || 0) || 1,  // total ops
       takes: t.takes || 0,
       stops: t.stops || 0,
+      breakevens: t.breakevens || 0,
       commission_per_trade: parseFloat(t.commission) || 0,
     }));
 
@@ -363,20 +365,22 @@ export default function SetupsView({
     if (viewMode !== 'view' || !selectedSetupId) return [];
     const myTargets = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId);
     
-    const groupsMap: Record<string, { takes: number, stops: number, pnl: number }> = {};
+    const groupsMap: Record<string, { takes: number, stops: number, breakevens: number, pnl: number }> = {};
     
     const currentSetup = setups.find((s:any) => s.id === selectedSetupId);
     myTargets.forEach((t:any) => {
        const g = t.group_name || `Default - ${currentSetup?.title || 'Setup'}`;
-       if (!groupsMap[g]) groupsMap[g] = { takes: 0, stops: 0, pnl: 0 };
+       if (!groupsMap[g]) groupsMap[g] = { takes: 0, stops: 0, breakevens: 0, pnl: 0 };
        groupsMap[g].takes += t.takes || 0;
        groupsMap[g].stops += t.stops || 0;
+       groupsMap[g].breakevens += t.breakevens || 0;
        groupsMap[g].pnl += parseFloat(t.pnl) || 0;
     });
 
     return Object.keys(groupsMap).map(k => {
        const takesNum = groupsMap[k].takes;
        const stopsNum = groupsMap[k].stops;
+       const breakevensNum = groupsMap[k].breakevens;
        const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
        return { name: k, pnl: groupsMap[k].pnl, winRate: winRateCalc };
     }).sort((a,b) => b.pnl - a.pnl);
@@ -459,6 +463,7 @@ export default function SetupsView({
       assetStr: row.asset_str,
       takes: row.takes,
       stops: row.stops,
+      breakevens: row.breakevens,
       pnl: row.pnl,
       commission: row.commission
     });
@@ -468,6 +473,7 @@ export default function SetupsView({
     if (!editingTargetId) return;
     const takesNum = Number(editValues.takes) || 0;
     const stopsNum = Number(editValues.stops) || 0;
+    const breakevensNum = Number(editValues.breakevens) || 0;
     const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
     
     setStagingTargets(prev => prev.map(t => {
@@ -478,6 +484,7 @@ export default function SetupsView({
             asset_str: editValues.assetStr,
             takes: takesNum,
             stops: stopsNum,
+            breakevens: breakevensNum,
             pnl: Number(editValues.pnl) || 0,
             commission: Number(editValues.commission) || 0,
             win_rate: winRateCalc
@@ -506,6 +513,7 @@ export default function SetupsView({
 
      const takesNum = Number(targetTakes) || 0;
      const stopsNum = Number(targetStops) || 0;
+     const breakevensNum = Number(targetBreakevens) || 0;
      const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
      
      const isAutoCalc = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
@@ -529,6 +537,7 @@ export default function SetupsView({
        asset_str: targetAsset,
        takes: takesNum,
        stops: stopsNum,
+       breakevens: breakevensNum,
        pnl: finalPnl,
        win_rate: winRateCalc,
        commission: Number(targetCommission) || 0
@@ -539,6 +548,7 @@ export default function SetupsView({
      // Clear only per-entry fields; day/month/year/asset/commission persist as reference
      setTargetTakes('');
      setTargetStops('');
+     setTargetBreakevens('');
      setTargetPnl('');
      // targetDay, targetMonth, targetYear, targetAsset, targetStopPoints,
      // targetRiskReward, targetPointValue, targetCommission intentionally kept
@@ -568,9 +578,10 @@ export default function SetupsView({
     return tableRows.reduce((acc, row) => ({
       takes: acc.takes + (row.takes || 0),
       stops: acc.stops + (row.stops || 0),
+      breakevens: acc.breakevens + (row.breakevens || 0),
       pnl: acc.pnl + (parseFloat(row.pnl) || 0),
-      commission: acc.commission + ((parseFloat(row.commission) || 0) * ((row.takes || 0) + (row.stops || 0)))
-    }), { takes: 0, stops: 0, pnl: 0, commission: 0 });
+      commission: acc.commission + ((parseFloat(row.commission) || 0) * ((row.takes || 0) + (row.stops || 0) + (row.breakevens || 0)))
+    }), { takes: 0, stops: 0, breakevens: 0, pnl: 0, commission: 0 });
   }, [tableRows]);
 
   const grandNetPnl = grandTotal.pnl - grandTotal.commission;
@@ -1218,6 +1229,10 @@ export default function SetupsView({
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">Stops</label>
                                    <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[9px] font-mono font-bold w-full outline-none focus:bg-white/10 text-center" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
+                                <div className="flex flex-col gap-1 w-[64px]">
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate">Breakeven</label>
+                                   <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-[#00B0F0]/20 text-[9px] font-mono font-bold w-full outline-none focus:bg-white/10 text-center" style={{ color: theme.textoPrincipal }} value={targetBreakevens} onChange={e => setTargetBreakevens(e.target.value ? Number(e.target.value) : '')} />
+                                </div>
                                 <div className="flex flex-col gap-1 w-[84px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 flex items-center justify-between" style={{ color: theme.textoPrincipal }}>
                                      Val $ {isAutoCalc && <span className="text-yellow-500 text-[6px] ml-1">(Auto)</span>}
@@ -1282,6 +1297,7 @@ export default function SetupsView({
                                    <th className="py-3 px-2 font-bold text-center">Asset</th>
                                    <th className="py-3 px-2 font-bold text-center">TAKES</th>
                                    <th className="py-3 px-2 font-bold text-center">STOPS</th>
+                                   <th className="py-3 px-2 font-bold text-center">BREAKEVEN</th>
                                    <th className="py-3 px-2 font-bold text-center">Gross P&L</th>
                                    <th className="py-3 px-2 font-bold text-center text-orange-400">Comissão</th>
                                    <th className="py-3 px-2 font-bold text-center">Net P&L</th>
@@ -1321,6 +1337,9 @@ export default function SetupsView({
                                               <input type="number" className="w-full bg-black/30 border border-red-500/30 text-[10px] p-1.5 rounded outline-none text-center" style={{ color: theme.textoPrincipal }} value={editValues.stops !== undefined ? editValues.stops : ''} onChange={e => setEditValues({...editValues, stops: e.target.value ? Number(e.target.value) : ''})} />
                                            </td>
                                            <td className="py-1 px-1">
+                                              <input type="number" className="w-full bg-black/30 border border-[#00B0F0]/30 text-[10px] p-1.5 rounded outline-none text-center" style={{ color: theme.textoPrincipal }} value={editValues.breakevens !== undefined ? editValues.breakevens : ''} onChange={e => setEditValues({...editValues, breakevens: e.target.value ? Number(e.target.value) : ''})} />
+                                           </td>
+                                           <td className="py-1 px-1">
                                               <input type="number" step="0.01" className="w-full bg-black/30 border border-yellow-500/30 text-[10px] p-1.5 rounded outline-none text-center" style={{ color: theme.textoPrincipal }} value={editValues.pnl !== undefined ? editValues.pnl : ''} onChange={e => setEditValues({...editValues, pnl: e.target.value ? Number(e.target.value) : ''})} />
                                            </td>
                                            <td className="py-1 px-1">
@@ -1345,14 +1364,15 @@ export default function SetupsView({
                                            <td className="py-2.5 px-2 text-[10px] max-w-[120px] truncate text-center uppercase" style={{ color: theme.textoPrincipal }} title={r.asset_str}>{r.asset_str}</td>
                                            <td className="py-2.5 px-2 text-[10px] font-black text-green-500 text-center">{r.takes}</td>
                                            <td className="py-2.5 px-2 text-[10px] font-black text-red-500 text-center">{r.stops}</td>
+                                           <td className="py-2.5 px-2 text-[10px] font-black text-[#00B0F0] text-center">{r.breakevens || 0}</td>
                                            <td className={`py-2.5 px-2 text-[10px] font-black text-center ${parseFloat(r.pnl) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                                              {parseFloat(r.pnl) < 0 ? '-' : ''}${Math.abs(parseFloat(r.pnl)).toFixed(2)}
                                            </td>
                                            <td className="py-2.5 px-2 text-[10px] font-bold text-center text-orange-400">
-                                             {(parseFloat(r.commission) || 0) > 0 ? `-$${((parseFloat(r.commission) || 0) * ((r.takes || 0) + (r.stops || 0))).toFixed(2)}` : '—'}
+                                             {(parseFloat(r.commission) || 0) > 0 ? `-$${((parseFloat(r.commission) || 0) * ((r.takes || 0) + (r.stops || 0) + (r.breakevens || 0))).toFixed(2)}` : '—'}
                                            </td>
                                            <td className={`py-2.5 px-2 text-[10px] font-black text-center ${(parseFloat(r.pnl) - (parseFloat(r.commission)||0)*((r.takes||0)+(r.stops||0))) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                             {(() => { const net = parseFloat(r.pnl) - (parseFloat(r.commission)||0)*((r.takes||0)+(r.stops||0)); return `${net < 0 ? '-' : ''}$${Math.abs(net).toFixed(2)}`; })()}
+                                             {(() => { const net = parseFloat(r.pnl) - (parseFloat(r.commission)||0)*((r.takes||0)+(r.stops||0)+(r.breakevens||0)); return `${net < 0 ? '-' : ''}$${Math.abs(net).toFixed(2)}`; })()}
                                            </td>
                                            <td className={`py-2.5 px-2 text-[10px] text-center font-black ${parseFloat(r.win_rate) >= 50 ? 'text-green-500' : 'text-red-500'}`}>
                                              {parseFloat(r.win_rate).toFixed(1)}%
@@ -1390,6 +1410,7 @@ export default function SetupsView({
                                       <td className="py-3 px-2 text-[10px] font-black uppercase tracking-widest text-center" colSpan={3} style={{ color: theme.textoPrincipal }}>Grand Total</td>
                                       <td className="py-3 px-2 text-[10px] font-black text-green-500 text-center">{grandTotal.takes}</td>
                                       <td className="py-3 px-2 text-[10px] font-black text-red-500 text-center">{grandTotal.stops}</td>
+                                      <td className="py-3 px-2 text-[10px] font-black text-[#00B0F0] text-center">{grandTotal.breakevens || 0}</td>
                                       <td className={`py-3 px-2 text-[11px] font-black font-display tracking-tight text-center ${grandTotal.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                                         {grandTotal.pnl < 0 ? '-' : ''}${Math.abs(parseFloat(grandTotal.pnl)).toFixed(2)}
                                       </td>
