@@ -896,9 +896,9 @@ export default function Dashboard() {
     let winDays = 0, lossDays = 0;
     dailyValues.forEach(val => { if (val >= 0) winDays++; else lossDays++; });
 
-    const betterDayPct = netPnl !== 0 && betterDay > 0 ? (betterDay / netPnl) * 100 : 0;
+    const betterDayPct = netPnl > 0 && betterDay > 0 ? (betterDay / netPnl) * 100 : 0;
     const badDayPct = netPnl !== 0 && badDay < 0 ? (badDay / netPnl) * 100 : 0;
-    const betterTradePct = netPnl !== 0 && maxTradeWin > 0 ? (maxTradeWin / netPnl) * 100 : 0;
+    const betterTradePct = netPnl > 0 && maxTradeWin > 0 ? (maxTradeWin / netPnl) * 100 : 0;
     const badTradePct = netPnl !== 0 && maxTradeLoss > 0 ? (-maxTradeLoss / netPnl) * 100 : 0;
     const remainingDailyLimit = dailyLossLimitAmount + todayNetPnl;
 
@@ -914,7 +914,7 @@ export default function Dashboard() {
       profitFactor, avgRR, maxTradeWin, maxTradeLoss, betterDay, badDay, peakBalance, betterDayPct, badDayPct, betterTradePct, badTradePct,
       winDays, lossDays, totalDays: Object.keys(dailyNetPnls).length, maxDrawdown, maxProfit: peakBalance - accountSettings.initialBalance,
       remainingDailyLimit, todayNetPnl, ddPercentUsed: totalStopLossAmount > 0 ? (maxDrawdown / totalStopLossAmount) * 100 : 0,
-      ddRemainingValue: Math.max(0, totalStopLossAmount - maxDrawdown), consistencyPct: netPnl !== 0 ? (betterDay / netPnl) * 100 : 0,
+      ddRemainingValue: Math.max(0, totalStopLossAmount - maxDrawdown), consistencyPct: netPnl > 0 ? (betterDay / netPnl) * 100 : 0,
       longWinRate, shortWinRate, accountStopRemaining, accountStopRemainingPct, accountStopColor,
       longTrades, shortTrades, longWins, shortWins
     };
@@ -1091,8 +1091,8 @@ export default function Dashboard() {
 
   const performanceWeeklyData = useMemo(() => {
     const daysData = [
-      { id: 1, name: 'Mon', trades: 0, pnl: 0 }, { id: 2, name: 'Tue', trades: 0, pnl: 0 },
-      { id: 3, name: 'Wed', trades: 0, pnl: 0 }, { id: 4, name: 'Thu', trades: 0, pnl: 0 }, { id: 5, name: 'Fri', trades: 0, pnl: 0 }
+      { id: 1, name: 'Mon', trades: 0, pnl: 0, wins: 0, losses: 0 }, { id: 2, name: 'Tue', trades: 0, pnl: 0, wins: 0, losses: 0 },
+      { id: 3, name: 'Wed', trades: 0, pnl: 0, wins: 0, losses: 0 }, { id: 4, name: 'Thu', trades: 0, pnl: 0, wins: 0, losses: 0 }, { id: 5, name: 'Fri', trades: 0, pnl: 0, wins: 0, losses: 0 }
     ];
 
     let weekFiltered = activeTrades;
@@ -1109,7 +1109,10 @@ export default function Dashboard() {
       const [y, m, d] = trade.date.split('-'); const dateObj = new Date(y, m - 1, d); const dayOfWeek = dateObj.getDay();
       if (dayOfWeek >= 1 && dayOfWeek <= 5) {
         const net = trade.pnl - (trade.qty * accountSettings.feePerTrade);
-        daysData[dayOfWeek - 1].trades += 1; daysData[dayOfWeek - 1].pnl += net;
+        daysData[dayOfWeek - 1].trades += 1;
+        daysData[dayOfWeek - 1].pnl += net;
+        if (net >= 0) daysData[dayOfWeek - 1].wins += 1;
+        else daysData[dayOfWeek - 1].losses += 1;
       }
     });
     const maxAbsPnl = Math.max(1, ...daysData.map(d => Math.abs(d.pnl)));
@@ -2123,16 +2126,30 @@ export default function Dashboard() {
 
   const dayOfWeekData = useMemo(() => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const map = { 'Monday': 0, 'Tuesday': 0, 'Wednesday': 0, 'Thursday': 0, 'Friday': 0, 'Saturday': 0, 'Sunday': 0 };
+    const map = {
+      'Monday': { pnl: 0, wins: 0, losses: 0 },
+      'Tuesday': { pnl: 0, wins: 0, losses: 0 },
+      'Wednesday': { pnl: 0, wins: 0, losses: 0 },
+      'Thursday': { pnl: 0, wins: 0, losses: 0 },
+      'Friday': { pnl: 0, wins: 0, losses: 0 },
+      'Saturday': { pnl: 0, wins: 0, losses: 0 },
+      'Sunday': { pnl: 0, wins: 0, losses: 0 }
+    };
     activeTrades.forEach(t => {
       const d = new Date(t.entryTimestamp || t.date + 'T12:00:00');
       const dayName = days[d.getDay()];
-      map[dayName] += (t.pnl - calculateTradeFee(t, accountSettings));
+      const net = t.pnl - calculateTradeFee(t, accountSettings);
+      map[dayName].pnl += net;
+      if (net >= 0) map[dayName].wins += 1;
+      else map[dayName].losses += 1;
     });
     // Order: Monday to Friday (ignore weekends if 0)
     return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => ({
       name: day.substring(0, 3), // Mon, Tue, etc.
-      pnl: map[day]
+      pnl: map[day].pnl,
+      wins: map[day].wins,
+      losses: map[day].losses,
+      count: map[day].wins + map[day].losses
     }));
   }, [activeTrades, accountSettings.feePerTrade]);
 

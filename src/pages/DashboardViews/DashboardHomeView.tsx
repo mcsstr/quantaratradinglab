@@ -65,8 +65,7 @@ export default function DashboardHomeView({
   blockedModules = [],
   onUpgradeClick = (_feature: string) => {}
 }) {
-
-  
+  const [showWeeklyWinsLosses, setShowWeeklyWinsLosses] = useState(false);
 
   const latestResultsData = [
     { label: 'Today', value: timeMetrics.profitToday },
@@ -121,12 +120,12 @@ export default function DashboardHomeView({
             <div className="flex items-center gap-1"><div className="w-3 h-[2px] rounded" style={{ backgroundColor: theme.linhaGrafico }}></div> Balance</div>
             <div className="flex items-center gap-1"><div className="w-3 h-0 border-t border-dashed" style={{ borderColor: isTrendUp ? theme.textoPositivo : theme.textoNegativo }}></div> Trend</div>
           </div>
-          <select value={equityFilter} onChange={e => setEquityFilter(e.target.value)} className="filter-select outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded-lg hover:bg-white/10 transition-all shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
+          <select value={equityFilter} onChange={e => setEquityFilter(e.target.value)} className="filter-select outline-none bg-transparent cursor-pointer font-bold px-3 py-1.5 rounded-lg hover:bg-white/10 transition-all shadow-sm border text-[11px]" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
             <option value="all" className="bg-gray-900">All History</option>
-            <option value="daily" className="bg-gray-900">Daily View</option>
-            <option value="weekly" className="bg-gray-900">Weekly View</option>
-            <option value="monthly" className="bg-gray-900">Monthly View</option>
-            <option value="yearly" className="bg-gray-900">Yearly View</option>
+            <option value="daily" className="bg-gray-900">Daily</option>
+            <option value="weekly" className="bg-gray-900">Weekly</option>
+            <option value="monthly" className="bg-gray-900">Monthly</option>
+            <option value="yearly" className="bg-gray-900">Yearly</option>
           </select>
           
         </div>
@@ -146,45 +145,72 @@ export default function DashboardHomeView({
   );
 
   const weeklyControls = (
-    <div className="flex gap-1 items-center rounded-lg p-1 shadow-sm border shrink-0" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), borderColor: theme.contornoGeral }}>
+    <div className="flex gap-1 items-center rounded-lg px-2 py-1 shadow-sm border shrink-0" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), borderColor: theme.contornoGeral }}>
       <button onClick={() => setSelectedWeekDate(prev => prev ? new Date(prev.getTime() - 7 * 86400000) : getStartOfWeek(new Date(new Date().getTime() - 7 * 86400000)))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronLeft size={14} /></button>
-      <span className="text-[10px] font-bold min-w-[45px] text-center" style={{ color: theme.textoPrincipal }}>
+      <span className="text-[10px] font-bold min-w-[44px] text-center" style={{ color: theme.textoPrincipal }}>
         {selectedWeekDate ? new Intl.DateTimeFormat(userLocale, { day: '2-digit', month: 'short' }).format(selectedWeekDate) : 'All'}
       </span>
       <button onClick={() => setSelectedWeekDate(prev => prev ? new Date(prev.getTime() + 7 * 86400000) : getStartOfWeek(new Date()))} className="p-1 rounded transition-colors hover:bg-white/10" style={{ color: theme.textoSecundario }}><ChevronRight size={14} /></button>
-      <div className="w-px h-3 opacity-30 mx-1" style={{ backgroundColor: theme.contornoGeral }}></div>
-      <button onClick={() => setSelectedWeekDate(getStartOfWeek(new Date()))} className="text-[10px] px-2 py-1 font-bold rounded-md hover:bg-white/10 transition-colors whitespace-nowrap" style={{ color: theme.linhaGrafico }}>
-        This Week
-      </button>
-      <button onClick={() => setSelectedWeekDate(null)} className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-1 font-bold rounded-md hover:bg-white/10 transition-colors" style={{ color: selectedWeekDate === null ? theme.textoPrincipal : theme.textoSecundario }}>All</button>
+      <div className="w-px h-3 opacity-30 mx-0.5" style={{ backgroundColor: theme.contornoGeral }}></div>
+      <button onClick={() => setSelectedWeekDate(getStartOfWeek(new Date()))} className="text-[10px] px-2 py-0.5 font-bold rounded-md hover:bg-white/10 transition-colors whitespace-nowrap" style={{ color: theme.linhaGrafico }}>Week</button>
+      <button onClick={() => setSelectedWeekDate(null)} className="text-[10px] px-2 py-0.5 font-bold rounded-md hover:bg-white/10 transition-colors" style={{ color: selectedWeekDate === null ? theme.textoPrincipal : theme.textoSecundario }}>All</button>
     </div>
   );
 
   const renderTradesByDayBlock = () => (
     <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-full overflow-hidden" style={getGlassStyle(theme.fundoCards)}>
       <div className="flex items-center justify-between mb-4 shrink-0 gap-3 w-full">
-        <SectionTitle
-          icon={BarChart2}
-          title={t('dash.weeklyTrades', lang)}
-          theme={theme}
-          hideTextOnMobile={true}
-        />
+        <div className="flex items-center gap-2">
+            <SectionTitle
+              icon={BarChart2}
+              title="Weekly"
+              theme={theme}
+              hideTextOnMobile={true}
+            />
+          <div className="flex items-center rounded-full p-0.5 cursor-pointer border transition-colors" style={{ backgroundColor: 'rgba(0,0,0,0.2)', borderColor: theme.contornoGeral }} onClick={() => setShowWeeklyWinsLosses(!showWeeklyWinsLosses)}>
+            <div className={`px-3 py-1 text-[10px] font-bold rounded-full transition-colors ${!showWeeklyWinsLosses ? 'text-white shadow' : 'opacity-40'}`} style={{ backgroundColor: !showWeeklyWinsLosses ? theme.linhaGrafico : 'transparent' }}>VOL</div>
+            <div className={`px-3 py-1 text-[10px] font-bold rounded-full transition-colors ${showWeeklyWinsLosses ? 'text-white shadow' : 'opacity-40'}`} style={{ backgroundColor: showWeeklyWinsLosses ? theme.linhaGrafico : 'transparent' }}>W/L</div>
+          </div>
+          {showWeeklyWinsLosses && (
+            <div className="flex items-center gap-2 text-[9px] font-bold" style={{ color: theme.textoSecundario }}>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>Wins</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>Losses</span>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {weeklyControls}
-          
         </div>
       </div>
       <div className={`w-full flex-1 overflow-hidden min-h-[150px]`}>
-        <ResponsiveContainer  width="100%" height="99%"><BarChart data={performanceWeeklyData.daysData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
-            <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
-            <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
-            <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px', borderWidth: settings.borderWidthGeral }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario, marginBottom: '4px' }} />
-            <Bar dataKey="trades" name="Trades" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-              <LabelList dataKey="trades" position="top" offset={10} fill="#FFD700" fontSize={14} fontWeight="bold" />
-              {performanceWeeklyData.daysData.map((entry, index) => (<Cell key={`cell-${index}`} fill={theme.contornoHoje} />))}
-            </Bar>
-          </BarChart>
+        <ResponsiveContainer width="100%" height="99%">
+          {showWeeklyWinsLosses ? (
+            <BarChart data={performanceWeeklyData.daysData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
+              <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
+              <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} allowDecimals={false} />
+              <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px', borderWidth: settings.borderWidthGeral }} itemStyle={{ fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario, marginBottom: '4px' }}
+                formatter={(val, name) => {
+                  if (name === 'wins') return [`${val}`, 'Wins'];
+                  if (name === 'losses') return [`${val}`, 'Losses'];
+                  return [val, name];
+                }}
+              />
+              <Bar dataKey="wins" stackId="a" fill={theme.textoPositivo} stroke={theme.fundoCards} strokeWidth={2} isAnimationActive={false} />
+              <Bar dataKey="losses" stackId="a" fill={theme.textoNegativo} stroke={theme.fundoCards} strokeWidth={2} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+            </BarChart>
+          ) : (
+            <BarChart data={performanceWeeklyData.daysData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
+              <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
+              <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
+              <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px', borderWidth: settings.borderWidthGeral }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario, marginBottom: '4px' }} />
+              <Bar dataKey="trades" name="Trades" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                <LabelList dataKey="trades" position="top" offset={10} fill="#FFD700" fontSize={14} fontWeight="bold" />
+                {performanceWeeklyData.daysData.map((entry, index) => (<Cell key={`cell-${index}`} fill={theme.contornoHoje} />))}
+              </Bar>
+            </BarChart>
+          )}
         </ResponsiveContainer>
       </div>
     </div>
@@ -195,7 +221,7 @@ export default function DashboardHomeView({
       <div className="flex items-center justify-between mb-4 shrink-0 gap-3 w-full">
         <SectionTitle
           icon={DollarSign}
-          title={t('dash.weeklyPnl', lang)}
+          title="Weekly P&L"
           theme={theme}
           hideTextOnMobile={true}
         />
@@ -415,7 +441,7 @@ export default function DashboardHomeView({
           title={`${t('dash.monthTrades', lang)}: ${new Intl.DateTimeFormat(userLocale, { month: 'long', year: 'numeric' }).format(currentDate)}`}
           theme={theme}
         />
-        <button onClick={() => setMiniHistorySort(prev => prev === 'recent' ? 'oldest' : 'recent')} className="text-[10px] px-2 py-1 rounded-lg font-bold transition-all hover:bg-white/10 shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
+        <button onClick={() => setMiniHistorySort(prev => prev === 'recent' ? 'oldest' : 'recent')} className="text-[11px] px-3 py-1.5 rounded-lg font-bold transition-all hover:bg-white/10 shadow-sm border" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
           {miniHistorySort === 'recent' ? 'Recent' : 'Oldest'}
         </button>
       </div>
@@ -596,7 +622,10 @@ export default function DashboardHomeView({
           </div>
           <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
             <div className="flex flex-col items-center sm:items-start w-full">
-              <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>{metrics.totalDays}</span>
+              <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>
+                {formatPercent(metrics.totalDays > 0 ? (metrics.winDays / metrics.totalDays) * 100 : 0)}
+              </span>
+              <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>{metrics.totalDays} Days</span>
             </div>
             <div className="w-full h-px sm:hidden opacity-30 my-2" style={{ backgroundColor: theme.contornoGeral }}></div>
             <div className="flex gap-4 items-center justify-center sm:items-end sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">

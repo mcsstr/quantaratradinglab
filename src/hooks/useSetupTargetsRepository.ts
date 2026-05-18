@@ -10,6 +10,7 @@ export interface SetupTarget {
   asset_str: string;
   takes: number;
   stops: number;
+  breakevens?: number;
   pnl: number;
   win_rate: number;
   commission?: number;
@@ -90,6 +91,7 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
         asset_str: target.asset_str,
         takes: target.takes,
         stops: target.stops,
+        breakevens: target.breakevens ?? 0,
         pnl: target.pnl,
         win_rate: target.win_rate,
         commission: target.commission ?? 0
@@ -134,9 +136,12 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
 
     if (storageMode === 'local') {
       setSetupTargets(prev => {
-        // delete old targeting this group or original group
         const filtered = prev.filter(s => !(s.setup_id === setup_id && (s.group_name === group_name || s.group_name === targetGroupNameToDelete)));
-        const newArr = [...targets, ...filtered];
+        const toStore = targets.length > 0 ? targets : [{
+          id: crypto.randomUUID(), setup_id, account_id: null, group_name,
+          date: null, asset_str: '__empty__', takes: 0, stops: 0, breakevens: 0, pnl: 0, win_rate: 0, commission: 0
+        }];
+        const newArr = [...toStore, ...filtered];
         localStorage.setItem('quantara_setup_targets', JSON.stringify(newArr));
         return newArr;
       });
@@ -179,12 +184,32 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
           asset_str: t.asset_str,
           takes: t.takes,
           stops: t.stops,
+          breakevens: t.breakevens ?? 0,
           pnl: t.pnl,
           win_rate: t.win_rate,
           commission: t.commission ?? 0,
           group_name: t.group_name
         }));
         const { error: insError } = await supabase.from('setup_targets').upsert(insertPayload);
+        if (insError) throw insError;
+      } else {
+        // Insert a placeholder record so the empty group persists in the DB
+        const placeholder = {
+          id: crypto.randomUUID(),
+          user_id: session.user.id,
+          setup_id: setup_id,
+          account_id: null,
+          date: null,
+          asset_str: '__empty__',
+          takes: 0,
+          stops: 0,
+          breakevens: 0,
+          pnl: 0,
+          win_rate: 0,
+          commission: 0,
+          group_name: group_name
+        };
+        const { error: insError } = await supabase.from('setup_targets').insert(placeholder);
         if (insError) throw insError;
       }
     } catch (err) {

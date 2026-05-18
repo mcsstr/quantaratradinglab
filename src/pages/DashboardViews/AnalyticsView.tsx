@@ -292,20 +292,31 @@ export default function AnalyticsView({
           <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full lg:w-1/2" style={{ ...getGlassStyle(theme.fundoCards), height: isMobile ? 300 : 400 }}>
             <div className="flex justify-between items-center mb-4 gap-2 shrink-0">
               <SectionTitle icon={BarChart2} title="Performance by Day of Week" theme={theme} />
+              <div className="flex items-center gap-3 text-[11px] font-bold" style={{ color: theme.textoSecundario }}>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>Wins</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>Losses</span>
+              </div>
             </div>
             <div className="w-full flex-1" style={{ minHeight: 0, height: '100%' }}>
               <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                 <BarChart data={dayOfWeekData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
                   <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-                  <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} tickFormatter={(val) => new Intl.NumberFormat(userLocale, { notation: "compact", compactDisplay: "short", style: "currency", currency: settings.brokerCurrency, currencyDisplay: "narrowSymbol" }).format(val)} />
-                  <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario }} formatter={(val) => formatCurrency(val)} />
-                  <ReferenceLine y={0} stroke={theme.contornoGeral} />
-                  <Bar dataKey="pnl" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-                    {dayOfWeekData?.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo} />
-                    ))}
-                  </Bar>
+                  <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <RechartsTooltip
+                    cursor={{ fill: 'rgba(128,128,128,0.1)' }}
+                    contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }}
+                    itemStyle={{ fontWeight: 'bold' }}
+                    labelStyle={{ color: theme.textoSecundario, marginBottom: 4 }}
+                    formatter={(val, name) => {
+                      if (name === 'wins') return [`${val}`, 'Wins (Green)'];
+                      if (name === 'losses') return [`${val}`, 'Losses (Red)'];
+                      if (name === 'count') return [`${val}`, 'Total Trades'];
+                      return [val, name];
+                    }}
+                  />
+                  <Bar dataKey="wins" stackId="a" fill={theme.textoPositivo} stroke={theme.fundoCards} strokeWidth={2} isAnimationActive={false} maxBarSize={50} />
+                  <Bar dataKey="losses" stackId="a" fill={theme.textoNegativo} stroke={theme.fundoCards} strokeWidth={2} radius={[4, 4, 0, 0]} isAnimationActive={false} maxBarSize={50} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -1,6 +1,6 @@
-﻿import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen, Search
+  Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen, Search, List
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
 import * as mammoth from 'mammoth';
@@ -41,6 +41,8 @@ export default function SetupsView({
 
   // Target Form States
   const [targetDay, setTargetDay] = useState<number | ''>('');
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkText, setBulkText] = useState('');
   const [targetMonth, setTargetMonth] = useState<number | ''>('');
   const [targetYear, setTargetYear] = useState<number | ''>('');
   const [targetAsset, setTargetAsset] = useState('');
@@ -392,6 +394,7 @@ export default function SetupsView({
     const isDefaultGroup = groupName.startsWith('Default');
     return (setupTargets||[]).filter((t:any) => {
       if (t.setup_id !== selectedSetupId) return false;
+      if (t.asset_str === '__empty__') return false; // skip placeholder
       if (isDefaultGroup && (!t.group_name || t.group_name === '')) return true;
       return t.group_name === groupName;
     });
@@ -399,7 +402,7 @@ export default function SetupsView({
 
   // Table rows depend on stagingTargets now
   const tableRows = useMemo(() => {
-    let arr = [...stagingTargets];
+    let arr = stagingTargets.filter((t: any) => t.asset_str !== '__empty__');
     if (filterPeriod !== 'All Time') {
        arr = arr.filter((t:any) => {
          if(!t.date) return false;
@@ -474,6 +477,7 @@ export default function SetupsView({
     const takesNum = Number(editValues.takes) || 0;
     const stopsNum = Number(editValues.stops) || 0;
     const breakevensNum = Number(editValues.breakevens) || 0;
+    const totalOps = takesNum + stopsNum + breakevensNum;
     const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
     
     setStagingTargets(prev => prev.map(t => {
@@ -514,6 +518,7 @@ export default function SetupsView({
      const takesNum = Number(targetTakes) || 0;
      const stopsNum = Number(targetStops) || 0;
      const breakevensNum = Number(targetBreakevens) || 0;
+     const totalOps = takesNum + stopsNum + breakevensNum;
      const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
      
      const isAutoCalc = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
@@ -543,7 +548,10 @@ export default function SetupsView({
        commission: Number(targetCommission) || 0
      };
 
-     setStagingTargets(prev => [newTarget, ...prev]);
+     setStagingTargets(prev => {
+       const filtered = prev.filter(t => t.date !== dateStr);
+       return [newTarget, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+     });
      
      // Clear only per-entry fields; day/month/year/asset/commission persist as reference
      setTargetTakes('');
@@ -552,6 +560,117 @@ export default function SetupsView({
      setTargetPnl('');
      // targetDay, targetMonth, targetYear, targetAsset, targetStopPoints,
      // targetRiskReward, targetPointValue, targetCommission intentionally kept
+  };
+
+  const handleBulkInsert = () => {
+    if (!bulkText.trim()) return;
+    
+    const lines = bulkText.split('\n');
+    const newTargetsMap = new Map();
+    const currentYear = targetYear ? Number(targetYear) : new Date().getFullYear();
+    const asset = targetAsset || 'SETUP';
+    const isAutoCalc = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
+    const sp = Number(targetStopPoints) || 0;
+    const rr = Number(targetRiskReward) || 0;
+    const pv = Number(targetPointValue) || 0;
+    const globalComm = Number(targetCommission) || 0;
+
+    for (const line of lines) {
+      if (!line.trim() || line.toLowerCase().includes('data |') || line.toLowerCase().includes('data|')) continue;
+      
+      const cols = line.split('|').map(s => s.trim());
+      if (cols.length < 5) continue;
+      
+      const dateParts = cols[0].split('/');
+      if (dateParts.length !== 2) continue;
+      const d = Number(dateParts[0]);
+      const m = Number(dateParts[1]);
+      if (isNaN(d) || isNaN(m)) continue;
+      const dateStr = `${currentYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+      const seq = cols[cols.length - 1];
+      let takesNum = 0;
+      let stopsNum = 0;
+      let breakevensNum = 0;
+      
+      if (seq && (seq.includes('🟢') || seq.includes('🔴') || seq.includes('⚪'))) {
+        for (const char of seq) {
+          if (char === '🟢') takesNum++;
+          else if (char === '🔴') stopsNum++;
+          else if (char === '⚪') breakevensNum++;
+        }
+      } else {
+        takesNum = Number(cols[2]) || 0;
+        stopsNum = Number(cols[3]) || 0;
+      }
+      
+      let pnl = 0;
+      let commission = 0;
+      let totalOps = takesNum + stopsNum + breakevensNum;
+
+      if (isAutoCalc) {
+        const takesValue = takesNum * (sp * rr * pv);
+        const stopsValue = stopsNum * (sp * pv);
+        pnl = takesValue - stopsValue;
+        commission = globalComm;
+      } else {
+        const resultStr = cols[4].replace(/[^\d.-]/g, '');
+        const parsedResult = Number(resultStr) || 0;
+
+        let totalFees = 0;
+        if (globalComm > 0) {
+          // Campo Comissão preenchido → usa ele (por op × total ops)
+          commission = globalComm;
+          totalFees = globalComm * totalOps;
+        } else if (cols.length >= 8) {
+          // Fallback: lê taxa da coluna colada
+          const feeStr = cols[5].replace(/[^\d.-]/g, '');
+          totalFees = Number(feeStr) || 0;
+          if (totalOps > 0) commission = totalFees / totalOps;
+        }
+
+        // Como a tabela calcula Net = pnl - totalFees, e o Result lido já é o Net,
+        // ajustamos o pnl (Gross) para parsedResult + totalFees, para que não desconte novamente.
+        pnl = parsedResult + totalFees;
+      }
+      
+      const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
+
+      newTargetsMap.set(dateStr, {
+        id: crypto.randomUUID(),
+        setup_id: selectedSetupId as string,
+        account_id: activeAccountId,
+        group_name: activeGroupName || 'Default Group',
+        date: dateStr,
+        asset_str: asset,
+        takes: takesNum,
+        stops: stopsNum,
+        breakevens: breakevensNum,
+        pnl: pnl,
+        win_rate: winRateCalc,
+        commission: commission
+      });
+    }
+
+    const newTargets = Array.from(newTargetsMap.values());
+    if (newTargets.length > 0) {
+      setStagingTargets(prev => {
+        const newDates = new Set(newTargets.map(t => t.date));
+        const filtered = prev.filter(t => !newDates.has(t.date));
+        const merged = [...newTargets, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Auto-save to Supabase if we have a group name
+        if (activeGroupName && selectedSetupId) {
+          const withGroup = merged.map(t => ({ ...t, group_name: activeGroupName }));
+          saveBatchSetupTargets(withGroup, selectedSetupId as string, activeGroupName, originalGroupName);
+        }
+
+        return merged;
+      });
+    }
+
+    setShowBulkModal(false);
+    setBulkText('');
   };
 
   const handleSaveStagingTable = async () => {
@@ -586,6 +705,7 @@ export default function SetupsView({
 
   const grandNetPnl = grandTotal.pnl - grandTotal.commission;
 
+  const grandTotalOps = grandTotal.takes + grandTotal.stops + grandTotal.breakevens;
   const grandWinRate = (grandTotal.takes + grandTotal.stops) > 0 
     ? (grandTotal.takes / (grandTotal.takes + grandTotal.stops)) * 100 
     : 0;
@@ -965,6 +1085,7 @@ export default function SetupsView({
                            setTargetTakes('');
                            setTargetStops('');
                            setTargetPnl('');
+                           setIsEditingGroup(true);
                          }}
                          className="w-full py-3 mb-4 rounded-xl font-bold text-black transition-all hover:brightness-110 active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.2)] flex justify-center items-center gap-2 text-xs uppercase tracking-widest"
                          style={{ background: '#eab308' }}
@@ -1121,7 +1242,7 @@ export default function SetupsView({
                                    </button>
                                    <button
                                      onClick={handleSaveStagingTable}
-                                     disabled={!activeGroupName || stagingTargets.length === 0}
+                                     disabled={!activeGroupName}
                                      className="h-8 px-4 rounded-lg font-bold text-black border-none text-[10px] uppercase tracking-widest bg-yellow-500 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shrink-0"
                                    >
                                       <Check size={13} /> Save
@@ -1254,13 +1375,21 @@ export default function SetupsView({
                                       {targetTakes !== '' && targetStops !== '' && (Number(targetTakes)+Number(targetStops)) > 0 ? ((Number(targetTakes)/(Number(targetTakes)+Number(targetStops)))*100).toFixed(0) + '%' : '—'}
                                    </div>
                                 </div>
-                                <button 
-                                  onClick={handleSubmitTarget}
-                                  disabled={!(Number(targetDay) > 0 && Number(targetMonth) > 0 && Number(targetYear) > 0) || !targetAsset}
-                                  className="h-8 px-5 flex-1 sm:flex-none rounded-lg bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5 shrink-0 mt-auto ml-auto"
-                                >
-                                  <Plus size={12} /> Add
-                                </button>
+                                <div className="flex items-center gap-2 mt-auto ml-auto shrink-0">
+                                  <button 
+                                    onClick={() => setShowBulkModal(true)}
+                                    className="h-8 px-4 flex-1 sm:flex-none rounded-lg bg-yellow-500 text-black font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 uppercase tracking-widest flex items-center justify-center gap-1.5"
+                                  >
+                                    <List size={12} /> Colar Op.
+                                  </button>
+                                  <button 
+                                    onClick={handleSubmitTarget}
+                                    disabled={!(Number(targetDay) > 0 && Number(targetMonth) > 0 && Number(targetYear) > 0) || !targetAsset}
+                                    className="h-8 px-5 flex-1 sm:flex-none rounded-lg bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5"
+                                  >
+                                    <Plus size={12} /> Add
+                                  </button>
+                                </div>
                              </div>
                          </div>
                          )}
@@ -1407,7 +1536,9 @@ export default function SetupsView({
                               {tableRows.length > 0 && (
                                  <tfoot className="sticky bottom-0 z-10" style={{ backgroundColor: theme.fundoCards || '#0a0a0a' }}>
                                    <tr>
-                                      <td className="py-3 px-2 text-[10px] font-black uppercase tracking-widest text-center" colSpan={3} style={{ color: theme.textoPrincipal }}>Grand Total</td>
+                                      <td className="py-3 px-2 text-[10px] font-black uppercase tracking-widest text-center" colSpan={3} style={{ color: theme.textoPrincipal }}>
+                                         Grand Total ({grandTotal.takes + grandTotal.stops + grandTotal.breakevens} Ops)
+                                      </td>
                                       <td className="py-3 px-2 text-[10px] font-black text-green-500 text-center">{grandTotal.takes}</td>
                                       <td className="py-3 px-2 text-[10px] font-black text-red-500 text-center">{grandTotal.stops}</td>
                                       <td className="py-3 px-2 text-[10px] font-black text-[#00B0F0] text-center">{grandTotal.breakevens || 0}</td>
@@ -1438,6 +1569,44 @@ export default function SetupsView({
             </div>
          </div>
          
+         {/* Bulk Insert Modal */}
+         {showBulkModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowBulkModal(false)}>
+               <div className="w-full max-w-2xl flex flex-col shadow-2xl relative border rounded-2xl overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
+                     <h3 className="text-sm font-black tracking-widest uppercase flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
+                        <List size={16} className="text-yellow-500" /> Colar Operações
+                     </h3>
+                     <button onClick={() => setShowBulkModal(false)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                        <X size={16} style={{ color: theme.textoPrincipal }} />
+                     </button>
+                  </div>
+                  <div className="flex flex-col gap-3 p-6 flex-1 overflow-y-auto">
+                     <p className="text-xs opacity-70" style={{ color: theme.textoPrincipal }}>
+                       Cole o texto contendo as operações. O sistema substituirá automaticamente os dias já existentes na tabela.<br/>
+                       Formato esperado: <code className="bg-black/30 px-1 rounded">Data | Dia | Take | Stop | Result | Fees | Win Rate | Seq</code>
+                     </p>
+                     <textarea
+                        value={bulkText}
+                        onChange={e => setBulkText(e.target.value)}
+                        placeholder="04/05 | Seg | 1 | 1 | +65 | 10 | 50% | ⚪🔴⚪🟢—⚪&#10;05/05 | Ter | 2 | 0 | +344 | 6 | 100% | 🟢⚪🟢"
+                        rows={10}
+                        className="w-full bg-black/20 border rounded-lg p-3 text-[11px] font-mono outline-none focus:border-yellow-500 resize-none"
+                        style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
+                     />
+                  </div>
+                  <div className="flex justify-end gap-3 px-6 py-4 border-t shrink-0" style={{ borderColor: theme.contornoGeral, background: 'rgba(0,0,0,0.2)' }}>
+                     <button onClick={() => setShowBulkModal(false)} className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white/5 transition-colors" style={{ color: theme.textoPrincipal }}>
+                        Cancelar
+                     </button>
+                     <button onClick={handleBulkInsert} className="px-6 py-2 rounded-lg text-black bg-yellow-500 hover:brightness-110 active:scale-95 transition-all text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                        <Check size={14} /> Processar
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
+
          {/* Setup Config / Parameters Modal */}
          {showConfigModal && selectedSetupId && (() => {
             const myLogs = (setupConfigLogs||[])

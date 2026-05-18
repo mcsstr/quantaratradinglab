@@ -290,7 +290,7 @@ function buildCalendar(trades: any[], currentDate: Date) {
 
 function buildWeeklyData(trades: any[], weekStart: Date | null) {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const daysData = dayNames.map((name, i) => ({ id: i, name, pnl: 0, trades: 0 }));
+  const daysData = dayNames.map((name, i) => ({ id: i, name, pnl: 0, trades: 0, wins: 0, losses: 0, breakevens: 0 }));
   const refDate = weekStart ?? getStartOfWeek(new Date());
 
   for (const t of trades) {
@@ -304,7 +304,20 @@ function buildWeeklyData(trades: any[], weekStart: Date | null) {
     const gross = parseFloat(t.pnl) || 0;
     const fee = (parseFloat(t.commission_per_trade) || 0) * (parseInt(t.qty) || 1);
     daysData[dow].pnl += (gross - fee);
-    daysData[dow].trades += (parseInt(t.qty) || 1);
+    
+    if (t.takes !== undefined || t.stops !== undefined) {
+      const tTakes = parseInt(t.takes) || 0;
+      const tStops = parseInt(t.stops) || 0;
+      const tBreak = parseInt(t.breakevens) || 0;
+      daysData[dow].trades += (tTakes + tStops + tBreak);
+      daysData[dow].wins += tTakes;
+      daysData[dow].losses += tStops;
+    } else {
+      daysData[dow].trades += (parseInt(t.qty) || 1);
+      const net = gross - fee;
+      if (net >= 0) daysData[dow].wins += 1;
+      else if (net < 0) daysData[dow].losses += 1;
+    }
   }
 
   // Omit weekends if there is no trading volume
@@ -445,6 +458,9 @@ function PreviewDashboard({
   selectedWeekDate, setSelectedWeekDate
 }: any) {
   const [isMobile, setIsMobile] = useState(false);
+  const [showWinsLosses, setShowWinsLosses] = useState(false);
+  const [equityFilter, setEquityFilter] = useState('daily');
+  const [tableSort, setTableSort] = useState<'recent' | 'oldest'>('recent');
   const printRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
@@ -558,6 +574,36 @@ function PreviewDashboard({
     return pts;
   }, [trades, accountHistory, initialBalance]);
 
+  // Filter/aggregate chartPoints by equityFilter
+  const filteredChartPoints = useMemo(() => {
+    if (!chartPoints.length) return chartPoints;
+    if (equityFilter === 'daily') return chartPoints;
+
+    const grouped: Record<string, { balance: number; accountBalance: number }> = {};
+    chartPoints.forEach(pt => {
+      if (pt.name === 'Start') return;
+      const d = new Date(pt.name + 'T00:00:00');
+      let key = pt.name;
+      if (equityFilter === 'weekly') {
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const mon = new Date(d.setDate(diff));
+        key = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
+      } else if (equityFilter === 'monthly') {
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      } else if (equityFilter === 'yearly') {
+        key = `${d.getFullYear()}`;
+      }
+      grouped[key] = { balance: pt.balance, accountBalance: pt.accountBalance };
+    });
+
+    const first = chartPoints[0];
+    return [
+      first,
+      ...Object.entries(grouped).map(([name, v]) => ({ name, balance: v.balance, accountBalance: v.accountBalance }))
+    ];
+  }, [chartPoints, equityFilter]);
+
 
   const currency = settings.brokerCurrency || 'USD';
   const fmt = (v: number) => formatCurrency(v, currency);
@@ -584,7 +630,7 @@ function PreviewDashboard({
   const exchangeRate = Number(settings.usdToBrlRate || 5);
 
   // Render Table values
-  const tableRows = [...trades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const tableRows = [...trades].sort((a, b) => tableSort === 'recent' ? new Date(b.date).getTime() - new Date(a.date).getTime() : new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const grandTotal = useMemo(() => {
     return tableRows.reduce((acc, r: any) => {
@@ -1004,9 +1050,17 @@ function PreviewDashboard({
               {/* EQUITY CURVE */}
               <div className="lg:col-span-1 h-[300px] md:h-[350px]">
                 <div className="rounded-xl p-4 md:p-6 shadow-sm transition-all w-full h-full flex flex-col overflow-hidden" style={glass(theme.fundoCards)}>
-                  <div className="flex items-center gap-2 mb-4 shrink-0">
-                    <TrendingUp size={16} style={{ color: theme.textoSecundario }} />
-                    <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Capital Curve</span>
+                  <div className="flex items-center justify-between mb-4 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp size={16} style={{ color: theme.textoSecundario }} />
+                      <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Equity Evolution</span>
+                    </div>
+                    <select value={equityFilter} onChange={e => setEquityFilter(e.target.value)} className="filter-select outline-none bg-transparent cursor-pointer font-bold px-3 py-1.5 rounded-lg hover:bg-white/10 transition-all shadow-sm border text-[11px]" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
+                      <option value="daily" className="bg-gray-900">Daily</option>
+                      <option value="weekly" className="bg-gray-900">Weekly</option>
+                      <option value="monthly" className="bg-gray-900">Monthly</option>
+                      <option value="yearly" className="bg-gray-900">Yearly</option>
+                    </select>
                   </div>
                   <div className="flex gap-3 text-[10px] font-bold mb-2 shrink-0" style={{ color: theme.textoSecundario }}>
                     <div className="flex items-center gap-1"><div className="w-3 h-[2px] rounded" style={{ backgroundColor: isTrendUp ? theme.textoPositivo : theme.textoNegativo }}></div> Setup</div>
@@ -1014,7 +1068,7 @@ function PreviewDashboard({
                   </div>
                   <div className="w-full flex-1 min-h-[150px] overflow-hidden">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartPoints} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                      <LineChart data={filteredChartPoints} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
                         <XAxis dataKey="name" hide />
                         <YAxis domain={['auto', 'auto']} stroke={theme.textoSecundario} fontSize={10}
@@ -1037,25 +1091,61 @@ function PreviewDashboard({
               <div className="lg:col-span-1 h-[300px] md:h-[350px]">
                 <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full h-full overflow-hidden" style={glass(theme.fundoCards)}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
-                    <div className="flex items-center gap-2">
-                      <BarChart2 size={16} style={{ color: theme.textoSecundario }} />
-                      <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Trades por dia</span>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <BarChart2 size={16} style={{ color: theme.textoSecundario }} />
+                        <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Weekly Trades</span>
+                        <div className="ml-1 flex items-center rounded-full p-0.5 cursor-pointer border transition-colors" style={{ backgroundColor: 'rgba(0,0,0,0.2)', borderColor: theme.contornoGeral }} onClick={() => setShowWinsLosses(!showWinsLosses)}>
+                          <div className={`px-2 py-0.5 text-[9px] font-bold rounded-full transition-colors ${!showWinsLosses ? 'text-white shadow' : 'opacity-40'}`} style={{ backgroundColor: !showWinsLosses ? theme.linhaGrafico : 'transparent' }}>VOL</div>
+                          <div className={`px-2 py-0.5 text-[9px] font-bold rounded-full transition-colors ${showWinsLosses ? 'text-white shadow' : 'opacity-40'}`} style={{ backgroundColor: showWinsLosses ? theme.linhaGrafico : 'transparent' }}>W/L</div>
+                        </div>
+                      </div>
+                      {showWinsLosses && (
+                        <div className="flex items-center gap-2 text-[9px] font-bold mt-1" style={{ color: theme.textoSecundario }}>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>Wins</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>Losses</span>
+                        </div>
+                      )}
                     </div>
                     <WeekNav selectedWeekDate={selectedWeekDate} setSelectedWeekDate={setSelectedWeekDate} theme={theme} />
                   </div>
                   <div className="w-full flex-1 min-h-[150px] overflow-hidden">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={weeklyData.daysData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
-                        <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
-                        <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
-                        <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }}
-                          contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderRadius: '8px', borderColor: theme.contornoGeral }}
-                          itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} />
-                        <Bar dataKey="trades" name="Trades" radius={[4, 4, 0, 0]} isAnimationActive={false} fill={theme.contornoHoje || '#3b82f6'}>
-                          <LabelList dataKey="trades" position="top" offset={10} fill="#FFD700" fontSize={14} fontWeight="bold" />
-                        </Bar>
-                      </BarChart>
+                      {showWinsLosses ? (
+                        <BarChart data={weeklyData.daysData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
+                          <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
+                          <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} allowDecimals={false} />
+                          <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }}
+                            contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderRadius: '8px', borderColor: theme.contornoGeral }}
+                            itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} 
+                            formatter={(val, name) => {
+                              if (name === 'wins') return [`${val}`, 'Wins'];
+                              if (name === 'losses') return [`${val}`, 'Losses'];
+                              return [val, name];
+                            }}
+                          />
+                          <Bar dataKey="wins" stackId="a" fill={theme.textoPositivo} stroke={theme.fundoCards} strokeWidth={1} isAnimationActive={false} />
+                          <Bar dataKey="losses" stackId="a" fill={theme.textoNegativo} stroke={theme.fundoCards} strokeWidth={1} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                        </BarChart>
+                      ) : (
+                        <BarChart data={weeklyData.daysData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
+                          <XAxis dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} />
+                          <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 13, fontWeight: 'normal' }} allowDecimals={false} />
+                          <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }}
+                            contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderRadius: '8px', borderColor: theme.contornoGeral }}
+                            itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} 
+                            formatter={(val, name) => {
+                              if (name === 'trades') return [`${val}`, 'Total Trades'];
+                              return [val, name];
+                            }}
+                          />
+                          <Bar dataKey="trades" name="Trades" radius={[4, 4, 0, 0]} isAnimationActive={false} fill={theme.contornoHoje || '#3b82f6'}>
+                            <LabelList dataKey="trades" position="top" offset={10} fill="#FFD700" fontSize={14} fontWeight="bold" />
+                          </Bar>
+                        </BarChart>
+                      )}
                     </ResponsiveContainer>
                   </div>
                 </div>
@@ -1067,7 +1157,7 @@ function PreviewDashboard({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 shrink-0 gap-3">
                     <div className="flex items-center gap-2">
                       <DollarSign size={16} style={{ color: theme.textoSecundario }} />
-                      <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>P&l por dia</span>
+                      <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Weekly P&L</span>
                     </div>
                     <WeekNav selectedWeekDate={selectedWeekDate} setSelectedWeekDate={setSelectedWeekDate} theme={theme} />
                   </div>
@@ -1100,7 +1190,7 @@ function PreviewDashboard({
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex items-center gap-2">
                         <CalendarDays size={16} style={{ color: theme.textoSecundario }} />
-                        <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Calendário</span>
+                        <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Performance Calendar</span>
                       </div>
                       <span className="xl:hidden text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
                         style={{ color: calendarData.reduce((a: number, w: any) => a + w.summary.pnl, 0) >= 0 ? theme.textoPositivo : theme.textoNegativo, backgroundColor: calendarData.reduce((a: number, w: any) => a + w.summary.pnl, 0) >= 0 ? `${theme.textoPositivo}18` : `${theme.textoNegativo}18` }}>
@@ -1180,9 +1270,14 @@ function PreviewDashboard({
               <div className="lg:col-span-1 h-[400px] lg:h-auto relative">
                 <div className="lg:absolute lg:inset-0 w-full h-full">
                   <div className="relative rounded-xl p-6 shadow-xl transition-all h-full flex flex-col" style={glass(theme.fundoCards)}>
-                    <div className="flex items-center gap-2 mb-2 shrink-0">
-                      <List size={16} style={{ color: theme.textoSecundario }} />
-                      <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Daily Entries</span>
+                    <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <List size={16} style={{ color: theme.textoSecundario }} />
+                        <span className="text-[15px] font-bold capitalize" style={{ color: theme.textoSecundario }}>Daily Entries</span>
+                      </div>
+                      <button onClick={() => setTableSort(prev => prev === 'recent' ? 'oldest' : 'recent')} className="text-[11px] px-3 py-1.5 rounded-lg font-bold transition-all hover:bg-white/10 shadow-sm border shrink-0" style={{ color: theme.linhaGrafico, borderColor: theme.contornoGeral }}>
+                        {tableSort === 'recent' ? 'Recent' : 'Oldest'}
+                      </button>
                     </div>
 
                     <div className="flex-1 overflow-y-auto hide-scrollbar relative rounded-lg min-h-0" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100) }}>
