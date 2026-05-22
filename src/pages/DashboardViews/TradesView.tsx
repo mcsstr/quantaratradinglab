@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import {
   ListIcon, Trash2, Search, ArrowDown, ArrowUp, Edit2, CalendarDays, X
 } from '../../components/Icons';
@@ -19,6 +20,8 @@ export default function TradesView({
   theme,
   getGlassStyle,
   settings,
+  disabledWeekdays = new Set(),
+  toggleWeekday,
   selectedTrades,
   setSelectedTrades,
   setTrades,
@@ -121,7 +124,9 @@ export default function TradesView({
     }
   };
 
-  const filteredTradesPnl = filteredTrades.reduce((acc: number, t: any) => acc + t.pnl + Number(t.commission || 0), 0);
+  const filteredTradesPnl = filteredTrades
+    .filter((t: any) => !t.rawMetadata?.voided)
+    .reduce((acc: number, t: any) => acc + t.pnl - Number(t.commission || 0), 0);
 
   return (
     <div key="trades" className="space-y-6 max-w-[1600px] mx-auto w-full animate-tab-enter">
@@ -174,47 +179,77 @@ export default function TradesView({
               </span>
             }
           />
-          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4">
-            <div className="flex gap-2 w-full flex-1 sm:min-w-[200px]">
-              <select
-                className="flex-1 rounded-lg py-2 px-3 text-xs outline-none cursor-pointer bg-transparent w-full"
-                style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
-                value={filterMonth}
-                onChange={e => setFilterMonth(e.target.value)}
-              >
-                <option value="all" className="bg-gray-800">Month: All</option>
-                {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={(i + 1).toString().padStart(2, '0')} className="bg-gray-800">{new Date(2000, i).toLocaleString(userLocale, { month: 'long' })}</option>)}
-              </select>
-              <select
-                className="flex-1 rounded-lg py-2 px-3 text-xs outline-none cursor-pointer bg-transparent w-full"
-                style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
-                value={filterYear}
-                onChange={e => setFilterYear(e.target.value)}
-              >
-                <option value="all" className="bg-gray-800">Year: All</option>
-                <option value="2024" className="bg-gray-800">2024</option>
-                <option value="2025" className="bg-gray-800">2025</option>
-                <option value="2026" className="bg-gray-800">2026</option>
-              </select>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4">
+              <div className="flex gap-2 w-full flex-1 sm:min-w-[200px]">
+                <select
+                  className="flex-1 rounded-lg py-2 px-3 text-xs outline-none cursor-pointer bg-transparent w-full"
+                  style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
+                  value={filterMonth}
+                  onChange={e => setFilterMonth(e.target.value)}
+                >
+                  <option value="all" className="bg-gray-800">Month: All</option>
+                  {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={(i + 1).toString().padStart(2, '0')} className="bg-gray-800">{new Date(2000, i).toLocaleString(userLocale, { month: 'long' })}</option>)}
+                </select>
+                <select
+                  className="flex-1 rounded-lg py-2 px-3 text-xs outline-none cursor-pointer bg-transparent w-full"
+                  style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
+                  value={filterYear}
+                  onChange={e => setFilterYear(e.target.value)}
+                >
+                  <option value="all" className="bg-gray-800">Year: All</option>
+                  <option value="2024" className="bg-gray-800">2024</option>
+                  <option value="2025" className="bg-gray-800">2025</option>
+                  <option value="2026" className="bg-gray-800">2026</option>
+                </select>
+              </div>
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto mt-1 sm:mt-0">
+                {filteredTrades.length > 0 && (
+                  <button
+                    onClick={() => setIsConfirmDeleteAllOpen(true)}
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap"
+                  >
+                    <Trash2 size={14} /> Delete All
+                  </button>
+                )}
+                {selectedTrades.length > 0 && (
+                  <button
+                    onClick={handleDeleteSelected}
+                    disabled={isDeleting}
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap disabled:opacity-40"
+                  >
+                    <Trash2 size={14} /> {isDeleting ? 'Deleting...' : `Delete Selected (${selectedTrades.length})`}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto mt-1 sm:mt-0">
-              {filteredTrades.length > 0 && (
-                <button
-                  onClick={() => setIsConfirmDeleteAllOpen(true)}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap"
-                >
-                  <Trash2 size={14} /> Delete All
-                </button>
-              )}
-              {selectedTrades.length > 0 && (
-                <button
-                  onClick={handleDeleteSelected}
-                  disabled={isDeleting}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap disabled:opacity-40"
-                >
-                  <Trash2 size={14} /> {isDeleting ? 'Deleting...' : `Delete Selected (${selectedTrades.length})`}
-                </button>
-              )}
+
+            {/* Weekday Filter Pills */}
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <span className="text-[10px] uppercase font-bold tracking-widest opacity-50 shrink-0" style={{ color: theme.textoPrincipal }}>Weekdays:</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[0, 1, 2, 3, 4, 5, 6].map(dayIdx => {
+                  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                  const isEnabled = !disabledWeekdays.has(dayIdx);
+                  return (
+                    <button
+                      key={dayIdx}
+                      type="button"
+                      onClick={() => toggleWeekday(dayIdx)}
+                      className="relative h-7 px-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all duration-200 select-none border"
+                      style={{
+                        background: isEnabled ? 'rgba(234,179,8,0.15)' : 'rgba(0,0,0,0.25)',
+                        borderColor: isEnabled ? 'rgba(234,179,8,0.6)' : 'rgba(255,255,255,0.08)',
+                        color: isEnabled ? '#eab308' : theme.textoSecundario,
+                        opacity: isEnabled ? 1 : 0.45,
+                        boxShadow: isEnabled ? '0 0 8px rgba(234,179,8,0.2)' : 'none',
+                      }}
+                    >
+                      {dayNames[dayIdx]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -225,90 +260,105 @@ export default function TradesView({
           <table className="w-full text-left text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap">
             <thead className="text-[9px] sm:text-[10px] md:text-xs tracking-wider font-bold" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), color: theme.textoSecundario }}>
               <tr>
-                <th className="px-2 py-3 md:px-4 md:py-4 w-6 text-center"><input type="checkbox" className="cursor-pointer" checked={paginatedTrades.length > 0 && selectedTrades.length === paginatedTrades.length} onChange={(e) => { if (e.target.checked) setSelectedTrades(paginatedTrades.map(t => t.id)); else setSelectedTrades([]); }} /></th>
+                <th className="px-2 py-3 md:px-4 md:py-4 w-10 text-center"><input type="checkbox" className="cursor-pointer" checked={paginatedTrades.length > 0 && selectedTrades.length === paginatedTrades.length} onChange={(e) => { if (e.target.checked) setSelectedTrades(paginatedTrades.map(t => t.id)); else setSelectedTrades([]); }} /></th>
                 <th className={`${getColClass('symbol')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sym</th>
                 <th className={`${getColClass('dateTime')} px-2 py-3 md:px-4 md:py-4 text-center`}>Date & Time</th>
-                <th className={`${getColClass('direction')} px-2 py-3 md:px-4 md:py-4 text-center w-8 sm:w-12`}>Dir</th>
+                <th className={`${getColClass('direction')} px-2 py-3 md:px-4 md:py-4 text-center`}>Dir</th>
                 <th className={`${getColClass('qty', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Contracts</th>
                 <th className={`${getColClass('buyPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Buy Price</th>
                 <th className={`${getColClass('buyTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Buy Time</th>
                 <th className={`${getColClass('duration', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Duration</th>
                 <th className={`${getColClass('sellTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sell Time</th>
                 <th className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Sell Price</th>
-                <th className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center w-24`}>Fees</th>
-                <th className={`${getColClass('pnl')} px-2 py-3 md:px-4 md:py-4 text-center w-28`}>Gross P&L</th>
-                <th className="px-2 py-3 md:px-4 md:py-4 text-center w-28">Setup</th>
-                <th className={`${getColClass('action')} px-2 py-3 md:px-4 md:py-4 text-center w-20`}>Action</th>
+                <th className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>Fees</th>
+                <th className={`${getColClass('pnl')} px-2 py-3 md:px-4 md:py-4 text-center`}>Gross P&L</th>
+                <th className={`${getColClass('action')} px-2 py-3 md:px-4 md:py-4 text-center`}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {paginatedTrades.map((trade, index) => (
-                <tr key={trade.id} className="transition-colors hover:bg-white/10" style={{ backgroundColor: index % 2 === 0 ? 'transparent' : 'rgba(128, 128, 128, 0.04)' }}>
-                  <td className="px-2 py-2.5 md:px-4 md:py-3 text-center">
-                    <input type="checkbox" className="cursor-pointer" checked={selectedTrades.includes(trade.id)} onChange={() => { setSelectedTrades(prev => prev.includes(trade.id) ? prev.filter(id => id !== trade.id) : [...prev, trade.id]); }} />
-                  </td>
-                  <td className={`${getColClass('symbol')} px-2 py-2.5 md:px-4 md:py-3 text-center font-bold text-[9px] sm:text-[10px] md:text-xs truncate max-w-[40px] sm:max-w-none`}>
-                    {trade.symbol || '-'}
-                  </td>
-                  <td className={`${getColClass('dateTime')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-[8.5px] sm:text-[10px] md:text-xs leading-tight`}>
-                    <div className="flex flex-col">
-                      <span>{formatDate(trade.date)}</span>
-                      {trade.entryTimestamp && <span className="opacity-70">{new Date(trade.entryTimestamp).toLocaleTimeString(userLocale, { hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
-                    </div>
-                  </td>
-                  <td className={`${getColClass('direction')} px-2 py-2.5 md:px-4 md:py-3 text-center`}>
-                    <div className="flex items-center justify-center gap-1 font-bold text-[9px] sm:text-[10px] md:text-xs" style={{ color: trade.direction === 'Short' ? theme.textoNegativo : theme.textoPositivo }}>
-                      {trade.direction === 'Short' ? <ArrowDown size={12} className="md:w-[14px] md:h-[14px]" /> : <ArrowUp size={12} className="md:w-[14px] md:h-[14px]" />}
-                    </div>
-                  </td>
-                  <td className={`${getColClass('qty', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs`}>
-                    {trade.qty}
-                  </td>
-                  <td className={`${getColClass('buyPrice', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
-                    {trade.buyPrice ? trade.buyPrice.toLocaleString(userLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
-                  </td>
-                  <td className={`${getColClass('buyTime', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
-                    {trade.buyTime || '-'}
-                  </td>
-                  <td className={`${getColClass('duration', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
-                    {trade.duration || "00:00"}
-                  </td>
-                  <td className={`${getColClass('sellTime', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
-                    {trade.sellTime || '-'}
-                  </td>
-                  <td className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
-                    {trade.sellPrice ? trade.sellPrice.toLocaleString(userLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
-                  </td>
-                  <td className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[10px] md:text-xs w-24`} style={{ color: theme.textoSecundario }}>
-                    {trade.commission ? `-${formatCurrency(Math.abs(Number(trade.commission)))}` : '$0.00'}
-                  </td>
-                  <td className={`${getColClass('pnl')} px-2 py-2.5 md:px-4 md:py-3 font-bold text-center text-[10px] md:text-xs w-28`} style={{ color: trade.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
-                    {formatCurrency(trade.pnl)}
-                  </td>
-                  <td className="px-2 py-2.5 md:px-4 md:py-3 text-center">
-                    <div style={{ transform: 'scale(0.72)', transformOrigin: 'center', display: 'inline-block', lineHeight: 1 }}>
-                      <select 
-                        value={trade.setup_id || ''}
-                        onChange={async (e) => {
-                           const val = e.target.value || null;
-                           setTrades((prev:any) => prev.map((t:any) => t.id === trade.id ? {...t, setup_id: val} : t));
-                           await supabase.from('trades').update({ setup_id: val }).eq('id', trade.id);
-                        }}
-                        className="bg-transparent text-center outline-none cursor-pointer font-mono border-none hover:opacity-80 transition-opacity appearance-none"
-                        style={{ color: theme.textoSecundario, fontSize: '11px', minWidth: '80px' }}
+              {paginatedTrades.map((trade, index) => {
+                const isVoided = !!trade.rawMetadata?.voided;
+                return (
+                  <tr 
+                    key={trade.id} 
+                    className={`transition-colors hover:bg-white/10 ${isVoided ? 'opacity-35 line-through select-none saturate-50' : ''}`} 
+                    style={{ backgroundColor: index % 2 === 0 ? 'transparent' : 'rgba(128, 128, 128, 0.04)' }}
+                  >
+                    <td className="px-2 py-2.5 md:px-4 md:py-3 text-center w-10">
+                      <input type="checkbox" className="cursor-pointer" checked={selectedTrades.includes(trade.id)} onChange={() => { setSelectedTrades(prev => prev.includes(trade.id) ? prev.filter(id => id !== trade.id) : [...prev, trade.id]); }} />
+                    </td>
+                    <td className={`${getColClass('symbol')} px-2 py-2.5 md:px-4 md:py-3 text-center font-bold text-[9px] sm:text-[10px] md:text-xs truncate max-w-[40px] sm:max-w-none`}>
+                      {trade.symbol || '-'}
+                    </td>
+                    <td className={`${getColClass('dateTime')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-[8.5px] sm:text-[10px] md:text-xs leading-tight text-center`}>
+                      <div className="flex flex-col">
+                        <span>{formatDate(trade.date)}</span>
+                        {trade.entryTimestamp && <span className="opacity-70">{new Date(trade.entryTimestamp).toLocaleTimeString(userLocale, { hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
+                      </div>
+                    </td>
+                    <td className={`${getColClass('direction')} px-2 py-2.5 md:px-4 md:py-3 text-center`}>
+                      <div className="flex items-center justify-center gap-1 font-bold text-[9px] sm:text-[10px] md:text-xs" style={{ color: trade.direction === 'Short' ? theme.textoNegativo : theme.textoPositivo }}>
+                        {trade.direction === 'Short' ? <ArrowDown size={12} className="md:w-[14px] md:h-[14px]" /> : <ArrowUp size={12} className="md:w-[14px] md:h-[14px]" />}
+                      </div>
+                    </td>
+                    <td className={`${getColClass('qty', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs`}>
+                      {trade.qty}
+                    </td>
+                    <td className={`${getColClass('buyPrice', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
+                      {trade.buyPrice ? trade.buyPrice.toLocaleString(userLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                    </td>
+                    <td className={`${getColClass('buyTime', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
+                      {trade.buyTime || '-'}
+                    </td>
+                    <td className={`${getColClass('duration', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
+                      {trade.duration || "00:00"}
+                    </td>
+                    <td className={`${getColClass('sellTime', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
+                      {trade.sellTime || '-'}
+                    </td>
+                    <td className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[9px] sm:text-[10px] md:text-xs opacity-70`}>
+                      {trade.sellPrice ? trade.sellPrice.toLocaleString(userLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                    </td>
+                    <td className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-2.5 md:px-4 md:py-3 font-mono text-center text-[10px] md:text-xs`} style={{ color: theme.textoSecundario }}>
+                      {trade.commission ? `-${formatCurrency(Math.abs(Number(trade.commission)))}` : '$0.00'}
+                    </td>
+                    <td className={`${getColClass('pnl')} px-2 py-2.5 md:px-4 md:py-3 font-bold text-center text-[10px] md:text-xs`} style={{ color: trade.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
+                      {formatCurrency(trade.pnl)}
+                    </td>
+                    <td className={`${getColClass('action')} px-2 py-2.5 md:px-4 md:py-3 text-center flex justify-center items-center gap-1`}>
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const nextVoided = !isVoided;
+                          const newMetadata = { ...trade.rawMetadata, voided: nextVoided };
+                          
+                          setTrades((prev: any) => prev.map((t: any) => t.id === trade.id ? { ...t, rawMetadata: newMetadata } : t));
+                          
+                          try {
+                            if (session) {
+                              const { error } = await supabase.from('trades').update({ raw_metadata: newMetadata }).eq('id', trade.id);
+                              if (error) throw error;
+                            }
+                          } catch (err: any) {
+                            console.error('Error toggling void status:', err);
+                            setToastMessage(`Error toggling void status: ${err.message}`);
+                            setTimeout(() => setToastMessage(''), 4000);
+                            setTrades((prev: any) => prev.map((t: any) => t.id === trade.id ? { ...t, rawMetadata: trade.rawMetadata } : t));
+                          }
+                        }} 
+                        className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" 
+                        title={isVoided ? "Reativar Trade" : "Anular Trade"}
+                        style={{ color: isVoided ? '#ef4444' : theme.textoSecundario }}
                       >
-                        <option value="">Price Action</option>
-                        {setups?.map((s:any) => <option key={s.id} value={s.id}>{s.title}</option>)}
-                      </select>
-                    </div>
-                  </td>
-                  <td className={`${getColClass('action')} px-2 py-2.5 md:px-4 md:py-3 text-center flex justify-center gap-1 w-20`}>
-                    <button onClick={() => { setEditFormData(trade); setIsTradeModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
-                    <button onClick={() => handleDeleteSingle(trade.id)} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 14} /></button>
-                  </td>
-                </tr>
-              ))}
-              {paginatedTrades.length === 0 && (<tr><td colSpan="12" className="p-12 text-center italic" style={{ color: theme.textoSecundario }}>No trades found.</td></tr>)}
+                        {isVoided ? <EyeOff size={isMobile ? 12 : 14} /> : <Eye size={isMobile ? 12 : 14} />}
+                      </button>
+                      <button onClick={() => { setEditFormData(trade); setIsTradeModalOpen(true); }} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Edit2 size={isMobile ? 12 : 14} /></button>
+                      <button onClick={() => handleDeleteSingle(trade.id)} className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" style={{ color: theme.textoSecundario }}><Trash2 size={isMobile ? 12 : 14} /></button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {paginatedTrades.length === 0 && (<tr><td colSpan="13" className="p-12 text-center italic" style={{ color: theme.textoSecundario }}>No trades found.</td></tr>)}
             </tbody>
           </table>
           {filteredTrades.length > historyItemsPerPage && (

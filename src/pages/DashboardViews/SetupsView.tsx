@@ -86,7 +86,7 @@ export default function SetupsView({
   // Open a read-only preview of a group's targets in a new tab
   const handleOpenPreview = useCallback((groupName: string, setupTitle: string) => {
     const myTargets = (setupTargets || []).filter(
-      (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName
+      (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName && !t.disabled
     );
     if (myTargets.length === 0) return;
 
@@ -160,6 +160,7 @@ export default function SetupsView({
     setActiveGroupName('');
     setStagingTargets([]);
     setIsEditingGroup(true);
+    setDisabledWeekdays(new Set());
     
     if (mode === 'create') {
       setFormTitle('');
@@ -333,7 +334,9 @@ export default function SetupsView({
             if (sid) {
                 const activeGroup = setupToActiveGroup[sid];
                 if ((!tg.group_name && !activeGroup) || tg.group_name === activeGroup) {
-                    setupTargetTotals[sid] = (setupTargetTotals[sid] || 0) + (parseFloat(tg.pnl) || 0);
+                    if (!tg.disabled) {
+                      setupTargetTotals[sid] = (setupTargetTotals[sid] || 0) + (parseFloat(tg.pnl) || 0);
+                    }
                 }
             }
         });
@@ -373,10 +376,12 @@ export default function SetupsView({
     myTargets.forEach((t:any) => {
        const g = t.group_name || `Default - ${currentSetup?.title || 'Setup'}`;
        if (!groupsMap[g]) groupsMap[g] = { takes: 0, stops: 0, breakevens: 0, pnl: 0 };
-       groupsMap[g].takes += t.takes || 0;
-       groupsMap[g].stops += t.stops || 0;
-       groupsMap[g].breakevens += t.breakevens || 0;
-       groupsMap[g].pnl += parseFloat(t.pnl) || 0;
+       if (!t.disabled) {
+         groupsMap[g].takes += t.takes || 0;
+         groupsMap[g].stops += t.stops || 0;
+         groupsMap[g].breakevens += t.breakevens || 0;
+         groupsMap[g].pnl += parseFloat(t.pnl) || 0;
+       }
     });
 
     return Object.keys(groupsMap).map(k => {
@@ -677,8 +682,12 @@ export default function SetupsView({
     if (!activeGroupName) return;
     const groupName = activeGroupName;
     
-    // Assign proper group_name to all staging targets
-    const updatedStaging = stagingTargets.map(t => ({ ...t, group_name: groupName }));
+    // Mark rows from disabled weekdays with disabled:true, keep all rows in DB
+    const updatedStaging = stagingTargets.map(t => {
+      const rowDate = new Date(t.date + 'T00:00:00');
+      const isDisabled = disabledWeekdays.has(rowDate.getDay());
+      return { ...t, group_name: groupName, disabled: isDisabled };
+    });
     
     await saveBatchSetupTargets(updatedStaging, selectedSetupId as string, groupName, originalGroupName);
     
@@ -693,15 +702,22 @@ export default function SetupsView({
     setIsEditingGroup(false);
   };
 
+  const [disabledWeekdays, setDisabledWeekdays] = useState<Set<number>>(new Set());
+
   const grandTotal = useMemo(() => {
-    return tableRows.reduce((acc, row) => ({
-      takes: acc.takes + (row.takes || 0),
-      stops: acc.stops + (row.stops || 0),
-      breakevens: acc.breakevens + (row.breakevens || 0),
-      pnl: acc.pnl + (parseFloat(row.pnl) || 0),
-      commission: acc.commission + ((parseFloat(row.commission) || 0) * ((row.takes || 0) + (row.stops || 0) + (row.breakevens || 0)))
-    }), { takes: 0, stops: 0, breakevens: 0, pnl: 0, commission: 0 });
-  }, [tableRows]);
+    return tableRows.reduce((acc, row) => {
+      const rowDate = new Date(row.date + 'T00:00:00');
+      if (disabledWeekdays.has(rowDate.getDay()) || row.disabled) return acc;
+
+      return {
+        takes: acc.takes + (row.takes || 0),
+        stops: acc.stops + (row.stops || 0),
+        breakevens: acc.breakevens + (row.breakevens || 0),
+        pnl: acc.pnl + (parseFloat(row.pnl) || 0),
+        commission: acc.commission + ((parseFloat(row.commission) || 0) * ((row.takes || 0) + (row.stops || 0) + (row.breakevens || 0)))
+      };
+    }, { takes: 0, stops: 0, breakevens: 0, pnl: 0, commission: 0 });
+  }, [tableRows, disabledWeekdays]);
 
   const grandNetPnl = grandTotal.pnl - grandTotal.commission;
 
@@ -1110,9 +1126,19 @@ export default function SetupsView({
                                 onClick={() => {
                                   // Click on card = read-only view
                                   setActiveGroupName(g.name);
+                                  setOriginalGroupName(g.name);
                                   setIsEditingGroup(false);
                                   const myT = getTargetsForGroup(g.name);
                                   setStagingTargets(myT.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                                  // Restore disabledWeekdays from saved disabled flags
+                                  const disabledDays = new Set<number>();
+                                  myT.forEach((t: any) => {
+                                    if (t.disabled && t.date) {
+                                      const d = new Date(t.date + 'T00:00:00');
+                                      disabledDays.add(d.getDay());
+                                    }
+                                  });
+                                  setDisabledWeekdays(disabledDays);
                                   // Also set as active chart group
                                   setActiveChartGroupNames(prev => ({...prev, [selectedSetupId as string]: g.name}));
                                 }}
@@ -1391,6 +1417,41 @@ export default function SetupsView({
                                   </button>
                                 </div>
                              </div>
+
+                             {/* ROW 3: Weekday Filters */}
+                             <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                <span className="text-[8px] uppercase font-bold tracking-widest opacity-50 shrink-0" style={{ color: theme.textoPrincipal }}>Dias Habilitados:</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {[0, 1, 2, 3, 4, 5, 6].map(dayIdx => {
+                                    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                                    const isEnabled = !disabledWeekdays.has(dayIdx);
+                                    return (
+                                      <button
+                                        key={dayIdx}
+                                        type="button"
+                                        onClick={() => {
+                                          setDisabledWeekdays(prev => {
+                                            const next = new Set(prev);
+                                            if (isEnabled) next.add(dayIdx);
+                                            else next.delete(dayIdx);
+                                            return next;
+                                          });
+                                        }}
+                                        className="relative h-7 px-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all duration-200 select-none border"
+                                        style={{
+                                          background: isEnabled ? 'rgba(234,179,8,0.15)' : 'rgba(0,0,0,0.25)',
+                                          borderColor: isEnabled ? 'rgba(234,179,8,0.6)' : 'rgba(255,255,255,0.08)',
+                                          color: isEnabled ? '#eab308' : theme.textoSecundario,
+                                          opacity: isEnabled ? 1 : 0.45,
+                                          boxShadow: isEnabled ? '0 0 8px rgba(234,179,8,0.2)' : 'none',
+                                        }}
+                                      >
+                                        {dayNames[dayIdx]}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                             </div>
                          </div>
                          )}
 
@@ -1438,8 +1499,13 @@ export default function SetupsView({
                                 {tableRows.map((r, i) => {
                                   const isSelected = selectedTargetIds.has(r.id);
                                   const isEditing = editingTargetId === r.id;
+                                  
+                                  const rowDate = new Date(r.date + 'T00:00:00');
+                                  const isExcluded = disabledWeekdays.has(rowDate.getDay()) || r.disabled;
+                                  const excludedStyle = isExcluded ? { opacity: 0.3, filter: 'grayscale(100%)' } : {};
+
                                   return (
-                                    <tr key={r.id} className={`border-b transition-colors ${isSelected ? 'bg-yellow-500/10' : 'hover:bg-white/5'}`} style={{ borderColor: theme.contornoGeral }}>
+                                    <tr key={r.id} className={`border-b transition-colors ${isSelected ? 'bg-yellow-500/10' : 'hover:bg-white/5'}`} style={{ borderColor: theme.contornoGeral, ...excludedStyle }}>
                                        {isEditingGroup && (
                                        <td className="py-1 px-3 text-center">
                                           <input 

@@ -117,17 +117,42 @@ function calcMetrics(trades: any[], initialBalance: number) {
   // Win/loss ops: each row contributes qty operations, all win or all loss based on row net
   let winOps = 0;
   let lossOps = 0;
+  let maxConsecWins = 0;
+  let maxConsecLosses = 0;
+  let currentConsecWins = 0;
+  let currentConsecLosses = 0;
+
   for (const t of sorted) {
+    let tWins = 0;
+    let tLosses = 0;
     if (t.takes !== undefined || t.stops !== undefined) {
-      winOps += (Number(t.takes) || 0);
-      lossOps += (Number(t.stops) || 0);
+      tWins = Number(t.takes) || 0;
+      tLosses = Number(t.stops) || 0;
     } else {
       const qty = parseInt(t.qty) || 1;
       const gross = parseFloat(t.pnl) || 0;
       const fee = (parseFloat(t.commission_per_trade) || parseFloat(t.commission) || 0) * qty;
       const net = gross - fee;
-      if (net >= 0) winOps += qty;
-      else lossOps += qty;
+      if (net >= 0) tWins = qty;
+      else tLosses = qty;
+    }
+    
+    winOps += tWins;
+    lossOps += tLosses;
+
+    if (tWins > 0 && tLosses === 0) {
+       currentConsecWins += tWins;
+       currentConsecLosses = 0;
+       if (currentConsecWins > maxConsecWins) maxConsecWins = currentConsecWins;
+    } else if (tLosses > 0 && tWins === 0) {
+       currentConsecLosses += tLosses;
+       currentConsecWins = 0;
+       if (currentConsecLosses > maxConsecLosses) maxConsecLosses = currentConsecLosses;
+    } else if (tWins > 0 && tLosses > 0) {
+       currentConsecWins = 0;
+       currentConsecLosses = 0;
+       if (tWins > maxConsecWins) maxConsecWins = tWins;
+       if (tLosses > maxConsecLosses) maxConsecLosses = tLosses;
     }
   }
   const winRate = totalOps > 0 ? (winOps / totalOps) * 100 : 0;
@@ -137,18 +162,34 @@ function calcMetrics(trades: any[], initialBalance: number) {
 
   let winDays = 0;
   let lossDays = 0;
+  let maxConsecWinDays = 0;
+  let maxConsecLossDays = 0;
+  let currentConsecWinDays = 0;
+  let currentConsecLossDays = 0;
 
-  Object.entries(dailyPnl).forEach(([d, pnl]) => {
+  const pnlDates = Object.keys(dailyPnl).sort();
+  pnlDates.forEach(d => {
+    const pnl = dailyPnl[d];
     if (pnl > bestDay.pnl) bestDay = { date: d, pnl };
     if (pnl < worstDay.pnl) worstDay = { date: d, pnl };
-    if (pnl >= 0) winDays++;
-    else lossDays++;
+
+    if (pnl >= 0) {
+      winDays++;
+      currentConsecWinDays++;
+      currentConsecLossDays = 0;
+      if (currentConsecWinDays > maxConsecWinDays) maxConsecWinDays = currentConsecWinDays;
+    } else {
+      lossDays++;
+      currentConsecLossDays++;
+      currentConsecWinDays = 0;
+      if (currentConsecLossDays > maxConsecLossDays) maxConsecLossDays = currentConsecLossDays;
+    }
   });
+
   if (bestDay.pnl === -Infinity) bestDay = { date: '', pnl: 0 };
   if (worstDay.pnl === Infinity) worstDay = { date: '', pnl: 0 };
 
   let lastDayPnl = 0;
-  const pnlDates = Object.keys(dailyPnl).sort();
   if (pnlDates.length > 0) {
     lastDayPnl = dailyPnl[pnlDates[pnlDates.length - 1]];
   }
@@ -178,6 +219,8 @@ function calcMetrics(trades: any[], initialBalance: number) {
     totalOps,
     winOps,
     lossOps,
+    maxConsecWins,
+    maxConsecLosses,
     winningTrades: winCount,
     losingTrades: lossCount,
     totalDays: datesSet.size,
@@ -190,6 +233,7 @@ function calcMetrics(trades: any[], initialBalance: number) {
     dailyPnl,
     longWins, longTrades, shortWins, shortTrades,
     winDays, lossDays,
+    maxConsecWinDays, maxConsecLossDays,
     profitFactor, avgRR, totalGrossProfit, totalGrossLoss,
     betterDay, betterDayPct, badDay, badDayPct,
     peakBalance: peak
@@ -236,7 +280,7 @@ function getPeriodStats(dailyPnl: Record<string, number>, netPnl: number, profit
 
 // ─── calendar & weekly builder ───────────────────────────────────────────────
 
-function buildCalendar(trades: any[], currentDate: Date) {
+function buildCalendar(trades: any[], currentDate: Date, holidays: any[] = [], news: any[] = []) {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const firstDay = new Date(year, month, 1);
@@ -271,13 +315,19 @@ function buildCalendar(trades: any[], currentDate: Date) {
       const isToday = dateStr === new Date().toISOString().slice(0, 10);
       const netPnl = data?.pnl ?? 0;
       const tradesCount = data?.count ?? 0;
+
+      const dayHolidays = holidays?.filter(h => h.date === dateStr) || [];
+      const isHoliday = dayHolidays.length > 0;
+      const dayNews = news?.filter(n => n.date === dateStr) || [];
+      const hasNews = dayNews.length > 0;
+
       if (isCurrentMonth) {
         week.summary.pnl += netPnl;
         week.summary.trades += tradesCount;
         if (netPnl > 0) wWin++;
         wTotal += tradesCount > 0 ? 1 : 0;
       }
-      week.days.push({ date: new Date(cur), dateStr, netPnl, tradesCount, isCurrentMonth, isToday });
+      week.days.push({ date: new Date(cur), dateStr, netPnl, tradesCount, isCurrentMonth, isToday, isHoliday, hasNews, dayHolidays, dayNews });
       cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
     }
     week.summary.winRate = wTotal > 0 ? (wWin / wTotal) * 100 : 0;
@@ -510,10 +560,28 @@ function PreviewDashboard({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const [holidays, setHolidays] = useState<any[]>([]);
+  const [news, setNews] = useState<any[]>([]);
+
+  useEffect(() => {
+    try {
+      const h = localStorage.getItem('tradeJournal_holidays');
+      if (h) setHolidays(JSON.parse(h));
+      const n = localStorage.getItem('tradeJournal_news');
+      if (n) setNews(JSON.parse(n));
+    } catch {}
+  }, []);
+
   const metrics = useMemo(() => calcMetrics(trades, initialBalance), [trades, initialBalance]);
-  const calendarData = useMemo(() => buildCalendar(trades, currentDate), [trades, currentDate]);
+  const calendarData = useMemo(() => buildCalendar(trades, currentDate, holidays, news), [trades, currentDate, holidays, news]);
   const periods = useMemo(() => getPeriodStats(metrics.dailyPnl, metrics.netPnl, settings.profitSplit || 0), [metrics.dailyPnl, metrics.netPnl, settings.profitSplit]);
   const weeklyData = useMemo(() => buildWeeklyData(trades, selectedWeekDate), [trades, selectedWeekDate]);
+
+  const expectancy = useMemo(() => {
+    const avgWinTrade = metrics.winOps > 0 ? metrics.totalGrossProfit / metrics.winOps : 0;
+    const avgLossTrade = metrics.lossOps > 0 ? metrics.totalGrossLoss / metrics.lossOps : 0;
+    return ((metrics.winRate / 100) * avgWinTrade) - ((1 - (metrics.winRate / 100)) * avgLossTrade);
+  }, [metrics]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
@@ -840,18 +908,21 @@ function PreviewDashboard({
                     <Layers size={14} className="shrink-0" />
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-                  <div className="flex flex-col items-center sm:items-start w-full">
+                <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+                  <div className="flex flex-col items-center sm:items-start">
                     <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>{metrics.totalOps}</span>
+                    <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>
+                      <span style={{ color: theme.textoPositivo }}>Win: {metrics.maxConsecWins}</span> / <span style={{ color: theme.textoNegativo }}>Loss: {metrics.maxConsecLosses}</span>
+                    </span>
                   </div>
                   <div className="w-full h-px sm:hidden opacity-30 my-2" style={{ backgroundColor: theme.contornoGeral }}></div>
-                  <div className="flex gap-4 items-center justify-center sm:items-end sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+                  <div className="flex gap-4 items-end justify-center sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
                     <div className="flex flex-col items-center">
-                      <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>WIN</span>
+                      <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>Win</span>
                       <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.winOps}</span>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-[9px] font-bold" style={{ color: theme.textoNegativo }}>LOSS</span>
+                      <span className="text-[9px] font-bold" style={{ color: theme.textoNegativo }}>Loss</span>
                       <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.lossOps}</span>
                     </div>
                   </div>
@@ -866,18 +937,21 @@ function PreviewDashboard({
                     <CalendarDays size={14} className="shrink-0" />
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-                  <div className="flex flex-col items-center sm:items-start w-full">
+                <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+                  <div className="flex flex-col items-center sm:items-start">
                     <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>{metrics.totalDays}</span>
+                    <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>
+                      <span style={{ color: theme.textoPositivo }}>Win: {metrics.maxConsecWinDays}</span> / <span style={{ color: theme.textoNegativo }}>Loss: {metrics.maxConsecLossDays}</span>
+                    </span>
                   </div>
                   <div className="w-full h-px sm:hidden opacity-30 my-2" style={{ backgroundColor: theme.contornoGeral }}></div>
-                  <div className="flex gap-4 items-center justify-center sm:items-end sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+                  <div className="flex gap-4 items-end justify-center sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
                     <div className="flex flex-col items-center">
-                      <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>WIN</span>
+                      <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>Win</span>
                       <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.winDays}</span>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-[9px] font-bold" style={{ color: theme.textoNegativo }}>LOSS</span>
+                      <span className="text-[9px] font-bold" style={{ color: theme.textoNegativo }}>Loss</span>
                       <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.lossDays}</span>
                     </div>
                   </div>
@@ -1005,6 +1079,11 @@ function PreviewDashboard({
                       {fmtPct(metrics.consistencyPct)}
                     </span>
                     <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>Target: {settings.consistencyTarget}%</span>
+                  </div>
+                  <div className="w-full h-px sm:hidden opacity-30 my-1" style={{ backgroundColor: theme.contornoGeral }}></div>
+                  <div className="flex flex-col justify-center items-center sm:justify-center sm:items-center sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+                    <span className="text-[9px] font-bold" style={{ color: theme.textoSecundario }}>Expectancy</span>
+                    <span className="text-[11px] font-bold" style={{ color: expectancy >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{fmt(expectancy)}</span>
                   </div>
                 </div>
               </div>
@@ -1236,6 +1315,16 @@ function PreviewDashboard({
                                   className="relative p-1 lg:p-2 rounded-lg aspect-square flex flex-col justify-between transition-all shadow-sm hover:scale-[1.03] hover:z-50">
                                   <div className="flex justify-between items-start w-full">
                                     <span className="text-xs font-bold" style={{ color: theme.textoSecundario }}>{day.date.getDate()}</span>
+                                    <div className="flex items-center gap-1">
+                                      {day.isHoliday && (
+                                        <CalendarDays size={12} style={{ color: theme.contornoFeriado }} title={day.dayHolidays.map((h:any) => h.title).join('\n')} />
+                                      )}
+                                      {day.hasNews && (
+                                        <div title={day.dayNews.map((n:any) => `${n.time} - ${n.currency} - ${n.impact} - ${n.title}`).join('\n')}>
+                                          <AlertTriangle size={12} style={{ color: theme.textoAlerta }} />
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                   <div className="flex flex-col items-center flex-1 justify-center gap-0.5 w-full text-center">
                                     <div className="text-[11px] lg:text-[13px] font-bold tracking-tighter leading-none" style={{ color: day.netPnl > 0 ? theme.textoPositivo : day.netPnl < 0 ? theme.textoNegativo : theme.textoSecundario }}>

@@ -522,13 +522,13 @@ export default function DashboardHomeView({
               <TrendingUp size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-            <div className="flex flex-col items-center sm:items-start w-full">
+          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+            <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color: metrics.netPnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{formatCurrency(metrics.netPnl)}</span>
               <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>Fees: {formatCurrency(metrics.totalFees)}</span>
             </div>
             <div className="w-full h-px sm:hidden opacity-30 my-1" style={{ backgroundColor: theme.contornoGeral }}></div>
-            <div className="flex flex-col justify-center items-center sm:justify-end sm:items-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+            <div className="flex flex-col items-center sm:items-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
               <span className="text-sm sm:text-base lg:text-lg font-bold leading-none" style={{ color: metrics.netPnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{formatPercent(settings.initialBalance > 0 ? (metrics.netPnl / settings.initialBalance) * 100 : 0)}</span>
             </div>
           </div>
@@ -542,13 +542,13 @@ export default function DashboardHomeView({
               <Percent size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-            <div className="flex flex-col items-center sm:items-start w-full">
+          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+            <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>{formatPercent(metrics.winRate)}</span>
               <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>{metrics.totalTrades} Trades</span>
             </div>
             <div className="w-full h-px sm:hidden opacity-30 my-1" style={{ backgroundColor: theme.contornoGeral }}></div>
-            <div className="flex gap-4 items-center justify-center sm:items-end sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+            <div className="flex gap-4 items-end justify-center sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
               <div className="flex flex-col items-center">
                 <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>LONG</span>
                 <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.longWins}/{metrics.longTrades}</span>
@@ -594,18 +594,21 @@ export default function DashboardHomeView({
               <Layers size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-            <div className="flex flex-col items-center sm:items-start w-full">
+          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+            <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>{metrics.totalTrades}</span>
+              <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>
+                <span style={{ color: theme.textoPositivo }}>Win: {metrics.maxConsecWins || 0}</span> / <span style={{ color: theme.textoNegativo }}>Loss: {metrics.maxConsecLosses || 0}</span>
+              </span>
             </div>
             <div className="w-full h-px sm:hidden opacity-30 my-2" style={{ backgroundColor: theme.contornoGeral }}></div>
-            <div className="flex gap-4 items-center justify-center sm:items-end sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+            <div className="flex gap-4 items-end justify-center sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>WIN</span>
+                <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>Win</span>
                 <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.winningTrades}</span>
               </div>
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold" style={{ color: theme.textoNegativo }}>LOSS</span>
+                <span className="text-[9px] font-bold" style={{ color: theme.textoNegativo }}>Loss</span>
                 <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.losingTrades}</span>
               </div>
             </div>
@@ -620,21 +623,23 @@ export default function DashboardHomeView({
               <CalendarDays size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-            <div className="flex flex-col items-center sm:items-start w-full">
+          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+            <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>
                 {formatPercent(metrics.totalDays > 0 ? (metrics.winDays / metrics.totalDays) * 100 : 0)}
               </span>
-              <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>{metrics.totalDays} Days</span>
+              <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>
+                <span style={{ color: theme.textoPositivo }}>Win: {metrics.maxConsecWinDays || 0}</span> / <span style={{ color: theme.textoNegativo }}>Loss: {metrics.maxConsecLossDays || 0}</span> • {metrics.totalDays} Days
+              </span>
             </div>
             <div className="w-full h-px sm:hidden opacity-30 my-2" style={{ backgroundColor: theme.contornoGeral }}></div>
-            <div className="flex gap-4 items-center justify-center sm:items-end sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+            <div className="flex gap-4 items-end justify-center sm:justify-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>WIN</span>
+                <span className="text-[9px] font-bold" style={{ color: theme.textoPositivo }}>Win</span>
                 <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.winDays}</span>
               </div>
               <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold" style={{ color: theme.textoNegativo }}>LOSS</span>
+                <span className="text-[9px] font-bold" style={{ color: theme.textoNegativo }}>Loss</span>
                 <span className="text-[11px] font-bold" style={{ color: theme.textoPrincipal }}>{metrics.lossDays}</span>
               </div>
             </div>
@@ -649,15 +654,15 @@ export default function DashboardHomeView({
               <Target size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-            <div className="flex flex-col items-center sm:items-start w-full">
+          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+            <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color: metrics.remainingDailyLimit < 0 ? theme.textoNegativo : (metrics.remainingDailyLimit < settings.dailyLossLimit ? theme.textoAlerta : theme.textoPositivo) }}>
                 {formatCurrency(metrics.remainingDailyLimit)}
               </span>
               <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>Base Limit: {formatCurrency(settings.dailyLossLimit)}</span>
             </div>
             <div className="w-full h-px sm:hidden opacity-30 my-1" style={{ backgroundColor: theme.contornoGeral }}></div>
-            <div className="flex flex-col justify-center items-center sm:justify-end sm:items-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+            <div className="flex flex-col items-center sm:items-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
               <span className="text-sm sm:text-base lg:text-lg font-bold leading-none" style={{ color: theme.textoPrincipal }}>{formatPercent(settings.dailyLossLimit > 0 ? (metrics.remainingDailyLimit / settings.dailyLossLimit) * 100 : 0)}</span>
             </div>
           </div>
@@ -671,15 +676,15 @@ export default function DashboardHomeView({
               <AlertTriangle size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-            <div className="flex flex-col items-center sm:items-start w-full">
+          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+            <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color: metrics.accountStopColor }}>
                 {formatCurrency(metrics.accountStopRemaining)}
               </span>
               <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>Stop Limit: {formatCurrency(settings.totalStopLoss)}</span>
             </div>
             <div className="w-full h-px sm:hidden opacity-30 my-1" style={{ backgroundColor: theme.contornoGeral }}></div>
-            <div className="flex flex-col justify-center items-center sm:justify-end sm:items-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+            <div className="flex flex-col items-center sm:items-end sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
               <span className="text-sm sm:text-base lg:text-lg font-bold leading-none" style={{ color: theme.textoPrincipal }}>{formatPercent(metrics.accountStopRemainingPct)}</span>
             </div>
           </div>
@@ -756,12 +761,19 @@ export default function DashboardHomeView({
               <Check size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between my-auto sm:my-0 sm:mt-auto w-full gap-2 sm:gap-0">
-            <div className="flex flex-col items-center sm:items-start w-full">
+          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+            <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color: metrics.consistencyPct <= settings.consistencyTarget ? theme.textoPositivo : theme.textoNegativo }}>
                 {formatPercent(metrics.consistencyPct)}
               </span>
               <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>Target: {settings.consistencyTarget}%</span>
+            </div>
+            <div className="w-full h-px sm:hidden opacity-30 my-2" style={{ backgroundColor: theme.contornoGeral }}></div>
+            <div className="flex flex-col items-center sm:items-center sm:-mb-1 sm:-mr-1 md:-mb-1.5 md:-mr-1.5 shrink-0 w-full sm:w-auto">
+              <span className="text-[9px] font-bold" style={{ color: theme.textoSecundario }}>Expectancy</span>
+              <span className="text-[11px] font-bold leading-none" style={{ color: metrics.expectancy >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
+                {formatCurrency(metrics.expectancy)}
+              </span>
             </div>
           </div>
         </div>

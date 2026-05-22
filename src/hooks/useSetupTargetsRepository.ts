@@ -15,6 +15,7 @@ export interface SetupTarget {
   win_rate: number;
   commission?: number;
   group_name?: string;
+  disabled?: boolean;
 }
 
 export function useSetupTargetsRepository(session: any, storageMode: 'local' | 'supabase') {
@@ -94,7 +95,8 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
         breakevens: target.breakevens ?? 0,
         pnl: target.pnl,
         win_rate: target.win_rate,
-        commission: target.commission ?? 0
+        commission: target.commission ?? 0,
+        disabled: target.disabled ?? false
       });
       if (error) throw error;
     } catch (err) {
@@ -188,7 +190,8 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
           pnl: t.pnl,
           win_rate: t.win_rate,
           commission: t.commission ?? 0,
-          group_name: t.group_name
+          group_name: t.group_name,
+          disabled: t.disabled ?? false
         }));
         const { error: insError } = await supabase.from('setup_targets').upsert(insertPayload);
         if (insError) throw insError;

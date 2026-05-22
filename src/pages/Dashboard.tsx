@@ -120,6 +120,28 @@ export default function Dashboard() {
   const [newHoliday, setNewHoliday] = useState({ date: '', description: '' });
   const [selectedTrades, setSelectedTrades] = useState([]);
 
+  const [tradesDisabledWeekdays, setTradesDisabledWeekdays] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quantara_trades_disabled_weekdays');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleTradesWeekday = (day) => {
+    setTradesDisabledWeekdays(prev => {
+      const next = new Set(prev);
+      if (next.has(day)) {
+        next.delete(day);
+      } else {
+        next.add(day);
+      }
+      localStorage.setItem('quantara_trades_disabled_weekdays', JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
+
   const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({});
 
@@ -517,7 +539,26 @@ export default function Dashboard() {
   // --- ACCOUNT DERIVATIONS ---
   const activeAccount = accounts.find(a => a.id === activeAccountId) || null;
   const accountSettings = activeAccount ? { ...settings, ...activeAccount } : settings; // Merges global UI settings with account financial params
-  const activeTrades = activeAccountId ? trades.filter(t => t.accountId === activeAccountId) : [];
+  const allAccountTrades = useMemo(() => {
+    if (!activeAccountId) return [];
+    return trades.filter(t => {
+      if (t.accountId !== activeAccountId) return false;
+      if (!t.date) return true;
+      const rowDate = new Date(t.date + 'T00:00:00');
+      return !tradesDisabledWeekdays.has(rowDate.getDay());
+    });
+  }, [trades, activeAccountId, tradesDisabledWeekdays]);
+
+  const activeTrades = useMemo(() => {
+    if (!activeAccountId) return [];
+    return trades.filter(t => {
+      if (t.accountId !== activeAccountId) return false;
+      if (t.rawMetadata?.voided) return false;
+      if (!t.date) return true;
+      const rowDate = new Date(t.date + 'T00:00:00');
+      return !tradesDisabledWeekdays.has(rowDate.getDay());
+    });
+  }, [trades, activeAccountId, tradesDisabledWeekdays]);
 
   // Logout Functionality
   useEffect(() => {
@@ -839,6 +880,9 @@ export default function Dashboard() {
     const dailyNetPnls = {};
     let peakBalance = accountSettings.initialBalance, maxDrawdown = 0, runningBalance = accountSettings.initialBalance;
 
+    let maxConsecWins = 0, maxConsecLosses = 0;
+    let currentConsecWins = 0, currentConsecLosses = 0;
+
     const nowForToday = new Date();
     const todayStr = `${nowForToday.getFullYear()}-${String(nowForToday.getMonth() + 1).padStart(2, '0')}-${String(nowForToday.getDate()).padStart(2, '0')}`;
 
@@ -852,9 +896,15 @@ export default function Dashboard() {
       if (trade.pnl >= 0) {
         winningTrades++; totalGrossProfit += trade.pnl;
         if (trade.pnl > maxTradeWin) maxTradeWin = trade.pnl;
+        currentConsecWins++;
+        currentConsecLosses = 0;
+        if (currentConsecWins > maxConsecWins) maxConsecWins = currentConsecWins;
       } else {
         losingTrades++; totalGrossLoss += Math.abs(trade.pnl);
         if (Math.abs(trade.pnl) > maxTradeLoss) maxTradeLoss = Math.abs(trade.pnl);
+        currentConsecLosses++;
+        currentConsecWins = 0;
+        if (currentConsecLosses > maxConsecLosses) maxConsecLosses = currentConsecLosses;
       }
 
       if (trade.direction === 'Short') {
@@ -889,6 +939,23 @@ export default function Dashboard() {
     const avgWin = winningTrades > 0 ? totalGrossProfit / winningTrades : 0;
     const avgLoss = losingTrades > 0 ? totalGrossLoss / losingTrades : 0;
     const avgRR = avgLoss > 0 ? (avgWin / avgLoss) : (avgWin > 0 ? 99.9 : 0);
+    const expectancy = ((winRate / 100) * avgWin) - ((1 - (winRate / 100)) * avgLoss);
+
+    let maxConsecWinDays = 0, maxConsecLossDays = 0;
+    let currentConsecWinDays = 0, currentConsecLossDays = 0;
+    const dailyDatesSorted = Object.keys(dailyNetPnls).sort();
+    dailyDatesSorted.forEach(d => {
+      const pnl = dailyNetPnls[d].pnl;
+      if (pnl >= 0) {
+        currentConsecWinDays++;
+        currentConsecLossDays = 0;
+        if (currentConsecWinDays > maxConsecWinDays) maxConsecWinDays = currentConsecWinDays;
+      } else {
+        currentConsecLossDays++;
+        currentConsecWinDays = 0;
+        if (currentConsecLossDays > maxConsecLossDays) maxConsecLossDays = currentConsecLossDays;
+      }
+    });
 
     const dailyValues = (Object.values(dailyNetPnls) as any[]).map(d => d.pnl);
     const betterDay = dailyValues.length > 0 ? Math.max(...dailyValues) : 0;
@@ -916,7 +983,8 @@ export default function Dashboard() {
       remainingDailyLimit, todayNetPnl, ddPercentUsed: totalStopLossAmount > 0 ? (maxDrawdown / totalStopLossAmount) * 100 : 0,
       ddRemainingValue: Math.max(0, totalStopLossAmount - maxDrawdown), consistencyPct: netPnl > 0 ? (betterDay / netPnl) * 100 : 0,
       longWinRate, shortWinRate, accountStopRemaining, accountStopRemainingPct, accountStopColor,
-      longTrades, shortTrades, longWins, shortWins
+      longTrades, shortTrades, longWins, shortWins,
+      maxConsecWins, maxConsecLosses, maxConsecWinDays, maxConsecLossDays, expectancy
     };
   }, [activeTrades, accountSettings, theme]);
 
@@ -1629,7 +1697,10 @@ export default function Dashboard() {
   }, [news, newsFilter]);
 
   const filteredTrades = useMemo(() => {
-    let result = activeTrades.filter(t => {
+    let result = allAccountTrades.filter(t => {
+      const rowDate = new Date(t.date + 'T00:00:00');
+      if (tradesDisabledWeekdays.has(rowDate.getDay())) return false;
+
       const fullString = `${t.date} ${formatDate(t.date)} ${t.qty} ${t.duration} ${t.pnl}`.toLowerCase();
       const matchesSearch = fullString.includes(searchTerm.toLowerCase());
       const [y, m] = t.date.split('-');
@@ -1667,7 +1738,7 @@ export default function Dashboard() {
       }
       return sortOrder === 'recent' ? timeB - timeA : timeA - timeB;
     });
-  }, [activeTrades, searchTerm, filterMonth, filterYear, sortOrder]);
+  }, [allAccountTrades, searchTerm, filterMonth, filterYear, sortOrder, tradesDisabledWeekdays]);
 
   const paginatedTrades = useMemo(() => {
     const start = (historyPage - 1) * historyItemsPerPage;
@@ -2775,6 +2846,8 @@ export default function Dashboard() {
                   <TradesView
                     theme={theme}
                     getGlassStyle={getGlassStyle}
+                    disabledWeekdays={tradesDisabledWeekdays}
+                    toggleWeekday={toggleTradesWeekday}
                     settings={accountSettings}
                     searchTerm={searchTerm}
                     setSearchTerm={setSearchTerm}
@@ -2819,7 +2892,7 @@ export default function Dashboard() {
               settings={settings}
               t={t}
               lang={settings.appLanguage}
-              trades={trades}
+              trades={activeTrades}
               activeAccountId={activeAccountId}
               journals={journals}
               saveJournal={saveJournal}
@@ -2905,7 +2978,7 @@ export default function Dashboard() {
               accountSettings={accountSettings}
               t={t}
               lang={settings.appLanguage}
-              trades={trades}
+              trades={activeTrades}
               setups={setups}
               saveSetup={saveSetup}
               deleteSetup={deleteSetup}
