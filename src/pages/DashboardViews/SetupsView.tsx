@@ -634,9 +634,9 @@ export default function SetupsView({
           if (totalOps > 0) commission = totalFees / totalOps;
         }
 
-        // Como a tabela calcula Net = pnl - totalFees, e o Result lido já é o Net,
-        // ajustamos o pnl (Gross) para parsedResult + totalFees, para que não desconte novamente.
-        pnl = parsedResult + totalFees;
+        // O valor colado na coluna Result representa o Gross P&L (valor cheio).
+        // O Net P&L será calculado na exibição subtraindo a comissão (pnl - totalFees).
+        pnl = parsedResult;
       }
       
       const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
