@@ -230,14 +230,24 @@ export default function SetupsView({
 
   const handleSave = () => {
     if (!formTitle.trim()) return;
-    const newId = viewMode === 'create' ? crypto.randomUUID() : (selectedSetupId as string);
+    const isCreating = viewMode === 'create';
+    const newId = isCreating ? crypto.randomUUID() : (selectedSetupId as string);
     saveSetup({
       id: newId,
       title: formTitle,
       description: formDesc,
       images: [formFileName]
     });
-    handleSelect('view', newId);
+    if (isCreating) {
+      // New setup: full navigation resets state correctly
+      handleSelect('view', newId);
+    } else {
+      // Editing existing setup: just switch back to view WITHOUT resetting
+      // group selections, staging targets, or disabled weekdays.
+      setViewMode('view');
+      setSelectedSetupId(newId);
+      setIsExpandedDoc(false);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -666,7 +676,33 @@ export default function SetupsView({
 
         // Auto-save to Supabase if we have a group name
         if (activeGroupName && selectedSetupId) {
-          const withGroup = merged.map(t => ({ ...t, group_name: activeGroupName }));
+          let bitmask = 0;
+          disabledWeekdays.forEach(day => {
+            bitmask |= (1 << day);
+          });
+          const configRow = {
+            id: crypto.randomUUID(),
+            setup_id: selectedSetupId as string,
+            account_id: activeAccountId,
+            group_name: activeGroupName,
+            date: null,
+            asset_str: '__empty__',
+            takes: 0,
+            stops: 0,
+            breakevens: 0,
+            pnl: 0,
+            win_rate: bitmask,
+            commission: 0,
+            disabled: false
+          };
+          const withGroup = [
+            configRow,
+            ...merged.map(t => {
+              const rowDate = new Date(t.date + 'T00:00:00');
+              const isDisabled = disabledWeekdays.has(rowDate.getDay());
+              return { ...t, group_name: activeGroupName, disabled: isDisabled };
+            })
+          ];
           saveBatchSetupTargets(withGroup, selectedSetupId as string, activeGroupName, originalGroupName);
         }
 
@@ -682,12 +718,36 @@ export default function SetupsView({
     if (!activeGroupName) return;
     const groupName = activeGroupName;
     
-    // Mark rows from disabled weekdays with disabled:true, keep all rows in DB
-    const updatedStaging = stagingTargets.map(t => {
-      const rowDate = new Date(t.date + 'T00:00:00');
-      const isDisabled = disabledWeekdays.has(rowDate.getDay());
-      return { ...t, group_name: groupName, disabled: isDisabled };
+    let bitmask = 0;
+    disabledWeekdays.forEach(day => {
+      bitmask |= (1 << day);
     });
+
+    const configRow = {
+      id: crypto.randomUUID(),
+      setup_id: selectedSetupId as string,
+      account_id: activeAccountId,
+      group_name: groupName,
+      date: null,
+      asset_str: '__empty__',
+      takes: 0,
+      stops: 0,
+      breakevens: 0,
+      pnl: 0,
+      win_rate: bitmask,
+      commission: 0,
+      disabled: false
+    };
+
+    // Mark rows from disabled weekdays with disabled:true, keep all rows in DB
+    const updatedStaging = [
+      configRow,
+      ...stagingTargets.map(t => {
+        const rowDate = new Date(t.date + 'T00:00:00');
+        const isDisabled = disabledWeekdays.has(rowDate.getDay());
+        return { ...t, group_name: groupName, disabled: isDisabled };
+      })
+    ];
     
     await saveBatchSetupTargets(updatedStaging, selectedSetupId as string, groupName, originalGroupName);
     
@@ -703,6 +763,34 @@ export default function SetupsView({
   };
 
   const [disabledWeekdays, setDisabledWeekdays] = useState<Set<number>>(new Set());
+
+  const restoreDisabledWeekdays = (groupName: string) => {
+    const configRow = (setupTargets || []).find(
+      (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName && t.asset_str === '__empty__'
+    );
+
+    const disabledDays = new Set<number>();
+    if (configRow && configRow.win_rate !== undefined) {
+      const bitmask = Number(configRow.win_rate) || 0;
+      for (let day = 0; day < 7; day++) {
+        if ((bitmask & (1 << day)) !== 0) {
+          disabledDays.add(day);
+        }
+      }
+    } else {
+      // Fallback: restore from actual targets' disabled flags
+      const myT = (setupTargets || []).filter(
+        (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName && t.asset_str !== '__empty__'
+      );
+      myT.forEach((t: any) => {
+        if (t.disabled && t.date) {
+          const d = new Date(t.date + 'T00:00:00');
+          disabledDays.add(d.getDay());
+        }
+      });
+    }
+    setDisabledWeekdays(disabledDays);
+  };
 
   const grandTotal = useMemo(() => {
     return tableRows.reduce((acc, row) => {
@@ -875,7 +963,22 @@ export default function SetupsView({
                       <span className="hidden md:block text-[10px] sm:text-[11px] font-bold truncate text-left" style={{ color: theme.textoPrincipal }}>{s.title}</span>
                     </button>
                     <div className="flex items-center justify-center gap-0.5">
-                      <button onClick={(e) => { e.stopPropagation(); handleSelect('edit', s.id); }} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors" style={{ color: theme.textoPrincipal }} title="Edit Setup"><Edit2 size={11} /></button>
+                      <button onClick={(e) => {
+                        e.stopPropagation();
+                        // If already viewing this same setup, enter edit mode WITHOUT resetting group state.
+                        // Only do a full navigation reset when switching to a different setup.
+                        if (selectedSetupId === s.id && viewMode === 'view') {
+                          setViewMode('edit');
+                          const found = setups.find((x: any) => x.id === s.id);
+                          if (found) {
+                            setFormTitle(found.title);
+                            setFormDesc(found.description || '');
+                            setFormFileName(found.images?.[0] || '');
+                          }
+                        } else {
+                          handleSelect('edit', s.id);
+                        }
+                      }} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors" style={{ color: theme.textoPrincipal }} title="Edit Setup"><Edit2 size={11} /></button>
                       <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-500 transition-colors" title="Delete Setup"><Trash2 size={11} /></button>
                     </div>
                   </div>
@@ -1101,6 +1204,7 @@ export default function SetupsView({
                            setTargetTakes('');
                            setTargetStops('');
                            setTargetPnl('');
+                           setDisabledWeekdays(new Set());
                            setIsEditingGroup(true);
                          }}
                          className="w-full py-3 mb-4 rounded-xl font-bold text-black transition-all hover:brightness-110 active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.2)] flex justify-center items-center gap-2 text-xs uppercase tracking-widest"
@@ -1130,15 +1234,7 @@ export default function SetupsView({
                                   setIsEditingGroup(false);
                                   const myT = getTargetsForGroup(g.name);
                                   setStagingTargets(myT.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-                                  // Restore disabledWeekdays from saved disabled flags
-                                  const disabledDays = new Set<number>();
-                                  myT.forEach((t: any) => {
-                                    if (t.disabled && t.date) {
-                                      const d = new Date(t.date + 'T00:00:00');
-                                      disabledDays.add(d.getDay());
-                                    }
-                                  });
-                                  setDisabledWeekdays(disabledDays);
+                                  restoreDisabledWeekdays(g.name);
                                   // Also set as active chart group
                                   setActiveChartGroupNames(prev => ({...prev, [selectedSetupId as string]: g.name}));
                                 }}
@@ -1179,6 +1275,7 @@ export default function SetupsView({
                                          setIsEditingGroup(true);
                                          const myT = getTargetsForGroup(g.name);
                                          setStagingTargets(myT.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                                         restoreDisabledWeekdays(g.name);
                                       }}
                                       className={`p-1.5 rounded-lg transition-colors ${ isSelected && isEditingGroup ? 'bg-yellow-500 text-black' : 'hover:bg-white/10'}`} 
                                       style={{ color: isSelected && isEditingGroup ? '#000' : theme.textoPrincipal }} 
