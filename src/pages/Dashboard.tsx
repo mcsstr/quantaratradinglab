@@ -227,8 +227,8 @@ export default function Dashboard() {
   const { journals, saveJournal, deleteJournal, overrideJournals, isLoading: journalsLoading } = useJournalsRepository(session, isFreePlan);
   const { setups, saveSetup, deleteSetup, overrideSetups, isLoading: setupsLoading } = useSetupsRepository(session);
   const { favorites: tradingFavorites, saveFavorite: saveTradingFavorite, deleteFavorite: deleteTradingFavorite, updateFavorite: updateTradingFavorite } = useTradingFavoritesRepository(session);
-  const { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets, saveBatchSetupTargets } = useSetupTargetsRepository(session, accounts.find(a => a.id === activeAccountId)?.storageMode || 'supabase');
-  const { setupConfigLogs, addSetupConfigLog, updateSetupConfigLog, overrideSetupConfigLogs } = useSetupConfigLogsRepository(session, accounts.find(a => a.id === activeAccountId)?.storageMode || 'supabase');
+  const { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets, saveBatchSetupTargets } = useSetupTargetsRepository(session, settings.storageMode || 'local');
+  const { setupConfigLogs, addSetupConfigLog, updateSetupConfigLog, overrideSetupConfigLogs } = useSetupConfigLogsRepository(session, settings.storageMode || 'local');
 
   // --- Dynamic Plan Enforcement ---
   const { plans: planConfigs } = usePlanConfig();
@@ -388,7 +388,8 @@ export default function Dashboard() {
           dateFormat: profile.date_format,
           userName: profile.first_name || 'User',
           userPlan: currentPlan,
-          ...profile.theme_settings
+          ...profile.theme_settings,
+          storageMode: profile.storage_mode === 'cloud' ? 'supabase' : 'local'
         };
         delete profileSettings._theme; // Remove the embedded theme block from settings
         setSettings(profileSettings);

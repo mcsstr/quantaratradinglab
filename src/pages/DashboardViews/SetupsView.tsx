@@ -649,65 +649,95 @@ export default function SetupsView({
         pnl = parsedResult;
       }
       
-      const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
-
-      newTargetsMap.set(dateStr, {
-        id: crypto.randomUUID(),
-        setup_id: selectedSetupId as string,
-        account_id: activeAccountId,
-        group_name: activeGroupName || 'Default Group',
-        date: dateStr,
-        asset_str: asset,
-        takes: takesNum,
-        stops: stopsNum,
-        breakevens: breakevensNum,
-        pnl: pnl,
-        win_rate: winRateCalc,
-        commission: commission
-      });
+      const existing = newTargetsMap.get(dateStr);
+      if (existing) {
+        const oldTotalOps = existing.takes + existing.stops + existing.breakevens;
+        const newTotalOps = takesNum + stopsNum + breakevensNum;
+        const combinedOps = oldTotalOps + newTotalOps;
+        
+        if (combinedOps > 0) {
+          existing.commission = (existing.commission * oldTotalOps + commission * newTotalOps) / combinedOps;
+        }
+        
+        existing.takes += takesNum;
+        existing.stops += stopsNum;
+        existing.breakevens += breakevensNum;
+        existing.pnl += pnl;
+        const totalTakesStops = existing.takes + existing.stops;
+        existing.win_rate = totalTakesStops > 0 ? (existing.takes / totalTakesStops) * 100 : 0;
+      } else {
+        const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
+        newTargetsMap.set(dateStr, {
+          id: crypto.randomUUID(),
+          setup_id: selectedSetupId as string,
+          account_id: activeAccountId,
+          group_name: activeGroupName || 'Default Group',
+          date: dateStr,
+          asset_str: asset,
+          takes: takesNum,
+          stops: stopsNum,
+          breakevens: breakevensNum,
+          pnl: pnl,
+          win_rate: winRateCalc,
+          commission: commission
+        });
+      }
     }
 
     const newTargets = Array.from(newTargetsMap.values());
     if (newTargets.length > 0) {
+      // Compute merged outside the state updater to avoid side effects in React's updater fn
       setStagingTargets(prev => {
         const newDates = new Set(newTargets.map(t => t.date));
         const filtered = prev.filter(t => !newDates.has(t.date));
+        return [...newTargets, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      });
+
+      // Save to Supabase outside the state updater (safe, no double-invocation risk)
+      if (activeGroupName && selectedSetupId) {
+        // Compute the same merged array for saving
+        const newDates = new Set(newTargets.map(t => t.date));
+        // We use a functional approach: read current staging inline
+        // Since setStagingTargets is async, we build merged from what we know
+        const currentStaging = stagingTargets;
+        const filtered = currentStaging.filter(t => !newDates.has(t.date));
         const merged = [...newTargets, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        // Auto-save to Supabase if we have a group name
-        if (activeGroupName && selectedSetupId) {
-          let bitmask = 0;
-          disabledWeekdays.forEach(day => {
-            bitmask |= (1 << day);
-          });
-          const configRow = {
-            id: crypto.randomUUID(),
-            setup_id: selectedSetupId as string,
-            account_id: activeAccountId,
-            group_name: activeGroupName,
-            date: null,
-            asset_str: '__empty__',
-            takes: 0,
-            stops: 0,
-            breakevens: 0,
-            pnl: 0,
-            win_rate: bitmask,
-            commission: 0,
-            disabled: false
-          };
-          const withGroup = [
-            configRow,
-            ...merged.map(t => {
-              const rowDate = new Date(t.date + 'T00:00:00');
-              const isDisabled = disabledWeekdays.has(rowDate.getDay());
-              return { ...t, group_name: activeGroupName, disabled: isDisabled };
-            })
-          ];
-          saveBatchSetupTargets(withGroup, selectedSetupId as string, activeGroupName, originalGroupName);
+        let bitmask = 0;
+        disabledWeekdays.forEach(day => {
+          bitmask |= (1 << day);
+        });
+        const configRow = {
+          id: crypto.randomUUID(),
+          setup_id: selectedSetupId as string,
+          account_id: activeAccountId,
+          group_name: activeGroupName,
+          date: null,
+          asset_str: '__empty__',
+          takes: 0,
+          stops: 0,
+          breakevens: 0,
+          pnl: 0,
+          win_rate: bitmask,
+          commission: 0,
+          disabled: false
+        };
+        const withGroup = [
+          configRow,
+          ...merged.map(t => {
+            const rowDate = new Date(t.date + 'T00:00:00');
+            const isDisabled = disabledWeekdays.has(rowDate.getDay());
+            return { ...t, group_name: activeGroupName, disabled: isDisabled };
+          })
+        ];
+        saveBatchSetupTargets(withGroup, selectedSetupId as string, activeGroupName, originalGroupName);
+        // Keep originalGroupName in sync so future saves use the correct name
+        setOriginalGroupName(activeGroupName);
+        // Activate chart for this group if not already set
+        if (!activeChartGroupNames[selectedSetupId as string]) {
+          setActiveChartGroupNames(prev => ({ ...prev, [selectedSetupId as string]: activeGroupName }));
         }
-
-        return merged;
-      });
+      }
     }
 
     setShowBulkModal(false);

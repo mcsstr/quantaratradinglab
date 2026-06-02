@@ -522,7 +522,7 @@ export default function DashboardHomeView({
               <TrendingUp size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
             <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color: metrics.netPnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{formatCurrency(metrics.netPnl)}</span>
               <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>Fees: {formatCurrency(metrics.totalFees)}</span>
@@ -542,7 +542,7 @@ export default function DashboardHomeView({
               <Percent size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
             <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>{formatPercent(metrics.winRate)}</span>
               <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>{metrics.totalTrades} Trades</span>
@@ -594,7 +594,7 @@ export default function DashboardHomeView({
               <Layers size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
             <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>{metrics.totalTrades}</span>
               <span className="text-[10px] break-words font-medium mt-1 opacity-80 text-center sm:text-left" style={{ color: theme.textoSecundario }}>
@@ -623,7 +623,7 @@ export default function DashboardHomeView({
               <CalendarDays size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
             <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold text-xl sm:text-2xl lg:text-2xl leading-none text-center sm:text-left" style={{ color: theme.textoPrincipal }}>
                 {formatPercent(metrics.totalDays > 0 ? (metrics.winDays / metrics.totalDays) * 100 : 0)}
@@ -654,7 +654,7 @@ export default function DashboardHomeView({
               <Target size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
             <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color: metrics.remainingDailyLimit < 0 ? theme.textoNegativo : (metrics.remainingDailyLimit < settings.dailyLossLimit ? theme.textoAlerta : theme.textoPositivo) }}>
                 {formatCurrency(metrics.remainingDailyLimit)}
@@ -676,7 +676,7 @@ export default function DashboardHomeView({
               <AlertTriangle size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
             <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color: metrics.accountStopColor }}>
                 {formatCurrency(metrics.accountStopRemaining)}
@@ -761,7 +761,7 @@ export default function DashboardHomeView({
               <Check size={14} className="shrink-0" />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-between mt-auto w-full gap-2 sm:gap-0">
             <div className="flex flex-col items-center sm:items-start">
               <span className="font-bold leading-tight text-center sm:text-left" style={{ fontSize: 'clamp(1.1rem, 1.2vw + 0.5rem, 1.5rem)', color: metrics.consistencyPct <= settings.consistencyTarget ? theme.textoPositivo : theme.textoNegativo }}>
                 {formatPercent(metrics.consistencyPct)}

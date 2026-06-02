@@ -65,6 +65,7 @@ export const DEFAULT_ACCOUNT_SETTINGS = {
 export const DEFAULT_SETTINGS = {
   appLanguage: 'en',
   dateFormat: 'BR',
+  storageMode: 'local',
   // Financial params below kept for backward compatibility but are now per-account
   initialBalance: 50000,
   feePerTrade: 2.04,
