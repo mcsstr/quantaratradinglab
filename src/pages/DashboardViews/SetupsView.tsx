@@ -603,50 +603,115 @@ export default function SetupsView({
       if (isNaN(d) || isNaN(m)) continue;
       const dateStr = `${currentYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-      const seq = cols[cols.length - 1];
       let takesNum = 0;
       let stopsNum = 0;
       let breakevensNum = 0;
-      
-      if (seq && (seq.includes('🟢') || seq.includes('🔴') || seq.includes('⚪'))) {
-        for (const char of seq) {
-          if (char === '🟢') takesNum++;
-          else if (char === '🔴') stopsNum++;
-          else if (char === '⚪') breakevensNum++;
-        }
-      } else {
-        takesNum = Number(cols[2]) || 0;
-        stopsNum = Number(cols[3]) || 0;
-      }
-      
       let pnl = 0;
       let commission = 0;
-      let totalOps = takesNum + stopsNum + breakevensNum;
 
-      if (isAutoCalc) {
-        const takesValue = takesNum * (sp * rr * pv);
-        const stopsValue = stopsNum * (sp * pv);
-        pnl = takesValue - stopsValue;
-        commission = globalComm;
-      } else {
-        const resultStr = cols[4].replace(/[^\d.-]/g, '');
-        const parsedResult = Number(resultStr) || 0;
+      // ── Detecção de formato ───────────────────────────────────────────────────
+      // Novo formato (8 cols): DD/MM | DiaSemana | Takes | Stops | BEs | Resultado | WinRate% | Sequência
+      // O col[1] contém um nome de dia da semana (texto, não número)
+      const WEEKDAYS_PT = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'sab', 'dom'];
+      const WEEKDAYS_EN = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+      const col1Lower = cols[1]?.toLowerCase().trim() ?? '';
+      const isNewFormat = cols.length >= 7 &&
+        ([...WEEKDAYS_PT, ...WEEKDAYS_EN].some(wd => col1Lower.startsWith(wd)));
 
-        let totalFees = 0;
-        if (globalComm > 0) {
-          // Campo Comissão preenchido → usa ele (por op × total ops)
-          commission = globalComm;
-          totalFees = globalComm * totalOps;
-        } else if (cols.length >= 8) {
-          // Fallback: lê taxa da coluna colada
-          const feeStr = cols[5].replace(/[^\d.-]/g, '');
-          totalFees = Number(feeStr) || 0;
-          if (totalOps > 0) commission = totalFees / totalOps;
+      if (isNewFormat) {
+        // ── NOVO FORMATO: DD/MM | DiaSemana | Takes | Stops | BEs | Resultado | WinRate% | Sequência ──
+        // Prefere os valores das colunas explícitas (mais confiáveis que contar emojis)
+        takesNum    = Number(cols[2]) || 0;
+        stopsNum    = Number(cols[3]) || 0;
+        breakevensNum = Number(cols[4]) || 0;
+
+        // Também conta da sequência para validação / fallback
+        const seqCol = cols[7] ?? cols[cols.length - 1];
+        if (seqCol && (seqCol.includes('🟢') || seqCol.includes('🔴') || seqCol.includes('⚪'))) {
+          let seqTakes = 0, seqStops = 0, seqBes = 0;
+          for (const char of seqCol) {
+            if (char === '🟢') seqTakes++;
+            else if (char === '🔴') seqStops++;
+            else if (char === '⚪') seqBes++;
+          }
+          // Se colunas estiverem zeradas mas sequência tiver dados, usa a sequência
+          if (takesNum === 0 && stopsNum === 0 && breakevensNum === 0) {
+            takesNum = seqTakes; stopsNum = seqStops; breakevensNum = seqBes;
+          }
         }
 
-        // O valor colado na coluna Result representa o Gross P&L (valor cheio).
-        // O Net P&L será calculado na exibição subtraindo a comissão (pnl - totalFees).
-        pnl = parsedResult;
+        const totalOps = takesNum + stopsNum + breakevensNum;
+
+        const resultRaw = cols[5]?.trim() ?? '';
+        const hasResult = resultRaw !== '';
+
+        if (hasResult) {
+          // Resultado bruto da coluna 5: "$550", "-$6", "$234"
+          const isNegative = resultRaw.startsWith('-') || resultRaw.startsWith('($') || resultRaw.startsWith('(');
+          // Remove todos os caracteres não numéricos exceto ponto decimal e sinal negativo
+          const resultClean = resultRaw.replace(/[$,\s()\-]/g, '').replace(',', '.');
+          let grossPnl = Number(resultClean) || 0;
+          if (isNegative) grossPnl = -Math.abs(grossPnl);
+
+          // O resultado colado é BRUTO. A comissão é armazenada separadamente (por op)
+          // e deduzida na exibição: NetPnL = pnl - (commission × totalOps)
+          commission = globalComm;
+          pnl = grossPnl;
+        } else if (isAutoCalc) {
+          const takesValue = takesNum * (sp * rr * pv);
+          const stopsValue = stopsNum * (sp * pv);
+          pnl = takesValue - stopsValue;
+          commission = globalComm;
+        } else {
+          commission = globalComm;
+          pnl = 0;
+        }
+
+      } else {
+        // ── FORMATO LEGADO: DD/MM | Takes | Stops | Resultado | Sequência (5+ cols) ──
+        const seq = cols[cols.length - 1];
+        if (seq && (seq.includes('🟢') || seq.includes('🔴') || seq.includes('⚪'))) {
+          for (const char of seq) {
+            if (char === '🟢') takesNum++;
+            else if (char === '🔴') stopsNum++;
+            else if (char === '⚪') breakevensNum++;
+          }
+        } else {
+          takesNum = Number(cols[2]) || 0;
+          stopsNum = Number(cols[3]) || 0;
+        }
+
+        const totalOps = takesNum + stopsNum + breakevensNum;
+
+        const resultStrRaw = cols[4]?.trim() ?? '';
+        const hasResult = resultStrRaw !== '';
+
+        if (hasResult) {
+          const isNegative = resultStrRaw.startsWith('-') || resultStrRaw.startsWith('($') || resultStrRaw.startsWith('(');
+          const resultClean = resultStrRaw.replace(/[$,\s()\-]/g, '').replace(',', '.');
+          let grossPnl = Number(resultClean) || 0;
+          if (isNegative) grossPnl = -Math.abs(grossPnl);
+
+          pnl = grossPnl;
+
+          let totalFees = 0;
+          if (globalComm > 0) {
+            commission = globalComm;
+            totalFees = globalComm * totalOps;
+          } else if (cols.length >= 8) {
+            const feeStr = cols[5].replace(/[^\d.-]/g, '');
+            totalFees = Number(feeStr) || 0;
+            if (totalOps > 0) commission = totalFees / totalOps;
+          }
+        } else if (isAutoCalc) {
+          const takesValue = takesNum * (sp * rr * pv);
+          const stopsValue = stopsNum * (sp * pv);
+          pnl = takesValue - stopsValue;
+          commission = globalComm;
+        } else {
+          pnl = 0;
+          commission = 0;
+        }
       }
       
       const existing = newTargetsMap.get(dateStr);
@@ -1693,7 +1758,7 @@ export default function SetupsView({
                                            <td className="py-2.5 px-2 text-[10px] font-bold text-center text-orange-400">
                                              {(parseFloat(r.commission) || 0) > 0 ? `-$${((parseFloat(r.commission) || 0) * ((r.takes || 0) + (r.stops || 0) + (r.breakevens || 0))).toFixed(2)}` : '—'}
                                            </td>
-                                           <td className={`py-2.5 px-2 text-[10px] font-black text-center ${(parseFloat(r.pnl) - (parseFloat(r.commission)||0)*((r.takes||0)+(r.stops||0))) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                           <td className={`py-2.5 px-2 text-[10px] font-black text-center ${(parseFloat(r.pnl) - (parseFloat(r.commission)||0)*((r.takes||0)+(r.stops||0)+(r.breakevens||0))) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                                              {(() => { const net = parseFloat(r.pnl) - (parseFloat(r.commission)||0)*((r.takes||0)+(r.stops||0)+(r.breakevens||0)); return `${net < 0 ? '-' : ''}$${Math.abs(net).toFixed(2)}`; })()}
                                            </td>
                                            <td className={`py-2.5 px-2 text-[10px] text-center font-black ${parseFloat(r.win_rate) >= 50 ? 'text-green-500' : 'text-red-500'}`}>
