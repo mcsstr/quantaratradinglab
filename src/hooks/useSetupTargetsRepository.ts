@@ -135,12 +135,13 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
 
   const saveBatchSetupTargets = async (targets: SetupTarget[], setup_id: string, group_name: string, original_group_name?: string) => {
     const targetGroupNameToDelete = original_group_name !== undefined ? original_group_name : group_name;
+    const account_id = targets[0]?.account_id || null;
 
     if (storageMode === 'local') {
       setSetupTargets(prev => {
-        const filtered = prev.filter(s => !(s.setup_id === setup_id && (s.group_name === group_name || s.group_name === targetGroupNameToDelete)));
+        const filtered = prev.filter(s => !(s.setup_id === setup_id && (s.group_name === group_name || s.group_name === targetGroupNameToDelete) && s.account_id === account_id));
         const toStore = targets.length > 0 ? targets : [{
-          id: crypto.randomUUID(), setup_id, account_id: null, group_name,
+          id: crypto.randomUUID(), setup_id, account_id, group_name,
           date: null, asset_str: '__empty__', takes: 0, stops: 0, breakevens: 0, pnl: 0, win_rate: 0, commission: 0
         }];
         const newArr = [...toStore, ...filtered];
@@ -154,12 +155,12 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
     
     // Optimistic update
     setSetupTargets(prev => {
-      const filtered = prev.filter(s => !(s.setup_id === setup_id && (s.group_name === group_name || s.group_name === targetGroupNameToDelete)));
+      const filtered = prev.filter(s => !(s.setup_id === setup_id && (s.group_name === group_name || s.group_name === targetGroupNameToDelete) && s.account_id === account_id));
       return [...targets, ...filtered];
     });
 
     try {
-      // Delete old targets matching group and setup
+      // Delete old targets matching group and setup and active account
       // Handle case where group_name may be null in older records
       let delQuery = supabase
         .from('setup_targets')
@@ -170,6 +171,12 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
         delQuery = delQuery.eq('group_name', targetGroupNameToDelete);
       } else {
         delQuery = delQuery.is('group_name', null);
+      }
+
+      if (account_id) {
+        delQuery = delQuery.eq('account_id', account_id);
+      } else {
+        delQuery = delQuery.is('account_id', null);
       }
         
       const { error: delError } = await delQuery;
@@ -201,7 +208,7 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
           id: crypto.randomUUID(),
           user_id: session.user.id,
           setup_id: setup_id,
-          account_id: null,
+          account_id: account_id,
           date: null,
           asset_str: '__empty__',
           takes: 0,

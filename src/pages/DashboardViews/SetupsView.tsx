@@ -16,7 +16,7 @@ export default function SetupsView({
   setups,
   saveSetup,
   deleteSetup,
-  setupTargets,
+  setupTargets: rawSetupTargets,
   saveSetupTarget,
   saveBatchSetupTargets,
   deleteSetupTarget,
@@ -28,6 +28,10 @@ export default function SetupsView({
 }: any) {
   const [viewMode, setViewMode] = useState<'home'|'create'|'edit'|'view'>('home');
   const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null);
+
+  const setupTargets = useMemo(() => {
+    return (rawSetupTargets || []).filter((t: any) => !activeAccountId || t.account_id === activeAccountId);
+  }, [rawSetupTargets, activeAccountId]);
 
   // Table State
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
