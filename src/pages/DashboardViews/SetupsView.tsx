@@ -157,23 +157,29 @@ export default function SetupsView({
   // Open a read-only preview of a group's targets in a new tab
   const handleOpenPreview = useCallback((groupName: string, setupTitle: string) => {
     const myTargets = (setupTargets || []).filter(
-      (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName && !t.disabled
+      (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName && !t.disabled && t.asset_str !== '__empty__' && t.date
     );
     if (myTargets.length === 0) return;
 
     // Convert targets to synthetic trades
     // qty = takes + stops (each is 1 trade), commission per trade = t.commission
-    const syntheticTrades = myTargets.map((t: any) => ({
-      id: `synth-${t.id}`,
-      date: t.date,
-      symbol: t.asset_str || 'SETUP',
-      pnl: parseFloat(t.pnl) || 0,                // gross pnl
-      qty: (t.takes || 0) + (t.stops || 0) + (t.breakevens || 0) || 1,  // total ops
-      takes: t.takes || 0,
-      stops: t.stops || 0,
-      breakevens: t.breakevens || 0,
-      commission_per_trade: parseFloat(t.commission) || 0,
-    }));
+    const syntheticTrades = myTargets.map((t: any) => {
+      const takes = Number(t.takes) || 0;
+      const stops = Number(t.stops) || 0;
+      const breakevens = Number(t.breakevens) || 0;
+      const totalOps = takes + stops + breakevens;
+      return {
+        id: `synth-${t.id}`,
+        date: t.date,
+        symbol: t.asset_str || 'SETUP',
+        pnl: parseFloat(t.pnl) || 0,                // gross pnl
+        qty: totalOps > 0 ? totalOps : 1,  // total ops
+        takes,
+        stops,
+        breakevens,
+        commission_per_trade: parseFloat(t.commission) || 0,
+      };
+    });
 
     // Filter real trades to only the active account and normalize fields
     const activeAccountTrades = (trades || [])
@@ -449,7 +455,7 @@ export default function SetupsView({
   // Groups derived for current selected setup
   const setupGroups = useMemo(() => {
     if (viewMode !== 'view' || !selectedSetupId) return [];
-    const myTargets = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId);
+    const myTargets = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId && t.asset_str !== '__empty__');
     
     const groupsMap: Record<string, { takes: number, stops: number, breakevens: number, pnl: number }> = {};
     
@@ -620,9 +626,10 @@ export default function SetupsView({
 
      if (isAutoCalc) {
         const sp = Number(targetStopPoints) || 0;
-        const rr = Number(targetRiskReward) || 0;
+        const tpRaw = Number(targetRiskReward) || 0;
         const pv = Number(targetPointValue) || 0;
-        const takesValue = takesNum * (sp * rr * pv);
+        // Se tpRaw < 10 e sp > 0, trata como multiplicador R/R (ex: 2 = 2x Stop), senão como Pts de Take diretos (ex: 125)
+        const takesValue = (tpRaw < 10 && sp > 0) ? takesNum * (sp * tpRaw * pv) : takesNum * (tpRaw * pv);
         const stopsValue = stopsNum * (sp * pv);
         finalPnl = takesValue - stopsValue;
      }
@@ -791,7 +798,8 @@ export default function SetupsView({
             commission = globalComm;
           }
         } else if (isAutoCalc) {
-          const takesValue = takesNum * (sp * rr * pv);
+          const tpRaw = rr;
+          const takesValue = (tpRaw < 10 && sp > 0) ? takesNum * (sp * tpRaw * pv) : takesNum * (tpRaw * pv);
           const stopsValue = stopsNum * (sp * pv);
           pnl = takesValue - stopsValue;
           commission = globalComm;
@@ -1667,10 +1675,10 @@ export default function SetupsView({
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Pts de Stop</label>
                                    <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetStopPoints} onChange={e => setTargetStopPoints(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
-                                <div className="flex flex-col gap-1 w-[72px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>R/R</label>
-                                   <input type="number" step="0.1" placeholder="Ex: 2" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetRiskReward} onChange={e => setTargetRiskReward(e.target.value ? Number(e.target.value) : '')} />
-                                </div>
+                                <div className="flex flex-col gap-1 w-[110px]">
+                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Pts de Take</label>
+                                    <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetRiskReward} onChange={e => setTargetRiskReward(e.target.value ? Number(e.target.value) : '')} />
+                                 </div>
                                 <div className="flex flex-col gap-1 w-[80px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Val/Pt $</label>
                                    <input type="number" step="0.01" placeholder="0.20" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPointValue} onChange={e => setTargetPointValue(e.target.value ? Number(e.target.value) : '')} />
@@ -2012,8 +2020,8 @@ export default function SetupsView({
                         value={bulkText}
                         onChange={e => setBulkText(e.target.value)}
                         placeholder={"17/06 | Qua | 1 | 0 | 0 | +320 | 100% | 🟢\n25/06 | Qui | 0 | 1 | 0 | -260 | 0% | 🔴\n06/07 | Seg | 1 | 0 | 0 | +105.82 | 100% | 🕒"}
-                        rows={9}
-                        className="w-full bg-black/20 border rounded-lg p-3 text-[11px] font-mono outline-none focus:border-yellow-500 resize-none"
+                        rows={14}
+                        className="w-full min-h-[280px] bg-black/20 border rounded-lg p-3 text-[11px] font-mono outline-none focus:border-yellow-500 resize-y leading-relaxed"
                         style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
                      />
                   </div>
@@ -2036,7 +2044,7 @@ export default function SetupsView({
               .sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime());
             return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowConfigModal(false)}>
-               <div className="w-full max-w-2xl flex flex-col shadow-2xl relative border rounded-2xl overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+               <div className="w-full max-w-3xl h-[88vh] min-h-[600px] flex flex-col shadow-2xl relative border rounded-2xl overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }} onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
                      <h3 className="text-sm font-black tracking-widest uppercase flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
                         <BookOpen size={16} className="text-blue-400" /> Strategy Log
@@ -2084,9 +2092,9 @@ export default function SetupsView({
                                     await updateSetupConfigLog(log.id, newNotes);
                                  }
                               }}
-                              rows={5}
+                              rows={12}
                               placeholder="Escreva suas anotacoes aqui... (ex: Mudei o RR para 1:2, Ajustei a MM...)"
-                              className="w-full bg-black/20 border rounded-lg p-3 text-[11px] font-medium outline-none focus:border-blue-400/60 resize-none leading-relaxed"
+                              className="w-full min-h-[220px] bg-black/20 border rounded-lg p-3 text-[11px] font-medium outline-none focus:border-blue-400/60 resize-y leading-relaxed"
                               style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
                            />
                         </div>
