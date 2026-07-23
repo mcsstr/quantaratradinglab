@@ -280,7 +280,7 @@ function getPeriodStats(dailyPnl: Record<string, number>, netPnl: number, profit
 
 // ─── calendar & weekly builder ───────────────────────────────────────────────
 
-function buildCalendar(trades: any[], currentDate: Date, holidays: any[] = [], news: any[] = []) {
+function buildCalendar(trades: any[], currentDate: Date, holidays: any[] = [], news: any[] = [], initialBalance = 10000) {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const firstDay = new Date(year, month, 1);
@@ -294,7 +294,7 @@ function buildCalendar(trades: any[], currentDate: Date, holidays: any[] = [], n
     if (!byDate[k]) byDate[k] = { pnl: 0, count: 0 };
 
     const gross = parseFloat(t.pnl) || 0;
-    const fee = (parseFloat(t.commission_per_trade) || 0) * (parseInt(t.qty) || 1);
+    const fee = (parseFloat(t.commission_per_trade) || parseFloat(t.commission) || 0) * (parseInt(t.qty) || 1);
     byDate[k].pnl += (gross - fee);
     byDate[k].count += (parseInt(t.qty) || 1);
   }
@@ -304,15 +304,16 @@ function buildCalendar(trades: any[], currentDate: Date, holidays: any[] = [], n
 
   const weeks: any[] = [];
   let cur = new Date(startSun);
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   while (cur <= lastDay || cur.getDay() !== 0) {
-    const week: any = { days: [], summary: { pnl: 0, trades: 0, winRate: 0 } };
+    const week: any = { days: [], summary: { pnl: 0, trades: 0, winRate: 0, weekHasStarted: false, weekCumulativeBalance: 0 } };
     let wWin = 0, wTotal = 0;
     for (let d = 0; d < 7; d++) {
       const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
       const data = byDate[dateStr];
       const isCurrentMonth = cur.getMonth() === month;
-      const isToday = dateStr === new Date().toISOString().slice(0, 10);
+      const isToday = dateStr === todayStr;
       const netPnl = data?.pnl ?? 0;
       const tradesCount = data?.count ?? 0;
 
@@ -331,6 +332,25 @@ function buildCalendar(trades: any[], currentDate: Date, holidays: any[] = [], n
       cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
     }
     week.summary.winRate = wTotal > 0 ? (wWin / wTotal) * 100 : 0;
+
+    const weekFirstDateStr = week.days[0].dateStr;
+    const weekLastDateStr = week.days[6].dateStr;
+    week.summary.weekHasStarted = weekFirstDateStr <= todayStr;
+
+    // Calculate total PnL of all trades up to weekLastDateStr
+    let totalPnLUpToWeek = 0;
+    for (const t of trades) {
+      if (t.date) {
+        const tDateStr = t.date.slice(0, 10);
+        if (tDateStr <= weekLastDateStr) {
+          const gross = parseFloat(t.pnl) || 0;
+          const fee = (parseFloat(t.commission_per_trade) || parseFloat(t.commission) || 0) * (parseInt(t.qty) || 1);
+          totalPnLUpToWeek += (gross - fee);
+        }
+      }
+    }
+    week.summary.weekCumulativeBalance = initialBalance + totalPnLUpToWeek;
+
     weeks.push(week);
     if (cur > lastDay && cur.getDay() === 0) break;
   }
@@ -573,7 +593,7 @@ function PreviewDashboard({
   }, []);
 
   const metrics = useMemo(() => calcMetrics(trades, initialBalance), [trades, initialBalance]);
-  const calendarData = useMemo(() => buildCalendar(trades, currentDate, holidays, news), [trades, currentDate, holidays, news]);
+  const calendarData = useMemo(() => buildCalendar(trades, currentDate, holidays, news, initialBalance), [trades, currentDate, holidays, news, initialBalance]);
   const periods = useMemo(() => getPeriodStats(metrics.dailyPnl, metrics.netPnl, settings.profitSplit || 0), [metrics.dailyPnl, metrics.netPnl, settings.profitSplit]);
   const weeklyData = useMemo(() => buildWeeklyData(trades, selectedWeekDate), [trades, selectedWeekDate]);
 
@@ -1301,9 +1321,12 @@ function PreviewDashboard({
                           {i === 7 ? 'Week' : new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(new Date(2024, 0, i + 7))}
                         </div>
                       ))}
-                      {calendarData.map((week: any, widx: number) => {
+                      {(() => {
+                        return calendarData.map((week: any, widx: number) => {
                         const wPnl = week.summary.pnl;
                         const wBg = wPnl > 0 ? theme.fundoDiaPositivo : wPnl < 0 ? theme.fundoDiaNegativo : theme.fundoPrincipal;
+                        const weekHasStarted = week.summary.weekHasStarted;
+                        const weekBalance = week.summary.weekCumulativeBalance;
                         return (
                           <React.Fragment key={widx}>
                             {week.days.map((day: any, didx: number) => {
@@ -1346,10 +1369,17 @@ function PreviewDashboard({
                                 </div>
                                 {week.summary.trades > 0 && <div className="text-[9px] lg:text-[10px] leading-none whitespace-nowrap mt-0.5" style={{ color: theme.textoSecundario }}>{week.summary.trades} Trades</div>}
                               </div>
+                              {weekHasStarted && (
+                                <div className="w-full text-center text-[9px] lg:text-[10px] font-bold leading-none mt-0.5 pb-0.5 tracking-tight"
+                                  style={{ color: weekBalance > initialBalance ? theme.textoPositivo : weekBalance < initialBalance ? theme.textoNegativo : theme.textoSecundario }}>
+                                  {fmt(weekBalance)}
+                                </div>
+                              )}
                             </div>
                           </React.Fragment>
                         );
-                      })}
+                        });
+                      })()}
                     </div>
                   </div>
                 </div>

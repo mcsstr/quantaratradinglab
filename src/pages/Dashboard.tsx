@@ -227,7 +227,7 @@ export default function Dashboard() {
   const { journals, saveJournal, deleteJournal, overrideJournals, isLoading: journalsLoading } = useJournalsRepository(session, isFreePlan);
   const { setups, saveSetup, deleteSetup, overrideSetups, isLoading: setupsLoading } = useSetupsRepository(session);
   const { favorites: tradingFavorites, saveFavorite: saveTradingFavorite, deleteFavorite: deleteTradingFavorite, updateFavorite: updateTradingFavorite } = useTradingFavoritesRepository(session);
-  const { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets, saveBatchSetupTargets } = useSetupTargetsRepository(session, settings.storageMode || 'local');
+  const { setupTargets, saveSetupTarget, deleteSetupTarget, overrideSetupTargets, saveBatchSetupTargets } = useSetupTargetsRepository(session, settings.storageMode || 'local', activeAccountId);
   const { setupConfigLogs, addSetupConfigLog, updateSetupConfigLog, overrideSetupConfigLogs } = useSetupConfigLogsRepository(session, settings.storageMode || 'local');
 
   // --- Dynamic Plan Enforcement ---
@@ -1153,7 +1153,21 @@ export default function Dashboard() {
       const weekDays = days.slice(i, i + 7);
       let weekNetPnl = 0, weekTrades = 0, weekWins = 0;
       weekDays.forEach(d => { if (d.isCurrentMonth) { weekNetPnl += d.netPnl; weekTrades += d.tradesCount; weekWins += (d.winRate / 100) * d.tradesCount; } });
-      weeks.push({ days: weekDays, summary: { pnl: weekNetPnl, trades: weekTrades, winRate: weekTrades > 0 ? (weekWins / weekTrades) * 100 : 0 } });
+      const weekFirstDateStr = weekDays[0].dateStr;
+      const weekLastDateStr = weekDays[weekDays.length - 1].dateStr;
+      const weekHasStarted = weekFirstDateStr <= todayStr;
+
+      // Calculate total PnL of all activeTrades up to weekLastDateStr
+      let totalPnLUpToWeek = 0;
+      activeTrades.forEach(t => {
+        if (t.date && t.date <= weekLastDateStr) {
+          const fee = calculateTradeFee(t, accountSettings);
+          totalPnLUpToWeek += (Number(t.pnl || 0) - fee);
+        }
+      });
+      const weekCumulativeBalance = accountSettings.initialBalance + totalPnLUpToWeek;
+
+      weeks.push({ days: weekDays, summary: { pnl: weekNetPnl, trades: weekTrades, winRate: weekTrades > 0 ? (weekWins / weekTrades) * 100 : 0, weekHasStarted, weekCumulativeBalance } });
     }
     return weeks;
   }, [currentDate, activeTrades, accountSettings.feePerTrade, accountSettings.feeType, accountSettings.initialBalance, holidays, news]);

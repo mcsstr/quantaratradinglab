@@ -18,7 +18,7 @@ export interface SetupTarget {
   disabled?: boolean;
 }
 
-export function useSetupTargetsRepository(session: any, storageMode: 'local' | 'supabase') {
+export function useSetupTargetsRepository(session: any, storageMode: 'local' | 'supabase', activeAccountId?: string | null) {
   const [setupTargets, setSetupTargets] = useState<SetupTarget[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -41,14 +41,39 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
       }
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('setup_targets')
-          .select('*')
-          .order('date', { ascending: false });
-        
-        if (error) throw error;
+        let allData: SetupTarget[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+          let query = supabase
+            .from('setup_targets')
+            .select('*')
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          
+          // Fetch all targets for this user. We rely on the frontend (SetupsView, etc) to filter by activeAccountId and handle legacy empty/null account_ids.
+
+          const { data, error } = await query
+            .order('date', { ascending: false, nullsFirst: false })
+            .order('id', { ascending: true });
+          
+          if (error) throw error;
+
+          if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            if (data.length < pageSize) {
+              hasMore = false;
+            } else {
+              page++;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+
         if (isMounted) {
-          setSetupTargets(data || []);
+          setSetupTargets(allData);
         }
       } catch (err) {
         console.error('Error fetching setup targets:', err);
@@ -58,7 +83,7 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
     }
     fetchTargets();
     return () => { isMounted = false; };
-  }, [session, storageMode]);
+  }, [session, storageMode, activeAccountId]);
 
   const saveSetupTarget = async (target: SetupTarget) => {
     if (storageMode === 'local') {
@@ -135,7 +160,7 @@ export function useSetupTargetsRepository(session: any, storageMode: 'local' | '
 
   const saveBatchSetupTargets = async (targets: SetupTarget[], setup_id: string, group_name: string, original_group_name?: string) => {
     const targetGroupNameToDelete = original_group_name !== undefined ? original_group_name : group_name;
-    const account_id = targets[0]?.account_id || null;
+    const account_id = targets[0]?.account_id || activeAccountId || null;
 
     if (storageMode === 'local') {
       setSetupTargets(prev => {

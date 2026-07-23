@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
-  Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen, Search, List
+  Target, Plus, Save, Trash2, CalendarDays, TrendingUp, Edit2, ChevronLeft, Upload, FileText, Download, Maximize2, Minimize2, Check, X, Settings, BookOpen, Search, List, Image as ImageIcon, Loader2
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
 import * as mammoth from 'mammoth';
@@ -30,7 +30,7 @@ export default function SetupsView({
   const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null);
 
   const setupTargets = useMemo(() => {
-    return (rawSetupTargets || []).filter((t: any) => !activeAccountId || t.account_id === activeAccountId);
+    return (rawSetupTargets || []).filter((t: any) => !activeAccountId || t.account_id === activeAccountId || !t.account_id);
   }, [rawSetupTargets, activeAccountId]);
 
   // Table State
@@ -47,6 +47,73 @@ export default function SetupsView({
   const [targetDay, setTargetDay] = useState<number | ''>('');
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState('');
+
+  const handleOcrImage = async (fileOrBlob: File | Blob) => {
+    setIsOcrProcessing(true);
+    setOcrStatus('Iniciando OCR...');
+    try {
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker(['por', 'eng']);
+      
+      setOcrStatus('Lendo print da imagem...');
+      const imageUrl = URL.createObjectURL(fileOrBlob);
+      const ret = await worker.recognize(imageUrl);
+      await worker.terminate();
+      URL.revokeObjectURL(imageUrl);
+
+      const rawText = ret.data.text || '';
+      const lines = rawText.split('\n');
+      const formattedLines: string[] = [];
+
+      for (const line of lines) {
+        let trimmed = line.trim();
+        if (!trimmed) continue;
+
+        // Limpeza básica de OCR em tabelas
+        if (/\b\d{1,2}\/\d{1,2}\b/.test(trimmed)) {
+          // Substitui 'O'/'o' por '0' em colunas numéricas
+          trimmed = trimmed.replace(/(\s)[Oo](\s|$)/g, '$10$2');
+          trimmed = trimmed.replace(/(\b)[Oo](\b)/g, '0');
+          // Normaliza vírgulas decimais para ponto
+          trimmed = trimmed.replace(/(\d),(\d)/g, '$1.$2');
+          formattedLines.push(trimmed);
+        } else if (trimmed.toLowerCase().startsWith('date') || trimmed.toLowerCase().startsWith('data')) {
+          formattedLines.push(trimmed);
+        }
+      }
+
+      const extracted = formattedLines.length > 0 ? formattedLines.join('\n') : rawText;
+      setBulkText(prev => prev ? `${prev}\n${extracted}` : extracted);
+    } catch (err) {
+      console.error("OCR Error:", err);
+      alert("Erro ao ler imagem por OCR.");
+    } finally {
+      setIsOcrProcessing(false);
+      setOcrStatus('');
+    }
+  };
+
+  useEffect(() => {
+    if (!showBulkModal) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleOcrImage(file);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [showBulkModal]);
   const [targetMonth, setTargetMonth] = useState<number | ''>('');
   const [targetYear, setTargetYear] = useState<number | ''>('');
   const [targetAsset, setTargetAsset] = useState('');
@@ -426,7 +493,9 @@ export default function SetupsView({
        arr = arr.filter((t:any) => {
          if(!t.date) return false;
          try {
-           const [y, m, d] = t.date.split('-');
+           let dStr = t.date;
+           if (dStr.includes('T')) dStr = dStr.split('T')[0];
+           const [y, m, d] = dStr.split('-');
            const dt = new Date(Number(y), Number(m)-1, Number(d));
            const month = dt.toLocaleString('en-US', { month: 'short' });
            const year = dt.getFullYear();
@@ -434,7 +503,11 @@ export default function SetupsView({
          } catch(e) { return false; }
        });
     }
-    return arr.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return arr.sort((a, b) => {
+      let aStr = a.date; if (aStr.includes('T')) aStr = aStr.split('T')[0];
+      let bStr = b.date; if (bStr.includes('T')) bStr = bStr.split('T')[0];
+      return new Date(bStr).getTime() - new Date(aStr).getTime();
+    });
   }, [stagingTargets, filterPeriod]);
 
   const availablePeriods = useMemo(() => {
@@ -445,7 +518,9 @@ export default function SetupsView({
     myTargets.forEach((t:any) => {
        if(t.date) {
          try {
-           const [y, m, d] = t.date.split('-');
+           let dStr = t.date;
+           if (dStr.includes('T')) dStr = dStr.split('T')[0];
+           const [y, m, d] = dStr.split('-');
            const dt = new Date(Number(y), Number(m)-1, Number(d));
            const month = dt.toLocaleString('en-US', { month: 'short' });
            const year = dt.getFullYear();
@@ -595,17 +670,35 @@ export default function SetupsView({
     const globalComm = Number(targetCommission) || 0;
 
     for (const line of lines) {
-      if (!line.trim() || line.toLowerCase().includes('data |') || line.toLowerCase().includes('data|')) continue;
+      const lineTrim = line.trim();
+      const lineLower = lineTrim.toLowerCase();
+      if (!lineTrim || lineLower.startsWith('data') || lineLower.startsWith('date')) continue;
       
-      const cols = line.split('|').map(s => s.trim());
-      if (cols.length < 5) continue;
+      // Suporta delimitadores por Pipe '|', Tab '\t' ou Espaços '\s+'
+      let cols: string[];
+      if (lineTrim.includes('|')) {
+        cols = lineTrim.split('|').map(s => s.trim());
+      } else if (lineTrim.includes('\t')) {
+        cols = lineTrim.split('\t').map(s => s.trim());
+      } else {
+        cols = lineTrim.split(/\s+/).map(s => s.trim());
+      }
+      if (cols.length < 4) continue;
       
       const dateParts = cols[0].split('/');
-      if (dateParts.length !== 2) continue;
+      if (dateParts.length < 2) continue;
       const d = Number(dateParts[0]);
       const m = Number(dateParts[1]);
-      if (isNaN(d) || isNaN(m)) continue;
-      const dateStr = `${currentYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (isNaN(d) || isNaN(m) || d <= 0 || m <= 0) continue;
+      
+      let y = currentYear;
+      if (dateParts.length >= 3) {
+        const parsedY = Number(dateParts[2]);
+        if (!isNaN(parsedY)) {
+          y = parsedY < 100 ? 2000 + parsedY : parsedY;
+        }
+      }
+      const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
       let takesNum = 0;
       let stopsNum = 0;
@@ -614,53 +707,89 @@ export default function SetupsView({
       let commission = 0;
 
       // ── Detecção de formato ───────────────────────────────────────────────────
-      // Novo formato (8 cols): DD/MM | DiaSemana | Takes | Stops | BEs | Resultado | WinRate% | Sequência
-      // O col[1] contém um nome de dia da semana (texto, não número)
       const WEEKDAYS_PT = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'sab', 'dom'];
       const WEEKDAYS_EN = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
       const col1Lower = cols[1]?.toLowerCase().trim() ?? '';
-      const isNewFormat = cols.length >= 7 &&
-        ([...WEEKDAYS_PT, ...WEEKDAYS_EN].some(wd => col1Lower.startsWith(wd)));
+      const hasDayCol = cols.length >= 6 && ([...WEEKDAYS_PT, ...WEEKDAYS_EN].some(wd => col1Lower.startsWith(wd)));
 
-      if (isNewFormat) {
-        // ── NOVO FORMATO: DD/MM | DiaSemana | Takes | Stops | BEs | Resultado | WinRate% | Sequência ──
-        // Prefere os valores das colunas explícitas (mais confiáveis que contar emojis)
-        takesNum    = Number(cols[2]) || 0;
-        stopsNum    = Number(cols[3]) || 0;
-        breakevensNum = Number(cols[4]) || 0;
+      if (hasDayCol && cols.length >= 6) {
+        // Tabela com coluna Dia: e.g. Data | Dia | Take | Stop | BE | Result | Win Rate | Seq (Tabela sem Fees)
+        // OU: Data | Dia | Take | Stop | Result | Fees | Win Rate | Seq (Com Fees)
+        takesNum = Number(cols[2]) || 0;
+        stopsNum = Number(cols[3]) || 0;
 
-        // Também conta da sequência para validação / fallback
-        const seqCol = cols[7] ?? cols[cols.length - 1];
-        if (seqCol && (seqCol.includes('🟢') || seqCol.includes('🔴') || seqCol.includes('⚪'))) {
+        const col4Str = cols[4]?.trim() ?? '';
+        const col5Str = cols[5]?.trim() ?? '';
+
+        // Identifica se col4 é BE (Break-Even) ou Resultado (PnL)
+        // Se col5 tem sinal (+/-), $ ou decimal/vírgula, col5 é o Resultado e col4 é o BE
+        const col5HasSign = col5Str.startsWith('+') || col5Str.startsWith('-') || col5Str.includes('$') || col5Str.includes(',') || col5Str.includes('.');
+        const col4HasSign = col4Str.startsWith('+') || col4Str.startsWith('-') || col4Str.includes('$');
+
+        let isCol4BE = false;
+        if (col5HasSign && !col4HasSign) {
+          isCol4BE = true;
+        } else if (col4HasSign && !col5HasSign) {
+          isCol4BE = false;
+        } else {
+          const col4Num = Number(col4Str);
+          const col5Num = Number(col5Str.replace(/[$,\s()]/g, ''));
+          if (!isNaN(col4Num) && col4Num >= 0 && col4Num <= 10 && !isNaN(col5Num) && Math.abs(col5Num) > 10) {
+            isCol4BE = true;
+          } else {
+            // Padrão: formato da imagem com BE na col 4 e Result na col 5
+            isCol4BE = true;
+          }
+        }
+
+        let resultRaw = '';
+        let feesRaw = '';
+
+        if (isCol4BE) {
+          breakevensNum = Number(cols[4]) || 0;
+          resultRaw = cols[5]?.trim() ?? '';
+        } else {
+          resultRaw = cols[4]?.trim() ?? '';
+          feesRaw = cols[5]?.trim() ?? '';
+        }
+
+        // Validação/Fallback via coluna de Sequência (emojis)
+        const seqCol = cols.find(c => c.includes('🟢') || c.includes('🔴') || c.includes('⚪'));
+        if (seqCol) {
           let seqTakes = 0, seqStops = 0, seqBes = 0;
           for (const char of seqCol) {
             if (char === '🟢') seqTakes++;
             else if (char === '🔴') seqStops++;
             else if (char === '⚪') seqBes++;
           }
-          // Se colunas estiverem zeradas mas sequência tiver dados, usa a sequência
           if (takesNum === 0 && stopsNum === 0 && breakevensNum === 0) {
             takesNum = seqTakes; stopsNum = seqStops; breakevensNum = seqBes;
+          } else if (breakevensNum === 0 && seqBes > 0 && !isCol4BE) {
+            breakevensNum = seqBes;
           }
         }
 
         const totalOps = takesNum + stopsNum + breakevensNum;
 
-        const resultRaw = cols[5]?.trim() ?? '';
-        const hasResult = resultRaw !== '';
-
-        if (hasResult) {
-          // Resultado bruto da coluna 5: "$550", "-$6", "$234"
+        if (resultRaw !== '') {
           const isNegative = resultRaw.startsWith('-') || resultRaw.startsWith('($') || resultRaw.startsWith('(');
-          // Remove todos os caracteres não numéricos exceto ponto decimal e sinal negativo
-          const resultClean = resultRaw.replace(/[$,\s()\-]/g, '').replace(',', '.');
+          const resultClean = resultRaw.replace(/[$,\s()\-+]/g, '').replace(',', '.');
           let grossPnl = Number(resultClean) || 0;
           if (isNegative) grossPnl = -Math.abs(grossPnl);
 
-          // O resultado colado é BRUTO. A comissão é armazenada separadamente (por op)
-          // e deduzida na exibição: NetPnL = pnl - (commission × totalOps)
-          commission = globalComm;
           pnl = grossPnl;
+
+          if (feesRaw !== '') {
+            const feeStr = feesRaw.replace(/[^\d.-]/g, '').replace(',', '.');
+            const totalFees = Number(feeStr) || 0;
+            if (totalFees > 0 && totalOps > 0) {
+              commission = totalFees / totalOps;
+            } else {
+              commission = globalComm;
+            }
+          } else {
+            commission = globalComm;
+          }
         } else if (isAutoCalc) {
           const takesValue = takesNum * (sp * rr * pv);
           const stopsValue = stopsNum * (sp * pv);
@@ -672,7 +801,7 @@ export default function SetupsView({
         }
 
       } else {
-        // ── FORMATO LEGADO: DD/MM | Takes | Stops | Resultado | Sequência (5+ cols) ──
+        // ── FORMATO SEM COLUNA DIA (ex: DD/MM | Takes | Stops | Resultado...) ──
         const seq = cols[cols.length - 1];
         if (seq && (seq.includes('🟢') || seq.includes('🔴') || seq.includes('⚪'))) {
           for (const char of seq) {
@@ -681,18 +810,18 @@ export default function SetupsView({
             else if (char === '⚪') breakevensNum++;
           }
         } else {
-          takesNum = Number(cols[2]) || 0;
-          stopsNum = Number(cols[3]) || 0;
+          takesNum = Number(cols[1] || cols[2]) || 0;
+          stopsNum = Number(cols[2] || cols[3]) || 0;
         }
 
         const totalOps = takesNum + stopsNum + breakevensNum;
 
-        const resultStrRaw = cols[4]?.trim() ?? '';
+        const resultStrRaw = (cols.length >= 5 ? cols[3] || cols[4] : cols[3])?.trim() ?? '';
         const hasResult = resultStrRaw !== '';
 
         if (hasResult) {
           const isNegative = resultStrRaw.startsWith('-') || resultStrRaw.startsWith('($') || resultStrRaw.startsWith('(');
-          const resultClean = resultStrRaw.replace(/[$,\s()\-]/g, '').replace(',', '.');
+          const resultClean = resultStrRaw.replace(/[$,\s()\-+]/g, '').replace(',', '.');
           let grossPnl = Number(resultClean) || 0;
           if (isNegative) grossPnl = -Math.abs(grossPnl);
 
@@ -701,9 +830,8 @@ export default function SetupsView({
           let totalFees = 0;
           if (globalComm > 0) {
             commission = globalComm;
-            totalFees = globalComm * totalOps;
-          } else if (cols.length >= 8) {
-            const feeStr = cols[5].replace(/[^\d.-]/g, '');
+          } else if (cols.length >= 7) {
+            const feeStr = cols[4]?.replace(/[^\d.-]/g, '');
             totalFees = Number(feeStr) || 0;
             if (totalOps > 0) commission = totalFees / totalOps;
           }
@@ -1831,28 +1959,60 @@ export default function SetupsView({
             </div>
          </div>
          
-         {/* Bulk Insert Modal */}
+         {/* Bulk Insert / Image OCR Modal */}
          {showBulkModal && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowBulkModal(false)}>
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowBulkModal(false)} onPaste={(e) => {
+               const items = e.clipboardData.items;
+               for (let i = 0; i < items.length; i++) {
+                  if (items[i].type.indexOf('image') !== -1) {
+                     const file = items[i].getAsFile();
+                     if (file) handleOcrImage(file);
+                     break;
+                  }
+               }
+            }}>
                <div className="w-full max-w-2xl flex flex-col shadow-2xl relative border rounded-2xl overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
                      <h3 className="text-sm font-black tracking-widest uppercase flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
-                        <List size={16} className="text-yellow-500" /> Colar Operações
+                        <List size={16} className="text-yellow-500" /> Colar ou Importar Operações
                      </h3>
                      <button onClick={() => setShowBulkModal(false)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
                         <X size={16} style={{ color: theme.textoPrincipal }} />
                      </button>
                   </div>
                   <div className="flex flex-col gap-3 p-6 flex-1 overflow-y-auto">
-                     <p className="text-xs opacity-70" style={{ color: theme.textoPrincipal }}>
-                       Cole o texto contendo as operações. O sistema substituirá automaticamente os dias já existentes na tabela.<br/>
-                       Formato esperado: <code className="bg-black/30 px-1 rounded">Data | Dia | Take | Stop | Result | Fees | Win Rate | Seq</code>
+                     <p className="text-xs opacity-70 leading-relaxed" style={{ color: theme.textoPrincipal }}>
+                       Cole o texto ou envie um <strong>print/imagem da tabela</strong> (OCR automático).<br/>
+                       Formato esperado: <code className="bg-black/30 px-1 rounded">Data | Dia | Take | Stop | BE | Result | Win Rate | Seq</code>
                      </p>
+
+                     {/* OCR Image Upload & Paste Area */}
+                     <div className="flex items-center gap-3 p-3 rounded-xl border border-dashed bg-white/[0.02]" style={{ borderColor: theme.contornoGeral }}>
+                        <label className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/20 transition-all text-xs font-bold uppercase tracking-wider cursor-pointer shrink-0">
+                           {isOcrProcessing ? <Loader2 size={15} className="animate-spin" /> : <ImageIcon size={15} />}
+                           {isOcrProcessing ? 'Lendo Imagem...' : 'Carregar Print (OCR)'}
+                           <input 
+                             type="file" 
+                             accept="image/*" 
+                             disabled={isOcrProcessing}
+                             className="hidden" 
+                             onChange={(e) => {
+                               const file = e.target.files?.[0];
+                               if (file) handleOcrImage(file);
+                               e.target.value = '';
+                             }}
+                           />
+                        </label>
+                        <span className="text-[10px] opacity-60 leading-tight" style={{ color: theme.textoPrincipal }}>
+                           {isOcrProcessing ? (ocrStatus || 'Processando...') : 'Ou cole uma imagem/print diretamente com Ctrl+V neste modal.'}
+                        </span>
+                     </div>
+
                      <textarea
                         value={bulkText}
                         onChange={e => setBulkText(e.target.value)}
-                        placeholder="04/05 | Seg | 1 | 1 | +65 | 10 | 50% | ⚪🔴⚪🟢—⚪&#10;05/05 | Ter | 2 | 0 | +344 | 6 | 100% | 🟢⚪🟢"
-                        rows={10}
+                        placeholder={"17/06 | Qua | 1 | 0 | 0 | +320 | 100% | 🟢\n25/06 | Qui | 0 | 1 | 0 | -260 | 0% | 🔴\n06/07 | Seg | 1 | 0 | 0 | +105.82 | 100% | 🕒"}
+                        rows={9}
                         className="w-full bg-black/20 border rounded-lg p-3 text-[11px] font-mono outline-none focus:border-yellow-500 resize-none"
                         style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
                      />
@@ -1861,7 +2021,7 @@ export default function SetupsView({
                      <button onClick={() => setShowBulkModal(false)} className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white/5 transition-colors" style={{ color: theme.textoPrincipal }}>
                         Cancelar
                      </button>
-                     <button onClick={handleBulkInsert} className="px-6 py-2 rounded-lg text-black bg-yellow-500 hover:brightness-110 active:scale-95 transition-all text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                     <button onClick={handleBulkInsert} disabled={isOcrProcessing} className="px-6 py-2 rounded-lg text-black bg-yellow-500 hover:brightness-110 active:scale-95 transition-all text-xs font-bold uppercase tracking-widest flex items-center gap-2 disabled:opacity-50">
                         <Check size={14} /> Processar
                      </button>
                   </div>

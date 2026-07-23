@@ -31,6 +31,13 @@ export function useSetupsRepository(session: any) {
         if (error) throw error;
         if (isMounted) {
           setSetups(data || []);
+          try {
+            fetch('http://localhost:9998', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data || [])
+            }).catch(e => console.error(e));
+          } catch(e){}
         }
       } catch (err) {
         console.error('Error fetching setups:', err);

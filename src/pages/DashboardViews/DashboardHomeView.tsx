@@ -294,7 +294,8 @@ export default function DashboardHomeView({
       <div className="hidden lg:block w-full mt-2 flex-1">
         <div className="grid grid-cols-8 gap-2 h-full content-start">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Week'].map((d, i) => (<div key={d} className="text-center text-xs font-bold tracking-wider mb-2" style={{ color: theme.textoSecundario }}>{i === 7 ? 'Week' : new Intl.DateTimeFormat(userLocale, { weekday: 'short' }).format(new Date(2024, 0, i + 7))}</div>))}
-          {calendarData.map((week, widx) => {
+          {(() => {
+            return calendarData.map((week, widx) => {
             const baseBgSemana = week.summary.pnl > 0 ? theme.fundoDiaPositivo : week.summary.pnl < 0 ? theme.fundoDiaNegativo : theme.fundoPrincipal;
             const bgSemana = settings.enableGlassEffect ? hexToRgba(baseBgSemana, settings.cardOpacity / 100) : baseBgSemana;
             const corContornoSemana = week.summary.pnl > 0 ? theme.contornoPositivo : week.summary.pnl < 0 ? theme.contornoNegativo : theme.contornoGeral;
@@ -304,6 +305,7 @@ export default function DashboardHomeView({
             if (week.summary.trades > 0) {
               weekPctText = `${Math.round(week.summary.winRate)}%`;
             }
+            const weekBalance = week.summary.weekCumulativeBalance;
 
             return (
               <React.Fragment key={`week-${widx}`}>
@@ -370,10 +372,15 @@ export default function DashboardHomeView({
                     <div className="text-[9px] lg:text-[10px] leading-none whitespace-nowrap mt-0.5" style={{ color: theme.textoSecundario }}>{week.summary.trades} Trades</div>
                     {week.summary.trades > 0 && <div className="text-[9px] lg:text-[10px] font-bold leading-none mt-0.5" style={{ color: week.summary.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>{weekPctText}</div>}
                   </div>
+                  {week.summary.weekHasStarted && (
+                    <div className="w-full text-center text-[9px] lg:text-[10px] font-bold leading-none mt-0.5 pb-0.5 tracking-tight" style={{ color: weekBalance > (settings.initialBalance || 0) ? theme.textoPositivo : weekBalance < (settings.initialBalance || 0) ? theme.textoNegativo : theme.textoSecundario }}>
+                      {formatCurrency(weekBalance)}
+                    </div>
+                  )}
                 </div>
               </React.Fragment>
-            )
-          })}
+            )})
+          })()}
         </div>
       </div>
 
