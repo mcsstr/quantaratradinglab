@@ -129,7 +129,7 @@ export default function Dashboard() {
     }
   });
 
-  const toggleTradesWeekday = (day) => {
+  const toggleTradesWeekday = (day: number) => {
     setTradesDisabledWeekdays(prev => {
       const next = new Set(prev);
       if (next.has(day)) {
@@ -140,6 +140,15 @@ export default function Dashboard() {
       localStorage.setItem('quantara_trades_disabled_weekdays', JSON.stringify(Array.from(next)));
       return next;
     });
+  };
+
+  const resetTradesFilters = () => {
+    setSearchTerm('');
+    setFilterMonth('all');
+    setFilterYear('all');
+    setTradesDisabledWeekdays(new Set());
+    localStorage.removeItem('quantara_trades_disabled_weekdays');
+    setHistoryPage(1);
   };
 
   const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
@@ -423,7 +432,8 @@ export default function Dashboard() {
           csvMapping: (a.csv_mapping && !Array.isArray(a.csv_mapping) ? a.csv_mapping : {}),
           pasteMapping: Array.isArray(a.paste_mapping) ? a.paste_mapping : [],
           isFixedFee: a.is_fixed_fee ?? false,
-          feePerContract: Number(a.fee_per_contract ?? 0)
+          feePerContract: Number(a.fee_per_contract ?? 0),
+          showStrategyCol: a.show_strategy_col ?? true
         })));
       }
 
@@ -445,7 +455,7 @@ export default function Dashboard() {
             qty: t.qty,
             pnl: Number(t.pnl),
             date: t.date,
-            entryTimestamp: t.entry_timestamp,
+            entryTimestamp: t.entry_timestamp ? new Date(t.entry_timestamp).getTime() : (t.date ? new Date(t.date + 'T00:00:00').getTime() : null),
             buyPrice: t.buy_price != null ? Number(t.buy_price) : null,
             buyTime: t.buy_time,
             duration: t.duration,
@@ -461,14 +471,15 @@ export default function Dashboard() {
         setTrades([]);
       }
 
-      // Initialize Active Account and Selection if not set
+      // Initialize Active Account and Selection if not set or invalid
       if (dbAccounts && dbAccounts.length > 0) {
         const savedId = localStorage.getItem('quantara_activeAccountId');
         const accountExists = dbAccounts.some(a => a.id === savedId);
         const targetId = accountExists && savedId ? savedId : dbAccounts[0].id;
         
-        if (!activeAccountId) setActiveAccountId(targetId);
-        if (!selectedImportAccountId) setSelectedImportAccountId(targetId);
+        setActiveAccountId(prev => (prev && dbAccounts.some(a => a.id === prev)) ? prev : targetId);
+        setSelectedImportAccountId(prev => (prev && dbAccounts.some(a => a.id === prev)) ? prev : targetId);
+        localStorage.setItem('quantara_activeAccountId', targetId);
       }
       // Tarefa 9: Marca o carregamento de contas como finalizado
       setIsLoadingAccounts(false);
@@ -542,24 +553,13 @@ export default function Dashboard() {
   const accountSettings = activeAccount ? { ...settings, ...activeAccount } : settings; // Merges global UI settings with account financial params
   const allAccountTrades = useMemo(() => {
     if (!activeAccountId) return [];
-    return trades.filter(t => {
-      if (t.accountId !== activeAccountId) return false;
-      if (!t.date) return true;
-      const rowDate = new Date(t.date + 'T00:00:00');
-      return !tradesDisabledWeekdays.has(rowDate.getDay());
-    });
-  }, [trades, activeAccountId, tradesDisabledWeekdays]);
+    return trades.filter(t => t.accountId === activeAccountId);
+  }, [trades, activeAccountId]);
 
   const activeTrades = useMemo(() => {
     if (!activeAccountId) return [];
-    return trades.filter(t => {
-      if (t.accountId !== activeAccountId) return false;
-      if (t.rawMetadata?.voided) return false;
-      if (!t.date) return true;
-      const rowDate = new Date(t.date + 'T00:00:00');
-      return !tradesDisabledWeekdays.has(rowDate.getDay());
-    });
-  }, [trades, activeAccountId, tradesDisabledWeekdays]);
+    return trades.filter(t => t.accountId === activeAccountId && !t.rawMetadata?.voided);
+  }, [trades, activeAccountId]);
 
   // Logout Functionality
   useEffect(() => {
@@ -1173,10 +1173,15 @@ export default function Dashboard() {
   }, [currentDate, activeTrades, accountSettings.feePerTrade, accountSettings.feeType, accountSettings.initialBalance, holidays, news]);
 
   const performanceWeeklyData = useMemo(() => {
-    const daysData = [
-      { id: 1, name: 'Mon', trades: 0, pnl: 0, wins: 0, losses: 0 }, { id: 2, name: 'Tue', trades: 0, pnl: 0, wins: 0, losses: 0 },
-      { id: 3, name: 'Wed', trades: 0, pnl: 0, wins: 0, losses: 0 }, { id: 4, name: 'Thu', trades: 0, pnl: 0, wins: 0, losses: 0 }, { id: 5, name: 'Fri', trades: 0, pnl: 0, wins: 0, losses: 0 }
-    ];
+    const dayMap: Record<number, { id: number; name: string; trades: number; pnl: number; wins: number; losses: number }> = {
+      1: { id: 1, name: 'Mon', trades: 0, pnl: 0, wins: 0, losses: 0 },
+      2: { id: 2, name: 'Tue', trades: 0, pnl: 0, wins: 0, losses: 0 },
+      3: { id: 3, name: 'Wed', trades: 0, pnl: 0, wins: 0, losses: 0 },
+      4: { id: 4, name: 'Thu', trades: 0, pnl: 0, wins: 0, losses: 0 },
+      5: { id: 5, name: 'Fri', trades: 0, pnl: 0, wins: 0, losses: 0 },
+      6: { id: 6, name: 'Sat', trades: 0, pnl: 0, wins: 0, losses: 0 },
+      0: { id: 0, name: 'Sun', trades: 0, pnl: 0, wins: 0, losses: 0 },
+    };
 
     let weekFiltered = activeTrades;
     if (selectedWeekDate) {
@@ -1188,22 +1193,62 @@ export default function Dashboard() {
       });
     }
 
+    let hasSaturday = false;
+    let hasSunday = false;
+
     weekFiltered.forEach(trade => {
-      const [y, m, d] = trade.date.split('-'); const dateObj = new Date(y, m - 1, d); const dayOfWeek = dateObj.getDay();
-      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-        const net = trade.pnl - (trade.qty * accountSettings.feePerTrade);
-        daysData[dayOfWeek - 1].trades += 1;
-        daysData[dayOfWeek - 1].pnl += net;
-        if (net >= 0) daysData[dayOfWeek - 1].wins += 1;
-        else daysData[dayOfWeek - 1].losses += 1;
+      if (!trade.date) return;
+      const [y, m, d] = trade.date.split('-');
+      const dateObj = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+      const dayOfWeek = dateObj.getDay();
+      if (dayMap[dayOfWeek] !== undefined) {
+        const fee = calculateTradeFee(trade, accountSettings);
+        const net = Number(trade.pnl || 0) - fee;
+        dayMap[dayOfWeek].trades += 1;
+        dayMap[dayOfWeek].pnl += net;
+        if (net >= 0) dayMap[dayOfWeek].wins += 1;
+        else dayMap[dayOfWeek].losses += 1;
+
+        if (dayOfWeek === 6) hasSaturday = true;
+        if (dayOfWeek === 0) hasSunday = true;
       }
     });
+
+    const activeDays = [1, 2, 3, 4, 5];
+    if (hasSaturday) activeDays.push(6);
+    if (hasSunday) activeDays.push(0);
+
+    const daysData = activeDays.map(d => dayMap[d]);
     const maxAbsPnl = Math.max(1, ...daysData.map(d => Math.abs(d.pnl)));
     return { daysData, maxAbsPnl };
-  }, [activeTrades, accountSettings.feePerTrade, selectedWeekDate]);
+  }, [activeTrades, accountSettings, selectedWeekDate]);
 
   // Column aliases imported from tradeParser.ts
   const targetColumns = Object.keys(columnAliases);
+
+  const formatTimestampForDb = (dateStr: string, timeStr?: string | null): string | null => {
+    if (!dateStr && !timeStr) return null;
+    const cleanDate = dateStr && dateStr.match(/^\d{4}-\d{2}-\d{2}/)
+      ? dateStr.substring(0, 10)
+      : new Date().toISOString().substring(0, 10);
+
+    if (!timeStr) return `${cleanDate}T00:00:00.000Z`;
+
+    if (timeStr.includes('T')) {
+      const parsed = parseSmartDate(timeStr);
+      if (parsed) return parsed;
+    }
+
+    const match = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (match) {
+      const hh = match[1].padStart(2, '0');
+      const mm = match[2].padStart(2, '0');
+      const ss = match[3] ? match[3].padStart(2, '0') : '00';
+      return `${cleanDate}T${hh}:${mm}:${ss}.000Z`;
+    }
+
+    return `${cleanDate}T00:00:00.000Z`;
+  };
 
   const parseTradesFromText = async (text: string, importSource: 'csv' | 'paste' = 'paste') => {
     if (!selectedImportAccountId) {
@@ -1249,6 +1294,7 @@ export default function Dashboard() {
         case 'duration': tradeData.duration = val; break;
         case 'pnl': tradeData.pnl = val; break;
         case 'direction': tradeData.direction = val; break;
+        case 'strategy': tradeData.strategy = val; rawMetadata.strategy = val; break;
         case 'commission': tradeData.commission = val; break;
         case 'raw': rawMetadata[fieldName] = val; break;
         case 'ignore': break;
@@ -1264,51 +1310,84 @@ export default function Dashboard() {
       else if (pnlRaw.startsWith('(') && pnlRaw.endsWith(')')) pnlRaw = '-' + pnlRaw.replace('(', '').replace(')', '');
       else if (pnlRaw.startsWith('$')) pnlRaw = pnlRaw.replace('$', '');
 
-      const qty = sanitizeNum(tradeData.qty);
+      let qty = sanitizeNum(tradeData.qty);
+      if (isNaN(qty) || qty <= 0) qty = 1; // Default to 1 for simplified trade imports
+
       let pnlValue = sanitizeNum(pnlRaw);
       if ((pnlRaw.includes('-') || pnlRaw.includes('(')) && pnlValue > 0) pnlValue = -pnlValue;
 
-      const symbol = tradeData.symbol ? tradeData.symbol.toUpperCase() : '-';
+      const symbol = tradeData.symbol ? String(tradeData.symbol).trim().toUpperCase() : 'MANUAL';
       const buyPrice = sanitizeNum(tradeData.buyPrice);
       const sellPrice = sanitizeNum(tradeData.sellPrice);
 
       let direction = 'Long';
-      if (tradeData.direction && (tradeData.direction.toLowerCase().includes('short') || tradeData.direction.toLowerCase().includes('venda'))) {
+      const dirRaw = String(tradeData.direction || '').trim().toLowerCase();
+      if (
+        dirRaw.includes('short') ||
+        dirRaw.includes('venda') ||
+        dirRaw === 'sell' ||
+        dirRaw === 'v' ||
+        dirRaw === 's' ||
+        dirRaw === '-1'
+      ) {
         direction = 'Short';
+      } else if (
+        dirRaw.includes('long') ||
+        dirRaw.includes('compra') ||
+        dirRaw === 'buy' ||
+        dirRaw === 'c' ||
+        dirRaw === 'b' ||
+        dirRaw === '1'
+      ) {
+        direction = 'Long';
       }
 
-      const d1Iso = parseSmartDate(tradeData.buyTime);
-      const d2Iso = parseSmartDate(tradeData.sellTime);
+      // If P&L is omitted but buy & sell prices are present, calculate P&L from prices!
+      if ((pnlValue === 0 || isNaN(pnlValue)) && (buyPrice > 0 || sellPrice > 0)) {
+        if (direction === 'Short') {
+          pnlValue = (buyPrice - sellPrice) * qty;
+        } else {
+          pnlValue = (sellPrice - buyPrice) * qty;
+        }
+      }
+
+      // Date & Time extraction: fallback sequence
+      const rawTime1 = tradeData.buyTime || tradeData.date || tradeData.data || tradeData.time || tradeData.horario;
+      const rawTime2 = tradeData.sellTime || rawTime1;
+
+      const d1Iso = parseSmartDate(rawTime1);
+      const d2Iso = parseSmartDate(rawTime2);
       const d1 = d1Iso ? new Date(d1Iso).getTime() : NaN;
       const d2 = d2Iso ? new Date(d2Iso).getTime() : NaN;
 
       let entryTimestamp: number | null = null;
       let finalBuyPrice = buyPrice;
       let finalSellPrice = sellPrice;
-      let finalBuyTime = tradeData.buyTime;
-      let finalSellTime = tradeData.sellTime;
+      let finalBuyTime = tradeData.buyTime || (d1Iso ? d1Iso.substring(11, 16) : '00:00');
+      let finalSellTime = tradeData.sellTime || (d2Iso ? d2Iso.substring(11, 16) : '00:00');
 
       if (!isNaN(d1) && !isNaN(d2)) {
         if (d1 > d2 && direction !== 'Short') {
-          // Auto-detect Short: sell happened before buy in calendar time
-          // Swap prices and times so "sellPrice" = closing price of the position
           direction = 'Short';
           entryTimestamp = d2;
-          finalBuyPrice = sellPrice;   // broker's "sell" = short entry → becomes our buyPrice conceptually
-          finalSellPrice = buyPrice;   // broker's "buy" = short exit → becomes our sellPrice (closing)
-          finalBuyTime = tradeData.sellTime;
-          finalSellTime = tradeData.buyTime;
+          finalBuyPrice = sellPrice;
+          finalSellPrice = buyPrice;
+          finalBuyTime = tradeData.sellTime || '00:00';
+          finalSellTime = tradeData.buyTime || '00:00';
         } else {
           entryTimestamp = d1;
         }
       } else {
-        entryTimestamp = !isNaN(d1) ? d1 : (!isNaN(d2) ? d2 : null);
+        entryTimestamp = !isNaN(d1) ? d1 : (!isNaN(d2) ? d2 : Date.now());
       }
 
       let dateStr: string | null = null;
       if (entryTimestamp) {
         const ed = new Date(entryTimestamp);
         dateStr = `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`;
+      } else {
+        const now = new Date();
+        dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       }
 
       let commission = tradeData.commission ? Number(tradeData.commission) : null;
@@ -1316,12 +1395,15 @@ export default function Dashboard() {
         commission = qty * Number(activeAccount.feePerTrade);
       }
 
+      const strategy = tradeData.strategy || rawMetadata.strategy || null;
+
       return {
         qty, pnlValue, symbol,
         buyPrice: finalBuyPrice, sellPrice: finalSellPrice,
-        direction, entryTimestamp, dateStr, rawMetadata,
+        direction, entryTimestamp, dateStr, rawMetadata: { ...rawMetadata, strategy },
         buyTime: finalBuyTime, sellTime: finalSellTime,
-        duration: tradeData.duration, commission
+        duration: tradeData.duration || '00:00', commission,
+        strategy
       };
     };
 
@@ -1379,7 +1461,8 @@ export default function Dashboard() {
               id: generateId(), accountId: selectedImportAccountId, date: t.dateStr,
               qty: t.qty, pnl: t.pnlValue, duration: t.duration || '00:00', direction: t.direction,
               entryTimestamp: t.entryTimestamp, symbol: t.symbol, buyPrice: t.buyPrice, sellPrice: t.sellPrice,
-              buyTime: t.buyTime, sellTime: t.sellTime, rawMetadata: t.rawMetadata, commission
+              buyTime: t.buyTime, sellTime: t.sellTime, rawMetadata: t.rawMetadata, commission,
+              strategy: t.strategy
             });
           } else {
             console.warn('CSV row rejected:', { line: lines[i], extracted: t });
@@ -1445,20 +1528,21 @@ export default function Dashboard() {
         const { data, error: dbError } = await supabase
           .from('trades')
           .insert(newTrades.map(t => ({
+            user_id: session?.user?.id,
             account_id: t.accountId,
             symbol: t.symbol || '',
             direction: t.direction || 'Long',
-            qty: t.qty || 0,
+            qty: t.qty || 1,
             pnl: t.pnl || 0,
             date: t.date,
             entry_timestamp: t.entryTimestamp ? new Date(t.entryTimestamp).toISOString() : null,
             buy_price: t.buyPrice || 0,
-            buy_time: t.buyTime ? parseSmartDate(t.buyTime) : null,
-            duration: t.duration || '',
-            sell_time: t.sellTime ? parseSmartDate(t.sellTime) : null,
+            buy_time: formatTimestampForDb(t.date, t.buyTime),
+            duration: t.duration || '00:00',
+            sell_time: formatTimestampForDb(t.date, t.sellTime),
             sell_price: t.sellPrice || 0,
             commission: t.commission || 0,
-            raw_metadata: t.rawMetadata
+            raw_metadata: t.rawMetadata || {}
           })))
           .select();
 
@@ -1476,22 +1560,37 @@ export default function Dashboard() {
             rawMetadata: t.raw_metadata
           }));
           setTrades(prev => [...prev, ...imported]);
+          if (selectedImportAccountId) {
+            setActiveAccountId(selectedImportAccountId);
+            localStorage.setItem('quantara_activeAccountId', selectedImportAccountId);
+          }
+          setSearchTerm('');
+          setFilterMonth('all');
+          setFilterYear('all');
+          setHistoryPage(1);
+          if (imported.length > 0 && imported[0].date) {
+            const [y, m] = imported[0].date.split('-');
+            if (y && m) {
+              setCurrentDate(new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1));
+            }
+          }
+          const isPt = settings?.appLanguage === 'pt';
+          setToastMessage(isPt ? `${imported.length} trade(s) adicionado(s) com sucesso!` : `${imported.length} trade(s) added successfully!`);
+          setActiveTab('dashboard');
         }
-
-        setActiveTab('dashboard');
-        setToastMessage(`${newTrades.length} trades imported successfully!`);
       } else {
-        setToastMessage('Could not parse any valid trades. Check rows or headers.');
+        const isPt = settings?.appLanguage === 'pt';
+        setToastMessage(isPt ? 'Nenhum trade válido encontrado. Verifique as linhas.' : 'Could not parse any valid trades. Check rows or headers.');
       }
       setTimeout(() => setToastMessage(''), 3000);
 
-
     } catch (err: any) {
-      console.error(err);
-      setToastMessage(`Error with Supabase: ${err.message}`);
-      setTimeout(() => setToastMessage(''), 3000);
+      console.error('Import Error:', err);
+      const isPt = settings?.appLanguage === 'pt';
+      setToastMessage(isPt ? `Erro ao importar trades: ${err.message}` : `Error importing trades: ${err.message}`);
     } finally {
       setIsSyncing(false);
+      setTimeout(() => setToastMessage(''), 4000);
     }
   };
 
@@ -1501,51 +1600,101 @@ export default function Dashboard() {
     setImportText('');
   };
 
-  const handleCSVUpload = (e: any) => {
-    const file = e.target.files[0];
+  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event: any) => {
-      parseTradesFromText(event.target.result, 'csv');
-      e.target.value = null;
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        parseTradesFromText(content, 'csv');
+      }
     };
     reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleManualTradeAdd = async () => {
-    if (!selectedImportAccountId) {
-      setToastMessage('Please select an account before adding a trade.');
-      setTimeout(() => setToastMessage(''), 3000);
-      return;
-    }
-    if (!manualTrade.qty || !manualTrade.pnl || (!manualTrade.buyTime && !manualTrade.sellTime)) {
-      setToastMessage('Please fill at least Qty, Time (Buy or Sell), and P&L.');
+    const isPt = settings?.appLanguage === 'pt';
+    const targetAccount = accounts.find(a => a.id === selectedImportAccountId)
+      || accounts.find(a => a.id === activeAccountId)
+      || accounts[0];
+
+    const targetAccountId = targetAccount?.id;
+
+    if (!targetAccountId) {
+      setToastMessage(isPt ? 'Selecione ou crie uma conta antes de adicionar um trade.' : 'Please select or create an account before adding a trade.');
       setTimeout(() => setToastMessage(''), 3000);
       return;
     }
 
     setIsSyncing(true);
     try {
-      const buyT = manualTrade.buyTime || manualTrade.sellTime;
-      const sellT = manualTrade.sellTime || manualTrade.buyTime;
-      const dateStr = new Date(buyT).toISOString().split('T')[0];
+      const qty = parseInt(manualTrade.qty || '1') || 1;
+      const buyT = manualTrade.buyTime || manualTrade.sellTime || new Date().toISOString();
+      const sellT = manualTrade.sellTime || manualTrade.buyTime || new Date().toISOString();
+
+      let dateStr = '';
+      if (manualTrade.buyTime && manualTrade.buyTime.match(/^\d{4}-\d{2}-\d{2}/)) {
+        dateStr = manualTrade.buyTime.substring(0, 10);
+      } else {
+        const smartIso = parseSmartDate(buyT);
+        if (smartIso) {
+          const d = new Date(smartIso);
+          dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        } else {
+          const now = new Date();
+          dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        }
+      }
+
+      let entryIso: string | null = null;
+      const smartIso = parseSmartDate(buyT);
+      if (smartIso) {
+        entryIso = smartIso;
+      } else {
+        try {
+          entryIso = new Date(buyT).toISOString();
+        } catch (e) {
+          entryIso = new Date().toISOString();
+        }
+      }
+
+      const buyPrice = parseFloat(manualTrade.buyPrice) || 0;
+      const sellPrice = parseFloat(manualTrade.sellPrice) || 0;
+      let pnl = parseFloat(manualTrade.pnl);
+
+      const direction = (manualTrade as any).direction || (pnl >= 0 ? 'Long' : 'Short');
+
+      if (isNaN(pnl)) {
+        if (buyPrice > 0 || sellPrice > 0) {
+          if (direction === 'Short') pnl = (buyPrice - sellPrice) * qty;
+          else pnl = (sellPrice - buyPrice) * qty;
+        } else {
+          pnl = 0;
+        }
+      }
+
+      const dbBuyTime = formatTimestampForDb(dateStr, buyT);
+      const dbSellTime = formatTimestampForDb(dateStr, sellT);
 
       let newT;
       const { data, error: dbError } = await supabase
         .from('trades')
         .insert([{
-          account_id: selectedImportAccountId,
-          symbol: manualTrade.symbol || '',
-          direction: Number(manualTrade.pnl) >= 0 ? 'Long' : 'Short',
-          qty: parseInt(manualTrade.qty),
-          pnl: parseFloat(manualTrade.pnl),
+          user_id: session?.user?.id,
+          account_id: targetAccountId,
+          symbol: manualTrade.symbol ? manualTrade.symbol.toUpperCase() : 'MANUAL',
+          direction: direction,
+          qty: qty,
+          pnl: pnl,
           date: dateStr,
-          entry_timestamp: new Date(buyT).toISOString(),
-          buy_price: parseFloat(manualTrade.buyPrice) || 0,
-          buy_time: buyT ? new Date(buyT).toISOString() : null,
-          duration: manualTrade.duration || '',
-          sell_time: sellT ? new Date(sellT).toISOString() : null,
-          sell_price: parseFloat(manualTrade.sellPrice) || 0,
+          entry_timestamp: entryIso,
+          buy_price: buyPrice,
+          buy_time: dbBuyTime,
+          duration: manualTrade.duration || '00:00',
+          sell_time: dbSellTime,
+          sell_price: sellPrice,
           commission: 0,
           raw_metadata: {}
         }])
@@ -1562,10 +1711,10 @@ export default function Dashboard() {
         qty: data.qty,
         pnl: Number(data.pnl),
         date: data.date,
-        entryTimestamp: new Date(data.entry_timestamp).getTime(),
+        entryTimestamp: data.entry_timestamp ? new Date(data.entry_timestamp).getTime() : Date.now(),
         buyPrice: Number(data.buy_price),
         buyTime: data.buy_time,
-        duration: data.duration,
+        duration: data.duration || '00:00',
         sellTime: data.sell_time,
         sellPrice: Number(data.sell_price),
         commission: data.commission !== null ? Number(data.commission) : null,
@@ -1573,11 +1722,27 @@ export default function Dashboard() {
       };
 
       setTrades(prev => [...prev, newT]);
+      setActiveAccountId(targetAccountId);
+      setSelectedImportAccountId(targetAccountId);
+      localStorage.setItem('quantara_activeAccountId', targetAccountId);
+      setSearchTerm('');
+      setFilterMonth('all');
+      setFilterYear('all');
+      setTradesDisabledWeekdays(new Set());
+      localStorage.removeItem('quantara_trades_disabled_weekdays');
+      setHistoryPage(1);
+      if (dateStr) {
+        const [y, m] = dateStr.split('-');
+        if (y && m) {
+          setCurrentDate(new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1));
+        }
+      }
       setManualTrade({ symbol: '', qty: '', buyPrice: '', buyTime: '', duration: '', sellTime: '', sellPrice: '', pnl: '' });
-      setToastMessage('Trade added and synchronized!');
+      setToastMessage(isPt ? 'Trade adicionado e sincronizado com sucesso!' : 'Trade added and synchronized successfully!');
       setActiveTab('dashboard');
     } catch (err: any) {
-      setToastMessage(`Error adding trade: ${err.message}`);
+      console.error('Manual trade add error:', err);
+      setToastMessage(isPt ? `Erro ao adicionar trade: ${err.message}` : `Error adding trade: ${err.message}`);
     } finally {
       setIsSyncing(false);
       setTimeout(() => setToastMessage(''), 3000);
@@ -1713,13 +1878,22 @@ export default function Dashboard() {
 
   const filteredTrades = useMemo(() => {
     let result = allAccountTrades.filter(t => {
-      const rowDate = new Date(t.date + 'T00:00:00');
-      if (tradesDisabledWeekdays.has(rowDate.getDay())) return false;
+      if (t.date && tradesDisabledWeekdays && tradesDisabledWeekdays.size > 0) {
+        const parts = t.date.split('-');
+        if (parts.length >= 3) {
+          const rowDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          if (tradesDisabledWeekdays.has(rowDate.getDay())) return false;
+        }
+      }
 
-      const fullString = `${t.date} ${formatDate(t.date)} ${t.qty} ${t.duration} ${t.pnl}`.toLowerCase();
-      const matchesSearch = fullString.includes(searchTerm.toLowerCase());
-      const [y, m] = t.date.split('-');
-      return matchesSearch && (filterMonth === 'all' || m === filterMonth) && (filterYear === 'all' || y === filterYear);
+      const fullString = `${t.symbol || ''} ${t.direction || ''} ${t.notes || ''} ${t.date || ''} ${formatDate(t.date)} ${t.qty || ''} ${t.duration || ''} ${t.pnl}`.toLowerCase();
+      const matchesSearch = searchTerm ? fullString.includes(searchTerm.toLowerCase()) : true;
+      const [y, m] = (t.date || '').split('-');
+      const mNorm = m ? String(parseInt(m, 10)).padStart(2, '0') : '';
+      const yNorm = y ? String(parseInt(y, 10)) : '';
+      const matchesMonth = filterMonth === 'all' || mNorm === filterMonth || m === filterMonth;
+      const matchesYear = filterYear === 'all' || yNorm === filterYear || y === filterYear;
+      return matchesSearch && matchesMonth && matchesYear;
     });
     return result.sort((a, b) => {
       const getTime = (t) => {
@@ -1756,9 +1930,11 @@ export default function Dashboard() {
   }, [allAccountTrades, searchTerm, filterMonth, filterYear, sortOrder, tradesDisabledWeekdays]);
 
   const paginatedTrades = useMemo(() => {
-    const start = (historyPage - 1) * historyItemsPerPage;
+    const totalPages = Math.max(1, Math.ceil(filteredTrades.length / historyItemsPerPage));
+    const validPage = Math.min(Math.max(1, historyPage), totalPages);
+    const start = (validPage - 1) * historyItemsPerPage;
     return filteredTrades.slice(start, start + historyItemsPerPage);
-  }, [filteredTrades, historyPage]);
+  }, [filteredTrades, historyPage, historyItemsPerPage]);
 
   const miniSortedTrades = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -1906,7 +2082,8 @@ export default function Dashboard() {
           ? accountFormData.pasteMapping
           : null,
         is_fixed_fee: accountFormData.isFixedFee ?? false,
-        fee_per_contract: accountFormData.isFixedFee ? Number(accountFormData.feePerContract || 0) : null
+        fee_per_contract: accountFormData.isFixedFee ? Number(accountFormData.feePerContract || 0) : null,
+        show_strategy_col: accountFormData.showStrategyCol ?? true
       };
 
       if (!dbAccount.enable_csv && !dbAccount.enable_paste) {
@@ -1941,15 +2118,19 @@ export default function Dashboard() {
           csvMapping: (data.csv_mapping && !Array.isArray(data.csv_mapping) ? data.csv_mapping : {}),
           pasteMapping: Array.isArray(data.paste_mapping) ? data.paste_mapping : [],
           isFixedFee: data.is_fixed_fee ?? false,
-          feePerContract: Number(data.fee_per_contract ?? 0)
+          feePerContract: Number(data.fee_per_contract ?? 0),
+          showStrategyCol: data.show_strategy_col ?? true
         };
         setAccounts(prev => [...prev, newAcc]);
-        if (!activeAccountId) setActiveAccountId(newAcc.id);
+        setActiveAccountId(newAcc.id);
+        setSelectedImportAccountId(newAcc.id);
+        localStorage.setItem('quantara_activeAccountId', newAcc.id);
       }
       setIsAccountFormOpen(false);
       setEditingAccount(null);
       setAccountFormError('');
-      setToastMessage(editingAccount ? 'Account updated!' : 'Account created!');
+      const isPt = settings?.appLanguage === 'pt';
+      setToastMessage(editingAccount ? (isPt ? 'Conta atualizada!' : 'Account updated!') : (isPt ? 'Conta criada com sucesso!' : 'Account created successfully!'));
     } catch (err: any) {
       setAccountFormError(err.message);
     }
@@ -2212,7 +2393,7 @@ export default function Dashboard() {
 
   const dayOfWeekData = useMemo(() => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const map = {
+    const map: Record<string, { pnl: number; wins: number; losses: number }> = {
       'Monday': { pnl: 0, wins: 0, losses: 0 },
       'Tuesday': { pnl: 0, wins: 0, losses: 0 },
       'Wednesday': { pnl: 0, wins: 0, losses: 0 },
@@ -2225,19 +2406,25 @@ export default function Dashboard() {
       const d = new Date(t.entryTimestamp || t.date + 'T12:00:00');
       const dayName = days[d.getDay()];
       const net = t.pnl - calculateTradeFee(t, accountSettings);
-      map[dayName].pnl += net;
-      if (net >= 0) map[dayName].wins += 1;
-      else map[dayName].losses += 1;
+      if (map[dayName]) {
+        map[dayName].pnl += net;
+        if (net >= 0) map[dayName].wins += 1;
+        else map[dayName].losses += 1;
+      }
     });
-    // Order: Monday to Friday (ignore weekends if 0)
-    return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => ({
+    // Order: Monday to Friday (include weekends only if trades exist)
+    const baseDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    if (map['Saturday'].wins + map['Saturday'].losses > 0) baseDays.push('Saturday');
+    if (map['Sunday'].wins + map['Sunday'].losses > 0) baseDays.push('Sunday');
+
+    return baseDays.map(day => ({
       name: day.substring(0, 3), // Mon, Tue, etc.
       pnl: map[day].pnl,
       wins: map[day].wins,
       losses: map[day].losses,
       count: map[day].wins + map[day].losses
     }));
-  }, [activeTrades, accountSettings.feePerTrade]);
+  }, [activeTrades, accountSettings]);
 
 
   if (isAuthChecking) {
@@ -2863,6 +3050,9 @@ export default function Dashboard() {
                     getGlassStyle={getGlassStyle}
                     disabledWeekdays={tradesDisabledWeekdays}
                     toggleWeekday={toggleTradesWeekday}
+                    onResetFilters={resetTradesFilters}
+                    allTradesCount={allAccountTrades.length}
+                    lang={settings.appLanguage || 'en'}
                     settings={accountSettings}
                     searchTerm={searchTerm}
                     setSearchTerm={setSearchTerm}
@@ -2892,6 +3082,7 @@ export default function Dashboard() {
                     supabase={supabase}
                     session={session}
                     setToastMessage={setToastMessage}
+                    showStrategyCol={activeAccount?.showStrategyCol ?? true}
                   />
                 )
               }
@@ -3421,6 +3612,9 @@ export default function Dashboard() {
                     pasteMapping={Array.isArray(accountFormData.pasteMapping) ? accountFormData.pasteMapping : []}
                     onPasteMappingChange={v => setAccountFormData(p => ({ ...p, pasteMapping: v }))}
                     isFixedFee={accountFormData.isFixedFee ?? false}
+                    showStrategyCol={accountFormData.showStrategyCol ?? true}
+                    onShowStrategyColChange={v => setAccountFormData(p => ({ ...p, showStrategyCol: v }))}
+                    lang={settings.appLanguage || 'en'}
                   />
                 </div>
                 <div className="px-5 py-5 flex gap-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>

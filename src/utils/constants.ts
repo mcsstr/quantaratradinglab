@@ -59,7 +59,8 @@ export const DEFAULT_ACCOUNT_SETTINGS = {
   enableCsv: true,
   enablePaste: false,
   csvMapping: '', // kept as string for the textarea state, converted to array on save
-  pasteMapping: ''
+  pasteMapping: '',
+  showStrategyCol: true
 };
 
 export const DEFAULT_SETTINGS = {

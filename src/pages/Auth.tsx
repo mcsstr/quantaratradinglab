@@ -1,27 +1,57 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Activity } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Eye, EyeOff, Activity, ArrowLeft, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+
+type AuthMode = 'login' | 'signup' | 'forgot_password' | 'reset_password';
 
 export default function Auth() {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<'google' | 'facebook' | 'apple' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Check if user came from a password recovery link or hash
+  useEffect(() => {
+    const hash = window.location.hash;
+    const modeParam = searchParams.get('mode');
+    const typeParam = searchParams.get('type');
+
+    if (modeParam === 'reset_password' || typeParam === 'recovery' || hash.includes('type=recovery')) {
+      setAuthMode('reset_password');
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthMode('reset_password');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [searchParams]);
+
+  // Main Email/Password Login or Signup Handler
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
-      let userId = null;
+      let userId: string | null = null;
 
-      if (isLogin) {
+      if (authMode === 'login') {
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
         if (authError) throw authError;
         if (authData?.user) userId = authData.user.id;
@@ -42,9 +72,9 @@ export default function Auth() {
             .from('plans_config')
             .select('trial_duration_value, trial_duration_unit')
             .eq('id', 'free')
-            .single();
+            .maybeSingle();
             
-          let trialEndIso = null;
+          let trialEndIso: string | null = null;
           if (freePlan && freePlan.trial_duration_value) {
             const now = new Date();
             const val = freePlan.trial_duration_value;
@@ -54,17 +84,17 @@ export default function Auth() {
               case 'days': now.setDate(now.getDate() + val); break;
               case 'months': now.setMonth(now.getMonth() + val); break;
               case 'years': now.setFullYear(now.getFullYear() + val); break;
-              default: now.setDate(now.getDate() + val); break; // fallback days
+              default: now.setDate(now.getDate() + val); break;
             }
             trialEndIso = now.toISOString();
           }
 
-          // Atualiza a tabela profiles com os dados capturados
+          // Upsert default profile
           const { error: profileError } = await supabase
             .from('profiles')
             .upsert({
               id: userId,
-              first_name: email.split('@')[0], // derived from email
+              first_name: email.split('@')[0],
               last_name: '',
               email: email,
               plan: '',
@@ -73,14 +103,14 @@ export default function Auth() {
               storage_mode: 'local',
               updated_at: new Date().toISOString()
             });
-          if (profileError) console.error('Erro ao salvar profile:', profileError);
+          if (profileError) console.error('Erro ao salvar perfil:', profileError);
         }
 
-        alert('Cadastro realizado! Se o e-mail de confirmação estiver habilitado, verifique sua caixa de entrada.');
+        setSuccessMessage('Conta criada! Se a confirmação de e-mail estiver habilitada no seu Supabase, verifique sua caixa de entrada.');
       }
 
-      if (isLogin && userId) {
-        // Check if profile still exists (deleted account guard)
+      if (authMode === 'login' && userId) {
+        // Check profile status
         const { data: profileCheck, error: profileError } = await supabase
           .from('profiles')
           .select('id, plan, status, trial_end, storage_mode')
@@ -88,15 +118,14 @@ export default function Auth() {
           .maybeSingle();
 
         if (!profileError && profileCheck === null) {
-          // Profile deleted from database but auth user still exists.
-          // Let's recreate their free profile gracefully.
+          // Restore profile if missing
           const { data: freePlan } = await supabase
             .from('plans_config')
             .select('trial_duration_value, trial_duration_unit')
             .eq('id', 'free')
-            .single();
+            .maybeSingle();
             
-          let trialEndIso = null;
+          let trialEndIso: string | null = null;
           if (freePlan && freePlan.trial_duration_value) {
             const now = new Date();
             const val = freePlan.trial_duration_value;
@@ -137,13 +166,11 @@ export default function Auth() {
           const status = profileCheck.status;
           const trialEnd = profileCheck.trial_end;
 
-          // Suspended or no plan → pricing
           if (!plan || status === 'Suspended' || status === 'Inactive') {
             navigate('/pricing');
             return;
           }
 
-          // Free plan: check if trial has expired
           if (plan === 'free') {
             if (trialEnd && new Date(trialEnd) < new Date()) {
               navigate('/pricing?reason=trial_expired');
@@ -153,31 +180,110 @@ export default function Auth() {
         }
       }
       
-      // If signed up, redirect to pricing
-      if (!isLogin && userId) {
-        navigate('/pricing');
+      if (authMode === 'signup' && userId) {
+        setTimeout(() => {
+          navigate('/pricing');
+        }, 1500);
         return;
       }
       
       navigate('/loading');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Erro ao realizar autenticação.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
+  // Social Login Handler (Google, Facebook, Apple)
+  const handleSocialLogin = async (provider: 'google' | 'facebook' | 'apple') => {
+    setSocialLoading(provider);
+    setError(null);
+    setSuccessMessage(null);
+
     try {
-      const { error: authError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+      const { data, error: authError } = await supabase.auth.signInWithOAuth({
+        provider,
         options: {
-          redirectTo: `${window.location.origin}/loading`
+          redirectTo: `${window.location.origin}/loading`,
+          skipBrowserRedirect: true
         }
       });
+      
       if (authError) throw authError;
+
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(`Não foi possível obter a URL de autenticação para ${provider.toUpperCase()}.`);
+      }
     } catch (err: any) {
-      setError(err.message);
+      console.error(`Erro OAuth (${provider}):`, err);
+      const msg = err.message || '';
+      const provName = provider === 'google' ? 'Google' : provider === 'facebook' ? 'Facebook' : 'Apple';
+      
+      if (msg.includes('provider is not enabled') || msg.includes('Unsupported provider') || msg.includes('validation_failed')) {
+        setError(`O login por ${provName} precisa ser habilitado no painel do seu Supabase em: Authentication → Providers → ${provName}.`);
+      } else {
+        setError(msg || `Não foi possível conectar com ${provName}.`);
+      }
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
+  // Forgot Password Request Handler
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      setError('Por favor, informe seu e-mail.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?mode=reset_password`
+      });
+      if (resetError) throw resetError;
+
+      setSuccessMessage('E-mail de recuperação enviado com sucesso! Verifique sua caixa de entrada e pasta de spam.');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao enviar e-mail de redefinição de senha.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // New Password Reset Handler
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password) {
+      setError('Informe a nova senha.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('As senhas não coincidem.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+
+      setSuccessMessage('Sua senha foi redefinida com sucesso! Redirecionando...');
+      setTimeout(() => {
+        navigate('/loading');
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao redefinir a nova senha.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -189,7 +295,6 @@ export default function Auth() {
         <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
           <svg viewBox="0 0 800 600" preserveAspectRatio="none" className="w-full h-full">
             <path d="M0,400 L100,350 L200,450 L300,200 L400,300 L500,100 L600,250 L700,50 L800,150" fill="none" stroke="#00B0F0" strokeWidth="4" />
-            {/* Candlesticks */}
             <rect x="95" y="300" width="10" height="100" fill="#22c55e" />
             <rect x="195" y="400" width="10" height="80" fill="#ef4444" />
             <rect x="295" y="150" width="10" height="120" fill="#22c55e" />
@@ -221,111 +326,240 @@ export default function Auth() {
 
         <div className="w-full max-w-md bg-[#111114] border border-white/10 rounded-2xl p-8 shadow-2xl relative z-10">
 
-          {/* Toggle Login/Signup */}
-          <div className="flex items-center justify-center gap-4 mb-8">
-            <span className={`text-sm font-bold ${isLogin ? 'text-white' : 'text-gray-500'}`}>Entrar</span>
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="relative w-12 h-6 bg-white/10 rounded-full transition-colors"
-            >
-              <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${!isLogin ? 'translate-x-6' : ''}`}></div>
-            </button>
-            <span className={`text-sm font-bold ${!isLogin ? 'text-white' : 'text-gray-500'}`}>Criar Conta</span>
-          </div>
-
-          {error && (
-            <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs text-center">
-              {error}
+          {/* Header & Mode Selector */}
+          {(authMode === 'login' || authMode === 'signup') && (
+            <div className="flex items-center justify-center gap-4 mb-8">
+              <span className={`text-sm font-bold cursor-pointer transition-colors ${authMode === 'login' ? 'text-white' : 'text-gray-500'}`} onClick={() => { setAuthMode('login'); setError(null); setSuccessMessage(null); }}>
+                Entrar
+              </span>
+              <button
+                type="button"
+                onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setError(null); setSuccessMessage(null); }}
+                className="relative w-12 h-6 bg-white/10 rounded-full transition-colors"
+              >
+                <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${authMode === 'signup' ? 'translate-x-6' : ''}`}></div>
+              </button>
+              <span className={`text-sm font-bold cursor-pointer transition-colors ${authMode === 'signup' ? 'text-white' : 'text-gray-500'}`} onClick={() => { setAuthMode('signup'); setError(null); setSuccessMessage(null); }}>
+                Criar Conta
+              </span>
             </div>
           )}
 
-          <form onSubmit={handleAuth} className="space-y-5">
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400">E-mail</label>
-              <input
-                type="email"
-                placeholder="seu@email.com"
-                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-              />
+          {authMode === 'forgot_password' && (
+            <div className="mb-6">
+              <button
+                type="button"
+                onClick={() => { setAuthMode('login'); setError(null); setSuccessMessage(null); }}
+                className="inline-flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition-colors mb-4"
+              >
+                <ArrowLeft size={14} /> Voltar para o Login
+              </button>
+              <h2 className="text-xl font-bold font-display text-white">Recuperar Senha</h2>
+              <p className="text-xs text-gray-400 mt-1">Informe seu e-mail cadastrado para enviarmos as instruções de redefinição.</p>
             </div>
+          )}
 
+          {authMode === 'reset_password' && (
+            <div className="mb-6">
+              <h2 className="text-xl font-bold font-display text-white">Redefinir Senha</h2>
+              <p className="text-xs text-gray-400 mt-1">Digite sua nova senha abaixo para atualizar seu acesso.</p>
+            </div>
+          )}
 
+          {/* Feedback Messages */}
+          {error && (
+            <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400">Senha</label>
-              <div className="relative">
+          {successMessage && (
+            <div className="mb-6 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-xs flex items-center gap-2">
+              <CheckCircle2 size={16} className="shrink-0" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {/* Form: LOGIN & SIGNUP */}
+          {(authMode === 'login' || authMode === 'signup') && (
+            <form onSubmit={handleAuth} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400">E-mail</label>
                 <input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="********"
-                  className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors pr-10"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  type="email"
+                  placeholder="seu@email.com"
+                  className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400">Senha</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="********"
+                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors pr-10"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {authMode === 'login' && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('forgot_password'); setError(null); setSuccessMessage(null); }}
+                    className="text-xs font-bold text-[#00B0F0] hover:text-[#00B0F0]/80 transition-colors"
+                  >
+                    Esqueci minha senha
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#00B0F0] text-white font-bold py-3 rounded-lg hover:brightness-110 active:scale-95 transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  authMode === 'login' ? 'Entrar' : 'Criar Conta'
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* Form: FORGOT PASSWORD */}
+          {authMode === 'forgot_password' && (
+            <form onSubmit={handleForgotPassword} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400">E-mail Cadastrado</label>
+                <input
+                  type="email"
+                  placeholder="seu@email.com"
+                  className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#00B0F0] text-white font-bold py-3 rounded-lg hover:brightness-110 active:scale-95 transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 size={18} className="animate-spin" /> : 'Enviar E-mail de Recuperação'}
+              </button>
+            </form>
+          )}
+
+          {/* Form: RESET PASSWORD */}
+          {authMode === 'reset_password' && (
+            <form onSubmit={handleResetPassword} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400">Nova Senha</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="********"
+                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors pr-10"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400">Confirmar Nova Senha</label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="********"
+                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-[#00B0F0] transition-colors pr-10"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#00B0F0] text-white font-bold py-3 rounded-lg hover:brightness-110 active:scale-95 transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 size={18} className="animate-spin" /> : 'Salvar Nova Senha'}
+              </button>
+            </form>
+          )}
+
+          {/* Social Logins Section */}
+          {(authMode === 'login' || authMode === 'signup') && (
+            <>
+              <div className="mt-8 relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/10"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-[#111114] px-2 text-gray-500">Ou entre com:</span>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                {/* Google */}
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  disabled={socialLoading !== null}
+                  onClick={() => handleSocialLogin('google')}
+                  className="w-full flex items-center justify-center gap-3 bg-white/5 border border-white/10 rounded-lg py-3 text-sm font-bold hover:bg-white/10 transition-colors disabled:opacity-50"
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {socialLoading === 'google' ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                    </svg>
+                  )}
+                  Entrar com Google
                 </button>
               </div>
-            </div>
-
-            {isLogin && (
-              <div className="flex justify-end">
-                <a href="#" className="text-xs font-bold text-[#00B0F0] hover:text-[#00B0F0]/80 transition-colors">
-                  Esqueci minha senha
-                </a>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#00B0F0] text-white font-bold py-3 rounded-lg hover:brightness-110 active:scale-95 transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
-              ) : (
-                isLogin ? 'Entrar' : 'Criar Conta'
-              )}
-            </button>
-          </form>
-
-          <div className="mt-8 relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10"></div>
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-[#111114] px-2 text-gray-500">Ou entre com:</span>
-            </div>
-          </div>
-
-          <div className="mt-6 space-y-3">
-            <button
-              onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center gap-3 bg-white/5 border border-white/10 rounded-lg py-2.5 text-sm font-bold hover:bg-white/10 transition-colors"
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" /><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" /><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" /><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" /></svg>
-              Google
-            </button>
-            <button className="w-full flex items-center justify-center gap-3 bg-white/5 border border-white/10 rounded-lg py-2.5 text-sm font-bold hover:bg-white/10 transition-colors">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="#1877F2" xmlns="http://www.w3.org/2000/svg"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-              Facebook
-            </button>
-            <button className="w-full flex items-center justify-center gap-3 bg-white/5 border border-white/10 rounded-lg py-2.5 text-sm font-bold hover:bg-white/10 transition-colors">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12c0-5.523-4.477-10-10-10z" className="hidden" /><path d="M16.365 1.43c0 0-2.083.068-3.83 2.147-.037.043-1.611 1.966-1.526 4.122 0 0 2.267-.165 4.023-2.135.042-.047 1.57-1.895 1.333-4.134zm-4.38 6.44c-2.613-.227-4.634 1.472-5.715 1.472-1.082 0-2.71-1.41-4.81-1.37-2.75.05-5.29 1.6-6.7 4.06-2.85 4.93-.73 12.22 2.05 16.24 1.36 1.96 2.97 4.16 5.1 4.08 2.05-.08 2.83-1.33 5.3-1.33 2.45 0 3.17 1.33 5.34 1.29 2.21-.04 3.61-2.04 4.96-4 1.56-2.28 2.2-4.49 2.23-4.6-.05-.02-4.3-1.65-4.33-6.6-.03-4.15 3.39-6.14 3.55-6.23-1.94-2.84-4.95-3.23-6.03-3.35z" transform="scale(0.8) translate(3, 2)" /></svg>
-              Apple
-            </button>
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
-

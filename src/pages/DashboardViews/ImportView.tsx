@@ -145,8 +145,22 @@ export default function ImportView({
               </div>
               <div className="grid grid-cols-2 gap-3 min-w-0">
                 <div className="space-y-1 min-w-0">
-                  <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.duration', lang)}</label>
-                  <input type="text" placeholder="Ex: 7m 12s" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.duration} onChange={e => setManualTrade({ ...manualTrade, duration: e.target.value })} />
+                  <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
+                    {lang === 'pt' ? 'Lado (Compra / Venda)' : lang === 'es' ? 'Lado (Compra / Venta)' : 'Side (Buy / Sell)'}
+                  </label>
+                  <select
+                    className="w-full rounded-lg p-2 outline-none text-xs bg-transparent cursor-pointer font-bold"
+                    style={inputStyle}
+                    value={manualTrade.direction || 'Long'}
+                    onChange={e => setManualTrade({ ...manualTrade, direction: e.target.value })}
+                  >
+                    <option value="Long" className="bg-gray-800 text-green-400">
+                      🟢 {lang === 'pt' ? 'Compra (Long)' : lang === 'es' ? 'Compra (Long)' : 'Buy (Long)'}
+                    </option>
+                    <option value="Short" className="bg-gray-800 text-red-400">
+                      🔴 {lang === 'pt' ? 'Venda (Short)' : lang === 'es' ? 'Venta (Short)' : 'Sell (Short)'}
+                    </option>
+                  </select>
                 </div>
                 <div className="space-y-1 min-w-0">
                   <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.sellTime', lang)}</label>

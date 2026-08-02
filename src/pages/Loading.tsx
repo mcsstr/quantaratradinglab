@@ -155,7 +155,41 @@ export default function Loading() {
                 }
               }
             } else {
-              // No profile found? Make them pick a plan!
+              // No profile found (e.g. first-time OAuth login)? Create default profile gracefully!
+              const { data: freePlan } = await supabase
+                .from('plans_config')
+                .select('trial_duration_value, trial_duration_unit')
+                .eq('id', 'free')
+                .maybeSingle();
+
+              let trialEndIso: string | null = null;
+              if (freePlan && freePlan.trial_duration_value) {
+                const now = new Date();
+                const val = freePlan.trial_duration_value;
+                switch (freePlan.trial_duration_unit) {
+                  case 'minutes': now.setMinutes(now.getMinutes() + val); break;
+                  case 'hours': now.setHours(now.getHours() + val); break;
+                  case 'days': now.setDate(now.getDate() + val); break;
+                  case 'months': now.setMonth(now.getMonth() + val); break;
+                  case 'years': now.setFullYear(now.getFullYear() + val); break;
+                  default: now.setDate(now.getDate() + val); break;
+                }
+                trialEndIso = now.toISOString();
+              }
+
+              const firstName = user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'Trader';
+              await supabase.from('profiles').upsert({
+                id: user.id,
+                first_name: firstName,
+                last_name: '',
+                email: user.email || '',
+                plan: '',
+                status: 'active',
+                trial_end: trialEndIso,
+                storage_mode: 'local',
+                updated_at: new Date().toISOString()
+              });
+
               navigate('/pricing');
               return;
             }
