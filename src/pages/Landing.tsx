@@ -1,219 +1,228 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ArrowRight,
-  Play,
-  Activity,
-  BarChart2,
-  TrendingUp,
-  Shield,
-  Calendar,
-  Layers,
-  BookOpen,
-  UploadCloud,
-  CheckCircle2,
-  DollarSign,
-  PieChart,
-  Lock,
-  ChevronRight,
-  Zap,
-  Globe,
-  Award,
-  Sliders,
-  FileText,
-  Clock,
-  Sparkles,
-  HelpCircle,
+import { 
+  TrendingUp, 
+  Shield, 
+  Target, 
+  Calendar, 
+  BarChart2, 
+  BookOpen, 
+  CheckCircle2, 
+  ArrowRight, 
+  Sparkles, 
+  ChevronRight, 
   ChevronDown,
-  ExternalLink,
-  Target,
-  ArrowUpRight,
-  Check,
-  X
+  Play, 
+  Download, 
+  UploadCloud, 
+  Check, 
+  X, 
+  Menu,
+  HelpCircle, 
+  DollarSign, 
+  Zap, 
+  Award, 
+  Layers, 
+  FileText, 
+  PieChart, 
+  Activity, 
+  Cpu, 
+  Globe, 
+  Clock, 
+  Lock, 
+  Sliders
 } from 'lucide-react';
+import { usePlanConfig } from '../hooks/usePlanConfig';
 
-type Lang = 'pt' | 'en' | 'es';
+type Lang = 'en' | 'pt' | 'es';
+
+interface LanguageOption {
+  code: Lang;
+  label: string;
+  flag: string;
+  country: string;
+}
+
+const LANGUAGES: LanguageOption[] = [
+  { code: 'en', label: 'English', flag: '🇺🇸', country: 'US' },
+  { code: 'pt', label: 'Português', flag: '🇧🇷', country: 'BR' },
+  { code: 'es', label: 'Español', flag: '🇪🇸', country: 'ES' },
+];
 
 export default function Landing() {
   const navigate = useNavigate();
-  const [lang, setLang] = useState<Lang>('pt');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'analytics' | 'calendar' | 'trades' | 'setups' | 'journal' | 'import'>('dashboard');
+  const [lang, setLang] = useState<Lang>('en');
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [langDropdownOpen, setLangDropdownOpen] = useState<boolean>(false);
+  const langDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Simulator State
+  // Dynamic Free Plan / Trial promotion from Admin configuration
+  const { getFreePlan } = usePlanConfig();
+  const freePlan = getFreePlan();
+  const trialValue = freePlan?.trial_duration_value || freePlan?.trial_days || 0;
+  const trialUnit = freePlan?.trial_duration_unit || 'days';
+  const hasTrialPromo = trialValue > 0;
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (langDropdownRef.current && !langDropdownRef.current.contains(event.target as Node)) {
+        setLangDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Interactive Simulator State
   const [simAccountSize, setSimAccountSize] = useState<number>(50000);
-  const [simWinRate, setSimWinRate] = useState<number>(55);
-  const [simAvgWin, setSimAvgWin] = useState<number>(350);
-  const [simAvgLoss, setSimAvgLoss] = useState<number>(200);
-  const [simTradesMonth, setSimTradesMonth] = useState<number>(30);
+  const [simWinRate, setSimWinRate] = useState<number>(62);
+  const [simAvgWin, setSimAvgWin] = useState<number>(380);
+  const [simAvgLoss, setSimAvgLoss] = useState<number>(210);
+  const [simTradesMonth, setSimTradesMonth] = useState<number>(32);
 
-  // Calculations for Simulator
-  const winFraction = simWinRate / 100;
-  const lossFraction = 1 - winFraction;
-  const expectancy = (winFraction * simAvgWin) - (lossFraction * simAvgLoss);
+  // Simulator Calculations
+  const winRateDec = simWinRate / 100;
+  const lossRateDec = (100 - simWinRate) / 100;
+  const expectancy = (winRateDec * simAvgWin) - (lossRateDec * simAvgLoss);
   const estimatedMonthlyNet = Math.round(expectancy * simTradesMonth);
-  const estimatedBrl = Math.round(estimatedMonthlyNet * 5.15);
-  const profitFactor = (simAvgLoss * lossFraction) > 0 
-    ? ((simAvgWin * winFraction) / (simAvgLoss * lossFraction)).toFixed(2) 
-    : '9.99';
+  const profitFactor = simAvgLoss > 0 && lossRateDec > 0 
+    ? ((winRateDec * simAvgWin) / (lossRateDec * simAvgLoss)).toFixed(2) 
+    : '0.00';
+  const estimatedBrl = Math.round(estimatedMonthlyNet * 5.65);
 
-  // Language texts
+  // Dynamic CTA labels based on Admin Plan Promotion
+  const getCtaLabel = (l: Lang) => {
+    if (hasTrialPromo) {
+      if (l === 'pt') {
+        const unitLabel = trialUnit === 'days' ? (trialValue === 1 ? 'Dia' : 'Dias') : trialUnit === 'hours' ? 'Horas' : trialUnit === 'minutes' ? 'Minutos' : trialUnit === 'months' ? 'Meses' : 'Dias';
+        return `Teste Grátis de ${trialValue} ${unitLabel}`;
+      }
+      if (l === 'es') {
+        const unitLabel = trialUnit === 'days' ? (trialValue === 1 ? 'Día' : 'Días') : trialUnit === 'hours' ? 'Horas' : 'Días';
+        return `Prueba Gratis de ${trialValue} ${unitLabel}`;
+      }
+      return `Start Free ${trialValue}-${trialUnit.replace(/s$/, '')} Trial`;
+    }
+    if (l === 'pt') return 'Começar Gratuitamente';
+    if (l === 'es') return 'Comenzar Gratis';
+    return 'Get Started Free';
+  };
+
+  const ctaPrimary = getCtaLabel(lang);
+
+  // Translation Strings
   const t = {
-    pt: {
-      badge: 'NOVA VERSÃO 2.0 • SUÍTE COMPLETA PARA TRADERS PROFISSIONAIS',
-      heroTitlePrefix: 'Domine Seus Trades com ',
-      heroTitleHighlight: 'Métricas Institucionais',
-      heroTitleSuffix: ' de Alta Precisão',
-      heroDesc: 'O workspace definitivo para traders de Futuros, Forex, Ações e Cripto. Valide setups matemáticos, monitore drawdowns em tempo real, proteja seu capital e conquiste aprovações em mesas proprietárias.',
-      ctaPrimary: 'Começar Gratuitamente',
-      ctaSecondary: 'Explorar Demonstração',
-      trustedBy: 'INTEGRAÇÃO & COMPATIBILIDADE COM AS PRINCIPAIS PLATAFORMAS & MESAS',
-      tabs: {
-        dashboard: 'Executive Dashboard',
-        analytics: 'Analytics Avançado',
-        calendar: 'Calendário de Performance',
-        trades: 'Histórico & Execução',
-        setups: 'Setups & Expectativa',
-        journal: 'Diário & Psicologia',
-        import: 'Importação & Plataformas'
-      },
-      showcaseTitles: {
-        dashboard: 'Visão Executiva & Controle de Risco em Tempo Real',
-        dashboardDesc: 'Monitore Saldo Atual, P&L Líquido, Curva de Equidade com Linha de Tendência, Trailing Drawdown e Trava de Limite Diário (Stop Diário) para nunca violar regras de gestão.',
-        analytics: 'Diagnóstico Profundo de Performance & Avaliações',
-        analyticsDesc: 'Descubra sua taxa de acerto por direção (Long vs Short), P&L por Ativo (MNQ, NQ, ES, CL), evolução mensal e metas de consistência exigidas por mesas proprietárias.',
-        calendar: 'Calendário Interativo com Heatmap & Resumos Semanais',
-        calendarDesc: 'Visualize instantaneamente seus dias de ganho e perda no mês, taxa de acerto diária, volume de trades e resumos semanais de W1 a W6 com zoom detalhado de operações.',
-        trades: 'Tabela de Trades Inteligente com Filtros Instantâneos',
-        tradesDesc: 'Histórico completo de ordens com preço de entrada/saída, comissões descontadas, direção (Buy/Sell) e filtros inteligentes por ativo, mês e dias da semana.',
-        setups: 'Laboratório de Validação de Estratégias & Relatórios PDF',
-        setupsDesc: 'Compare a curva de equidade de cada setup contra a conta geral, calcule a expectativa matemática ($/trade) e gere relatórios executivos em PDF com 1 clique.',
-        journal: 'Diário Emocional & Registro de Operações',
-        journalDesc: 'Registre reflexões diárias, estado psicológico, notas de pré/pós-mercado, prints de gráficos e sincronização com eventos econômicos de alto impacto.',
-        import: 'Importação Automática & Modo Simplificado',
-        importDesc: 'Conecte arquivos CSV do Tradovate, NinjaTrader, MetaTrader 4/5 ou insira trades manualmente sem complicações através do formulário simplificado.'
-      },
-      featuresTitle: 'Recursos Criados para a Sua Consistência',
-      featuresSubtitle: 'Cada ferramenta do Quantara foi desenvolvida para solucionar as maiores dores de traders individuais e participantes de mesas proprietárias.',
-      features: [
-        {
-          icon: Shield,
-          title: 'Proteção Anti-Quebra & Regras de Mesa',
-          desc: 'Configure limites de perda diária ($ ou %) e acompanhe o drawdown restante em tempo real para evitar desqualificações acidentais.'
-        },
-        {
-          icon: Target,
-          title: 'Expectativa Matemática de Setups',
-          desc: 'Descubra exatamente quais estratégias colocam dinheiro no seu bolso e quais estão drenando seu capital através da fórmula de Expectancy.'
-        },
-        {
-          icon: Calendar,
-          title: 'Heatmap de Melhores Dias e Horários',
-          desc: 'Identifique seus dias mais lucrativos da semana e as melhores janelas horárias de operação para focar seu tempo onde o retorno é máximo.'
-        },
-        {
-          icon: UploadCloud,
-          title: 'Importação Rápida Multi-Plataforma',
-          desc: 'Suporte a Tradovate, NinjaTrader, MetaTrader, TradingView, planilhas CSV personalizadas e formulário manual ultra simplificado.'
-        },
-        {
-          icon: DollarSign,
-          title: 'Conversão em Tempo Real & Split BRL',
-          desc: 'Cálculo automático de comissões por contrato, taxa de câmbio USD/BRL e visualização do seu profit split líquido real.'
-        },
-        {
-          icon: FileText,
-          title: 'Relatórios Executivos em PDF',
-          desc: 'Exporte relatórios completos em alta resolução para investidores, mentores ou comprovação de histórico com layout impecável.'
-        }
-      ],
-      simTitle: 'Simulador Interativo de Lucro & Expectativa',
-      simSubtitle: 'Ajuste os parâmetros abaixo e veja o impacto da consistência matemática no seu resultado mensal:',
-      simAccount: 'Tamanho da Conta:',
-      simWinRateLabel: 'Taxa de Acerto (Win Rate):',
-      simAvgWinLabel: 'Ganho Médio por Trade ($):',
-      simAvgLossLabel: 'Perda Média por Trade ($):',
-      simTradesLabel: 'Trades por Mês:',
-      simResNet: 'P&L Líquido Estimado:',
-      simResBrl: 'Equivalente em Reais (BRL):',
-      simResExp: 'Expectativa Matemática:',
-      simResPF: 'Profit Factor Projetado:',
-      compareTitle: 'Por que o Quantara supera planilhas comuns?',
-      compareSubtitle: 'Compare a experiência profissional do Quantara contra soluções improvisadas.',
-      faqTitle: 'Perguntas Frequentes',
-      ctaBottomTitle: 'Pronto para Transformar Seus Resultados?',
-      ctaBottomDesc: 'Crie sua conta agora e comece a analisar seus trades com a precisão dos melhores fundos e traders institucionais.',
-      ctaBottomBtn: 'Começar Agora Gratuitamente',
-      loginBtn: 'Entrar na Conta'
-    },
     en: {
-      badge: 'NEW VERSION 2.0 • COMPLETE SUITE FOR PROFESSIONAL TRADERS',
+      badge: 'QUANTARA TRADING LAB • PRECISION ANALYTICS & RISK MANAGEMENT',
       heroTitlePrefix: 'Master Your Trades with ',
       heroTitleHighlight: 'Institutional-Grade',
       heroTitleSuffix: ' Precision Analytics',
-      heroDesc: 'The ultimate workspace for Futures, Forex, Stock and Crypto traders. Validate mathematical setups, monitor real-time drawdowns, protect capital and pass prop firm challenges.',
-      ctaPrimary: 'Start Free Trial',
-      ctaSecondary: 'Explore Live Demo',
-      trustedBy: 'SEAMLESS COMPATIBILITY WITH LEADING BROKERS & PROP FIRMS',
-      tabs: {
-        dashboard: 'Executive Dashboard',
-        analytics: 'Deep Analytics',
-        calendar: 'Performance Calendar',
-        trades: 'Trades & Execution',
-        setups: 'Setups & Expectancy',
-        journal: 'Journal & Psychology',
-        import: 'Import & Brokers'
+      heroDesc: 'The high-performance analytics, trade audit, and risk management laboratory built for serious futures, forex, stock, and prop firm traders. Validate mathematical setups, protect capital, and scale your payouts.',
+      ctaPrimary: ctaPrimary,
+      ctaSecondary: 'Explore All Modules Below',
+      trustedBy: 'SEAMLESS COMPATIBILITY WITH LEADING BROKERS, PLATFORMS & PROP FIRMS',
+      nav: {
+        dashboard: 'Dashboard',
+        analytics: 'Analytics',
+        calendar: 'Calendar',
+        trades: 'Trades',
+        setups: 'Setups',
+        news: 'News',
+        import: 'Brokers',
+        simulator: 'Simulator',
+        faq: 'FAQ'
       },
-      showcaseTitles: {
-        dashboard: 'Executive Overview & Real-Time Risk Control',
-        dashboardDesc: 'Monitor Current Balance, Net P&L, Equity Curve with Linear Trendline, Trailing Drawdown, and Daily Loss Limit stop guard.',
-        analytics: 'Deep Performance Diagnostics & Prop Firm Evaluations',
-        analyticsDesc: 'Break down your win rate by direction (Long vs Short), P&L by Symbol (MNQ, NQ, ES, CL), monthly histograms and consistency scores.',
-        calendar: 'Interactive Calendar with Heatmap & Weekly Summaries',
-        calendarDesc: 'Instantly view daily win/loss distribution, win rates, trade volume, and weekly summaries (W1 to W6) with 1-click day zoom.',
-        trades: 'Smart Execution Table with Instant Filters',
-        tradesDesc: 'Comprehensive execution log with fill prices, commissions subtracted, direction tags (Buy/Sell), and symbol/date filters.',
-        setups: 'Strategy Validation Lab & Printable PDF Reports',
-        setupsDesc: 'Overlay setup equity curves on top of account equity, calculate mathematical expectancy ($/trade), and export clean PDF reports.',
-        journal: 'Psychological Journal & Daily Notes',
-        journalDesc: 'Record pre/post market reflections, mental states, trade chart attachments, and synced high-impact economic news events.',
-        import: 'Automated Broker Import & Simplified Input',
-        importDesc: 'Seamlessly upload CSVs from Tradovate, NinjaTrader, MetaTrader 4/5, or use the fast streamlined manual trade entry form.'
+      stats: {
+        pnlTitle: 'Tracked Balance & P&L',
+        pnlVal: '$50,829.50',
+        ddTitle: 'Live Risk Protection',
+        ddVal: '100% Real-Time',
+        importTitle: 'Multi-Broker Sync',
+        importVal: '1-Click Fast',
+        reportTitle: 'Executive Audits',
+        reportVal: 'PDF Export'
       },
-      featuresTitle: 'Built for Serious Consistency',
-      featuresSubtitle: 'Every tool in Quantara was engineered to solve real pains faced by retail traders and prop firm participants.',
-      features: [
-        {
-          icon: Shield,
-          title: 'Risk Protection & Prop Firm Rules',
-          desc: 'Set custom daily stop limits ($ or %) and track trailing drawdown buffer in real-time to avoid blowing funded challenges.'
+      sections: {
+        dashboard: {
+          badge: 'MODULE 01 • EXECUTIVE OVERVIEW',
+          title: 'Executive Dashboard & Real-Time Risk Control',
+          desc: 'Get an immediate, high-definition panoramic view of your current account balance, cumulative P&L, real-time equity curve with linear trendline, trailing drawdown gauge, and daily loss stop guard.',
+          bullets: [
+            { title: 'Real-Time Equity Curve & Growth Trendline', desc: 'Track your capital progression with multi-timeframe filters and automated linear regression trends.' },
+            { title: 'Weekly Volume & Day-of-Week Distribution', desc: 'Analyze contracts executed and net P&L generated on each individual weekday.' },
+            { title: 'Trailing Drawdown & Daily Stop Loss Guard', desc: 'Never violate prop firm loss limits with real-time drawdown alerts and daily stop loss monitors.' },
+            { title: 'Live Performance Metrics Bar', desc: 'Instant calculations for Win Rate, Payoff Ratio, Average Win/Loss, and Max Drawdown.' }
+          ]
         },
-        {
-          icon: Target,
-          title: 'Mathematical Expectancy Edge',
-          desc: 'Quantify which setups are truly profitable and prune losing strategies using rigorous mathematical expectancy formulas.'
+        analytics: {
+          badge: 'MODULE 02 • DEEP DIAGNOSTICS',
+          title: 'Deep Performance Diagnostics & Asset Attribution',
+          desc: 'Break down your trading performance to the atomic level. Evaluate your edge across multiple instruments, direction bias (Long vs Short), and consistency targets required by leading prop firms.',
+          bullets: [
+            { title: 'Multi-Asset Performance Breakdown', desc: 'Rank profitability across MNQ, NQ, ES, CL, BTC, and Forex pairs with visual bar charts.' },
+            { title: 'Long vs Short Bias Calibration', desc: 'Isolate win rates and net profits on buys versus sells to identify directional strengths and weaknesses.' },
+            { title: 'Prop Firm Consistency Score', desc: 'Monitor your best trading day percentage against total profit to easily pass prop firm evaluation rules.' },
+            { title: 'Cumulative Gross vs Net Profit', desc: 'Audit exact fee deductions and gross-to-net slippage across your entire trade history.' }
+          ]
         },
-        {
-          icon: Calendar,
-          title: 'Optimal Day & Hour Heatmaps',
-          desc: 'Discover your most profitable trading weekdays and specific market hour sessions to optimize screen time.'
+        calendar: {
+          badge: 'MODULE 03 • INTERACTIVE CALENDAR',
+          title: 'Interactive Performance Calendar & Daily Zoom',
+          desc: 'Transform your monthly trading journey into a visual heatmap. View daily win/loss distribution, weekly subtotals from W1 to W6, and click any single day to zoom into every trade executed.',
+          bullets: [
+            { title: 'Color-Coded Heatmap Grid', desc: 'Instantly spot winning and losing streaks with green/red net P&L badges on each day.' },
+            { title: 'Weekly Summaries (W1 to W6)', desc: 'Track cumulative weekly progress with trade counts, total volume, and net P&L.' },
+            { title: '1-Click Daily Trade Zoom', desc: 'Click on any calendar day to inspect execution timestamps, symbols, and price points.' },
+            { title: 'Smart Weekend Trade Detection', desc: 'Standard Monday-to-Friday view with automatic weekend inclusion when Saturday or Sunday trades exist.' }
+          ]
         },
-        {
-          icon: UploadCloud,
-          title: 'Fast Multi-Platform Import',
-          desc: 'Effortlessly import from Tradovate, NinjaTrader, MetaTrader, TradingView, custom CSV files, or fast manual mode.'
+        trades: {
+          badge: 'MODULE 04 • TRADE EXECUTION LOG',
+          title: 'Precision Trades Log & Surgical Order Audit',
+          desc: 'A complete, auditable table of every order executed. Filter by date, symbol, direction, or strategy, with automatic calculation of broker fees, exchange commissions, and tick sizes.',
+          bullets: [
+            { title: 'Surgical Order & Fill Detail', desc: 'Clear visual badges for Buy/Sell, entry/exit prices, contract size, and duration.' },
+            { title: 'Real Exchange & Broker Fees Calculation', desc: 'Automatic commission calculation per contract for CME, B3, E-mini, Micro, and Forex.' },
+            { title: 'Instant Dynamic Multi-Filtering', desc: 'Isolate specific symbols (MNQ, NQ, ES) or filter by profitable and loss-making trades in real-time.' },
+            { title: 'Data Export & Audit Trail', desc: 'Export sanitized CSV or formatted data for external auditing and mentor reviews.' }
+          ]
         },
-        {
-          icon: DollarSign,
-          title: 'Real-time Currency & Payout Splits',
-          desc: 'Automatic commission calculation, live USD/BRL/EUR currency conversions, and net payout split monitoring.'
+        setups: {
+          badge: 'MODULE 05 • STRATEGY LABORATORY',
+          title: 'Setups Lab & Multi-Curve Mathematical Validation',
+          desc: 'Quantify your true mathematical edge. Overlay individual strategy equity curves on top of your overall account balance, calculate expectancy in $/trade, and export high-resolution executive PDF reports.',
+          bullets: [
+            { title: 'Mathematical Expectancy Formula', desc: 'Determine the exact expected dollar value of every setup with Take vs Stop distribution.' },
+            { title: 'Multi-Curve Equity Comparison', desc: 'Plot multiple setup equity curves simultaneously to find your best performing trading models.' },
+            { title: 'Setup Attribution & Win/Loss Count', desc: 'Identify which setups are compounding your wealth and prune toxic patterns draining equity.' },
+            { title: '1-Click Executive PDF Export', desc: 'Generate high-resolution printable PDF performance reports with professional charts and tables.' }
+          ]
         },
-        {
-          icon: FileText,
-          title: 'Executive PDF Reports',
-          desc: 'Generate high-resolution executive summary PDFs to share with investors, mentors, or for personal documentation.'
+        news: {
+          badge: 'MODULE 06 • MACRO SYNCHRONIZATION',
+          title: 'Macro Economic News Calendar & Market Half-Days',
+          desc: 'Stay ahead of high-impact volatility. View high-impact macroeconomic releases (CPI, FOMC, NFP, ISM PMI) and CME/NYSE early close half-days directly cross-referenced with your trade timestamps.',
+          bullets: [
+            { title: 'High-Impact Economic News Feed', desc: 'Real-time synchronization with major US and global economic announcements.' },
+            { title: 'CME & NYSE Holiday & Half-Days', desc: 'Full calendar of market holidays, early bank closes, and special trading hours.' },
+            { title: 'Execution Risk Avoidance', desc: 'Correlate your trade timestamps against high-volatility news spikes to avoid slippage traps.' },
+            { title: 'Psychological Pre-Market Readiness', desc: 'Prepare your daily bias before the market open with key economic catalysts at a glance.' }
+          ]
+        },
+        import: {
+          badge: 'MODULE 07 • INTEGRATION & INPUT',
+          title: 'Automated Broker Import & Simplified Input Engine',
+          desc: 'Seamlessly upload CSV statements from Tradovate, NinjaTrader, MetaTrader 4/5, or use our ultra-fast simplified manual trade entry form to log trades in seconds.',
+          bullets: [
+            { title: '1-Click Tradovate & NinjaTrader CSV Import', desc: 'Automatic column mapping and execution pairing without manual spreadsheet formatting.' },
+            { title: 'MetaTrader 4 & 5 Statement Parser', desc: 'Import full account histories from MT4/MT5 HTML/CSV reports.' },
+            { title: 'Simplified Manual Entry Mode', desc: 'Fast 5-field entry (Symbol, Side, Date, Qty, Net P&L) for rapid daily logging.' },
+            { title: 'Multi-Account & Prop Firm Management', desc: 'Isolate multiple evaluation accounts with separate currency settings and risk parameters.' }
+          ]
         }
-      ],
+      },
       simTitle: 'Interactive Profit & Expectancy Simulator',
       simSubtitle: 'Adjust parameters to project the mathematical power of consistent trading over time:',
       simAccount: 'Account Size:',
@@ -225,82 +234,271 @@ export default function Landing() {
       simResBrl: 'Converted in BRL (R$):',
       simResExp: 'Math Expectancy:',
       simResPF: 'Projected Profit Factor:',
-      compareTitle: 'Why Quantara Outperforms Spreadsheets?',
-      compareSubtitle: 'Compare the specialized power of Quantara against ordinary spreadsheet solutions.',
+      featuresTitle: 'Built for Serious Consistency',
+      featuresSubtitle: 'Every tool in Quantara was engineered to solve real pains faced by retail traders and prop firm participants.',
+      features: [
+        { icon: Shield, title: 'Risk Protection & Prop Firm Rules', desc: 'Set custom daily stop limits ($ or %) and track trailing drawdown buffer in real-time to avoid blowing funded challenges.' },
+        { icon: Target, title: 'Mathematical Expectancy Edge', desc: 'Quantify which setups are truly profitable and prune losing strategies using rigorous mathematical expectancy formulas.' },
+        { icon: Calendar, title: 'Optimal Day & Hour Heatmaps', desc: 'Discover your most profitable trading weekdays and specific market hour sessions to optimize screen time.' },
+        { icon: UploadCloud, title: 'Fast Multi-Platform Import', desc: 'Effortlessly import from Tradovate, NinjaTrader, MetaTrader, TradingView, custom CSV files, or fast manual mode.' },
+        { icon: DollarSign, title: 'Real-time Currency & Payout Splits', desc: 'Automatic commission calculation, live USD/BRL/EUR currency conversions, and net payout split monitoring.' },
+        { icon: FileText, title: 'Executive PDF Reports', desc: 'Generate high-resolution executive summary PDFs to share with investors, mentors, or for personal documentation.' }
+      ],
+      compareTitle: 'Why Quantara Outperforms Spreadsheets & Generic Journals?',
+      compareSubtitle: 'Compare the specialized institutional power of Quantara against ordinary spreadsheet solutions.',
       faqTitle: 'Frequently Asked Questions',
       ctaBottomTitle: 'Ready to Level Up Your Trading Edge?',
-      ctaBottomDesc: 'Create your free account today and start analyzing your performance with institutional clarity.',
-      ctaBottomBtn: 'Get Started for Free',
-      loginBtn: 'Account Login'
+      ctaBottomDesc: 'Create your account today and start analyzing your performance with institutional clarity.',
+      ctaBottomBtn: ctaPrimary,
+      loginBtn: 'Sign In'
+    },
+    pt: {
+      badge: 'QUANTARA TRADING LAB • LABORATÓRIO DE ANALYTICS & GESTÃO DE RISCO',
+      heroTitlePrefix: 'Domine Seus Trades com ',
+      heroTitleHighlight: 'Métricas Institucionais',
+      heroTitleSuffix: ' de Alta Precisão',
+      heroDesc: 'O laboratório de alta performance de analytics, auditoria de ordens e gestão de risco para traders de Futuros, Forex, Ações e Mesas Proprietárias. Valide setups matemáticos, proteja seu capital e escale seus saques.',
+      ctaPrimary: ctaPrimary,
+      ctaSecondary: 'Explorar Todos os Módulos Abaixo',
+      trustedBy: 'INTEGRAÇÃO & COMPATIBILIDADE COM AS PRINCIPAIS PLATAFORMAS & MESAS',
+      nav: {
+        dashboard: 'Dashboard',
+        analytics: 'Analytics',
+        calendar: 'Calendário',
+        trades: 'Trades',
+        setups: 'Setups',
+        news: 'Notícias',
+        import: 'Corretoras',
+        simulator: 'Simulador',
+        faq: 'Dúvidas'
+      },
+      stats: {
+        pnlTitle: 'Saldo & P&L Monitorado',
+        pnlVal: '$50,829.50',
+        ddTitle: 'Proteção de Risco em Tempo Real',
+        ddVal: '100% Real-Time',
+        importTitle: 'Sincronização Multi-Broker',
+        importVal: '1-Clique Rápido',
+        reportTitle: 'Auditorias Executivas',
+        reportVal: 'Relatórios PDF'
+      },
+      sections: {
+        dashboard: {
+          badge: 'MÓDULO 01 • VISÃO EXECUTIVA',
+          title: 'Executive Dashboard & Controle de Risco em Tempo Real',
+          desc: 'Obtenha uma visão panorâmica imediata e em alta definição do saldo atual da sua conta, P&L acumulado, curva de equidade com linha de tendência, medidor de trailing drawdown e trava de stop loss diário.',
+          bullets: [
+            { title: 'Curva de Equidade & Linha de Tendência', desc: 'Acompanhe a progressão do patrimônio com filtros temporais e regressão linear de crescimento.' },
+            { title: 'Volume Semanal & Distribuição por Dia útil', desc: 'Analise o volume de contratos operados e o P&L gerado em cada dia da semana.' },
+            { title: 'Trailing Drawdown & Trava de Stop Diário', desc: 'Nunca viole limites de mesas proprietárias com alertas de drawdown e travas diárias em tempo real.' },
+            { title: 'Barra de Métricas ao Vivo', desc: 'Cálculo instantâneo de Win Rate, Payoff Ratio, Ganho/Perda Médio e Rebaixamento Máximo.' }
+          ]
+        },
+        analytics: {
+          badge: 'MÓDULO 02 • DIAGNÓSTICO PROFUNDO',
+          title: 'Diagnóstico Profundo de Performance & Atribuição de Ativos',
+          desc: 'Desça ao nível atômico dos seus trades. Avalie seu edge estatístico em múltiplos instrumentos, viés direcional (Compras vs Vendas) e metas de consistência exigidas por mesas proprietárias.',
+          bullets: [
+            { title: 'Performance por Ativo Operado', desc: 'Ranking visual comparando lucros e perdas no MNQ, NQ, ES, CL, BTC e Forex.' },
+            { title: 'Calibração Long vs Short (Compra vs Venda)', desc: 'Isole a taxa de acerto e o P&L líquido em compras versus vendas para encontrar seus pontos fortes.' },
+            { title: 'Pontuação de Consistência de Mesas', desc: 'Acompanhe a porcentagem do seu melhor dia sobre o lucro total para cumprir regras de avaliação.' },
+            { title: 'P&L Bruto vs Líquido Acumulado', desc: 'Audite a dedução de taxas, emolumentos e comissões reais ao longo de todo o histórico.' }
+          ]
+        },
+        calendar: {
+          badge: 'MÓDULO 03 • CALENDÁRIO INTERATIVO',
+          title: 'Calendário Interativo de Performance & Zoom Diário',
+          desc: 'Transforme sua jornada mensal em um heatmap visual. Veja a distribuição diária de ganhos e perdas, subtotais semanais de W1 a W6 e clique em qualquer dia para inspecionar todos os trades executados.',
+          bullets: [
+            { title: 'Heatmap Visual Colorido', desc: 'Identifique sequências de ganhos e perdas com badges de P&L líquido em verde e vermelho.' },
+            { title: 'Resumos Semanais (W1 a W6)', desc: 'Acompanhe o progresso acumulado de cada semana com contagem de trades, volume e P&L.' },
+            { title: 'Zoom Diário em 1 Clique', desc: 'Clique em qualquer dia do calendário para ver horários, ativos e preços de execução de cada trade.' },
+            { title: 'Detecção Inteligente de Finais de Semana', desc: 'Visualização padrão de segunda a sexta com inclusão automática de sábados ou domingos caso haja operações.' }
+          ]
+        },
+        trades: {
+          badge: 'MÓDULO 04 • HISTÓRICO DE EXECUÇÃO',
+          title: 'Histórico de Trades Cirúrgico & Auditoria de Ordens',
+          desc: 'Uma tabela completa e auditável de cada ordem enviada ao mercado. Filtre por data, símbolo, direção ou setup, com cálculo automatizado de corretagens, taxas de bolsa e tick size.',
+          bullets: [
+            { title: 'Detalhes de Execução & Fill', desc: 'Badges visuais de Compra/Venda, preços de entrada/saída, quantidade de contratos e duração.' },
+            { title: 'Cálculo Real de Taxas & Comissões', desc: 'Desconto automático de corretagens por contrato para CME, B3, Micro e Mini contratos.' },
+            { title: 'Filtros Dinâmicos Instantâneos', desc: 'Isole símbolos específicos (MNQ, NQ, ES) ou filtre por trades vencedores e perdedores em tempo real.' },
+            { title: 'Exportação & Trilha de Auditoria', desc: 'Exporte relatórios e dados limpos para auditoria externa, mentores ou declaração fiscal.' }
+          ]
+        },
+        setups: {
+          badge: 'MÓDULO 05 • LABORATÓRIO DE ESTRATÉGIAS',
+          title: 'Setups Lab & Validação Matemática Multi-Curva',
+          desc: 'Quantifique sua verdadeira vantagem matemática. Sobreponha curvas de equidade de estratégias individuais sobre o saldo geral da conta, calcule a expectativa em $/trade e exporte relatórios executivos em PDF.',
+          bullets: [
+            { title: 'Fórmula de Expectativa Matemática', desc: 'Descubra o valor esperado em dólares de cada setup com base na proporção de Takes e Stops.' },
+            { title: 'Comparação de Curvas de Equidade', desc: 'Visualize curvas de setups simultaneamente para identificar quais modelos performam melhor.' },
+            { title: 'Atribuição de Ganhos e Perdas', desc: 'Descubra quais estratégias estão alavancando seu capital e elimine padrões tóxicos.' },
+            { title: 'Exportação Executiva em PDF em 1 Clique', desc: 'Gere relatórios impressos profissionais em alta resolução com gráficos e tabelas completas.' }
+          ]
+        },
+        news: {
+          badge: 'MÓDULO 06 • SINCRONIZAÇÃO MACRO',
+          title: 'Calendário Econômico Macro & Horários Especiais CME',
+          desc: 'Esteja sempre à frente da volatilidade. Visualize eventos econômicos de alto impacto (CPI, FOMC, Payroll, ISM) e feriados bancários com fechamento antecipado (Half-Days) sincronizados com seus trades.',
+          bullets: [
+            { title: 'Feed de Notícias de Alto Impacto', desc: 'Sincronização em tempo real com anúncios de taxas de juros, inflação e emprego global.' },
+            { title: 'Feriados & Half-Days CME / NYSE', desc: 'Calendário oficial de feriados bancários e sessões com horário reduzido nos EUA e Brasil.' },
+            { title: 'Prevenção de Risco de Notícia', desc: 'Correlacione horários de trades com picos de volatilidade para evitar spreads e slippages indesejados.' },
+            { title: 'Planejamento de Pré-Mercado', desc: 'Prepare seu viés antes da abertura com os principais catalisadores do dia.' }
+          ]
+        },
+        import: {
+          badge: 'MÓDULO 07 • INTEGRAÇÃO & ENTRADA',
+          title: 'Importação Automática de Corretoras & Modo Simplificado',
+          desc: 'Suba facilmente relatórios CSV do Tradovate, NinjaTrader, MetaTrader 4/5 ou utilize nosso formulário simplificado ultra-rápido para registrar operações manuais em poucos segundos.',
+          bullets: [
+            { title: 'Importação 1-Clique Tradovate & NinjaTrader', desc: 'Mapeamento automático de colunas e união de ordens sem edição manual em planilhas.' },
+            { title: 'Leitor de Extratos MetaTrader 4 & 5', desc: 'Importe históricos completos a partir de relatórios HTML ou CSV do MT4/MT5.' },
+            { title: 'Modo Manual Simplificado', desc: 'Formulário direto de 5 campos (Ativo, Lado, Data, Contratos e P&L Líquido) para agilidade máxima.' },
+            { title: 'Gestão de Múltiplas Contas & Mesas', desc: 'Isole contas de avaliação com parâmetros de risco e moedas independentes.' }
+          ]
+        }
+      },
+      simTitle: 'Simulador Interativo de Lucro & Expectativa',
+      simSubtitle: 'Ajuste os parâmetros abaixo e veja o impacto da consistência matemática no seu resultado mensal:',
+      simAccount: 'Tamanho da Conta:',
+      simWinRateLabel: 'Taxa de Acerto (Win Rate):',
+      simAvgWinLabel: 'Ganho Médio por Trade ($):',
+      simAvgLossLabel: 'Perda Média por Trade ($):',
+      simTradesLabel: 'Trades por Mês:',
+      simResNet: 'P&L Líquido Estimado:',
+      simResBrl: 'Equivalente em Reais (BRL):',
+      simResExp: 'Expectativa Matemática:',
+      simResPF: 'Profit Factor Projetado:',
+      featuresTitle: 'Recursos Criados para a Sua Consistência',
+      featuresSubtitle: 'Cada ferramenta do Quantara foi desenvolvida para solucionar as maiores dores de traders individuais e participantes de mesas proprietárias.',
+      features: [
+        { icon: Shield, title: 'Proteção Anti-Quebra & Regras de Mesa', desc: 'Configure limites de perda diária ($ ou %) e acompanhe o drawdown restante em tempo real para evitar desqualificações acidentais.' },
+        { icon: Target, title: 'Expectativa Matemática de Setups', desc: 'Descubra exatamente quais estratégias colocam dinheiro no seu bolso e quais estão drenando seu capital através da fórmula de Expectancy.' },
+        { icon: Calendar, title: 'Heatmap de Melhores Dias e Horários', desc: 'Identifique seus dias mais lucrativos da semana e as melhores janelas horárias de operação para focar seu tempo onde o retorno é máximo.' },
+        { icon: UploadCloud, title: 'Importação Rápida Multi-Plataforma', desc: 'Suporte a Tradovate, NinjaTrader, MetaTrader, TradingView, planilhas CSV personalizadas e formulário manual ultra simplificado.' },
+        { icon: DollarSign, title: 'Conversão em Tempo Real & Split BRL', desc: 'Cálculo automático de comissões por contrato, taxa de câmbio USD/BRL e visualização do seu profit split líquido real.' },
+        { icon: FileText, title: 'Relatórios Executivos em PDF', desc: 'Exporte relatórios completos em alta resolução para investidores, mentores ou comprovação de histórico com layout impecável.' }
+      ],
+      compareTitle: 'Por que o Quantara supera planilhas comuns?',
+      compareSubtitle: 'Compare a experiência profissional do Quantara contra soluções improvisadas.',
+      faqTitle: 'Perguntas Frequentes',
+      ctaBottomTitle: 'Pronto para Transformar Seus Resultados?',
+      ctaBottomDesc: 'Crie sua conta agora e comece a analisar seus trades com a precisão dos melhores fundos e traders institucionais.',
+      ctaBottomBtn: ctaPrimary,
+      loginBtn: 'Entrar na Conta'
     },
     es: {
-      badge: 'NUEVA VERSIÓN 2.0 • SUITE COMPLETA PARA TRADERS PROFESIONALES',
+      badge: 'QUANTARA TRADING LAB • LABORATORIO DE ANALÍTICA Y GESTIÓN DE RIESGO',
       heroTitlePrefix: 'Domina Tus Operaciones con ',
       heroTitleHighlight: 'Métricas Institucionales',
       heroTitleSuffix: ' de Alta Precisión',
-      heroDesc: 'El workspace definitivo para traders de Futuros, Forex, Acciones y Cripto. Valida setups matemáticos, monitorea drawdowns en tiempo real, protege tu capital y aprueba evaluaciones de fondeo.',
-      ctaPrimary: 'Comenzar Gratis',
-      ctaSecondary: 'Explorar Demostración',
+      heroDesc: 'El laboratorio de alto rendimiento de analítica, auditoría de órdenes y gestión de riesgo para traders de Futuros, Forex, Acciones y Cuentas de Fondeo. Valida setups matemáticos, protege tu capital y escala tus retiros.',
+      ctaPrimary: ctaPrimary,
+      ctaSecondary: 'Explorar Todos los Módulos Abajo',
       trustedBy: 'COMPATIBILIDAD CON LAS PRINCIPALES PLATAFORMAS Y EMPRESAS DE FONDEO',
-      tabs: {
-        dashboard: 'Executive Dashboard',
-        analytics: 'Analytics Avanzado',
-        calendar: 'Calendario de Rendimiento',
-        trades: 'Historial & Ejecución',
-        setups: 'Setups & Esperanza',
-        journal: 'Diario & Psicología',
-        import: 'Importación & Brokers'
+      nav: {
+        dashboard: 'Dashboard',
+        analytics: 'Analytics',
+        calendar: 'Calendario',
+        trades: 'Trades',
+        setups: 'Setups',
+        news: 'Noticias',
+        import: 'Brokers',
+        simulator: 'Simulador',
+        faq: 'Dudas'
       },
-      showcaseTitles: {
-        dashboard: 'Visión Ejecutiva y Control de Riesgo en Tiempo Real',
-        dashboardDesc: 'Monitorea Saldo Actual, P&L Neto, Curva de Equidad con Línea de Tendencia, Trailing Drawdown y Límite de Pérdida Diario.',
-        analytics: 'Diagnóstico Profundo de Rendimiento y Evaluaciones',
-        analyticsDesc: 'Descubre tu tasa de acierto por dirección (Long vs Short), P&L por Símbolo (MNQ, NQ, ES, CL), histogramas mensuales y metas de consistencia.',
-        calendar: 'Calendario Interactivo con Heatmap y Resúmenes Semanales',
-        calendarDesc: 'Visualiza al instante tus días ganadores y perdedores, tasa de acierto, volumen de operaciones y resúmenes semanales de W1 a W6.',
-        trades: 'Tabla de Operaciones Inteligente con Filtros Rápidos',
-        tradesDesc: 'Historial detallado con precios de ejecución, comisiones deducidas, dirección (Buy/Sell) y filtros por activo y fechas.',
-        setups: 'Laboratorio de Validación de Estrategias e Informes PDF',
-        setupsDesc: 'Compara la curva de equidad de cada setup con la cuenta general, calcula la esperanza matemática ($/trade) y genera informes en PDF.',
-        journal: 'Diario Emocional y Registro de Operaciones',
-        journalDesc: 'Registra reflexiones diarias, estado psicológico, notas de mercado, capturas de gráficos y noticias económicas clave.',
-        import: 'Importación Rápida Multi-Plataforma y Modo Simple',
-        importDesc: 'Importa archivos CSV de Tradovate, NinjaTrader, MetaTrader 4/5 o inserta operaciones manualmente de forma simplificada.'
+      stats: {
+        pnlTitle: 'Saldo y P&L Monitoreado',
+        pnlVal: '$50,829.50',
+        ddTitle: 'Protección de Riesgo en Tiempo Real',
+        ddVal: '100% Real-Time',
+        importTitle: 'Sincronización Multi-Broker',
+        importVal: '1-Clic Rápido',
+        reportTitle: 'Auditorías Ejecutivas',
+        reportVal: 'Informes PDF'
       },
-      featuresTitle: 'Herramientas Diseñadas para tu Consistencia',
-      featuresSubtitle: 'Cada módulo fue creado para resolver los desafíos reales de traders individuales y de cuentas de fondeo.',
-      features: [
-        {
-          icon: Shield,
-          title: 'Protección Anti-Pérdida y Reglas de Fondeo',
-          desc: 'Configura límites diarios de pérdida y monitorea el margen de drawdown restante en tiempo real.'
+      sections: {
+        dashboard: {
+          badge: 'MÓDULO 01 • VISIÓN EJECUTIVA',
+          title: 'Executive Dashboard y Control de Riesgo en Tiempo Real',
+          desc: 'Obtén una vista panorámica inmediata de tu saldo de cuenta, P&L neto, curva de equidad con línea de tendencia, medidor de trailing drawdown y límite de pérdida diario.',
+          bullets: [
+            { title: 'Curva de Equidad y Línea de Tendencia', desc: 'Sigue la progresión de tu capital con filtros temporales y regresión lineal.' },
+            { title: 'Volumen Semanal y Distribución Diaria', desc: 'Analiza el volumen de contratos y el P&L generado en cada día hábil.' },
+            { title: 'Trailing Drawdown y Stop Diario', desc: 'Evita violar reglas de empresas de fondeo con alertas de rebasamiento en tiempo real.' },
+            { title: 'Barra de Métricas en Vivo', desc: 'Cálculo instantáneo de Win Rate, Payoff Ratio y Drawdown Máximo.' }
+          ]
         },
-        {
-          icon: Target,
-          title: 'Esperanza Matemática de Setups',
-          desc: 'Identifica qué estrategias son rentables y elimina las perdedoras usando fórmulas estadísticas precisas.'
+        analytics: {
+          badge: 'MÓDULO 02 • DIAGNÓSTICO PROFUNDO',
+          title: 'Diagnóstico Profundo de Rendimiento y Atribución de Activos',
+          desc: 'Evalúa tu ventaja estadística en múltiples instrumentos, sesgo direcional (Compras vs Ventas) y metas de consistencia requeridas por cuentas de fondeo.',
+          bullets: [
+            { title: 'Rendimiento por Activo Operado', desc: 'Ranking visual comparando resultados en MNQ, NQ, ES, CL y Forex.' },
+            { title: 'Calibración Long vs Short (Compra vs Venta)', desc: 'Aísla la tasa de acierto en compras y ventas para detectar fortalezas.' },
+            { title: 'Puntuación de Consistencia', desc: 'Monitorea el porcentaje de tu mejor día sobre el beneficio total.' },
+            { title: 'P&L Bruto vs Neto Acumulado', desc: 'Auditoría exacta de comisiones y tarifas en todo tu historial.' }
+          ]
         },
-        {
-          icon: Calendar,
-          title: 'Heatmap de Mejores Días y Horarios',
-          desc: 'Descubre los días de la semana y franjas horarias con mejor rendimiento para maximizar tu rentabilidad.'
+        calendar: {
+          badge: 'MÓDULO 03 • CALENDARIO INTERACTIVO',
+          title: 'Calendario Interactivo de Rendimiento y Zoom Diario',
+          desc: 'Visualiza un mapa de calor mensual con resultados diarios, subtotales semanales y haz clic en cualquier día para ver cada orden ejecutada.',
+          bullets: [
+            { title: 'Mapa de Calor con Colores Dinámicos', desc: 'Identifica rachas ganadoras y perdedoras con badges de P&L diario.' },
+            { title: 'Resúmenes Semanales (W1 a W6)', desc: 'Sigue el progreso acumulado por semana con volumen y resultados.' },
+            { title: 'Zoom Diario en 1 Clic', desc: 'Haz clic en cualquier día para ver horas y precios de ejecución.' },
+            { title: 'Detección de Fines de Semana', desc: 'Visualización estándar de lunes a viernes con inclusión de fines de semana si hay trades.' }
+          ]
         },
-        {
-          icon: UploadCloud,
-          title: 'Importación Automática Multi-Plataforma',
-          desc: 'Compatible con Tradovate, NinjaTrader, MetaTrader, TradingView, CSVs personalizados o modo manual rápido.'
+        trades: {
+          badge: 'MÓDULO 04 • HISTORIAL DE OPERACIONES',
+          title: 'Historial de Trades Quirúrgico y Auditoría de Órdenes',
+          desc: 'Tabla auditable de cada orden enviada. Filtra por fecha, símbolo o setup con cálculo automático de comisiones y tick sizes.',
+          bullets: [
+            { title: 'Detalles de Ejecución y Fill', desc: 'Badges de Compra/Venta, precios de entrada/salida y contratos.' },
+            { title: 'Cálculo Real de Tarifas', desc: 'Deducción automática de comisiones por contrato para CME y Forex.' },
+            { title: 'Filtros Dinâmicos Instantáneos', desc: 'Aísla símbolos (MNQ, NQ, ES) y analiza trades ganadores y perdedores.' },
+            { title: 'Exportación de Auditoría', desc: 'Exporta datos limpios para mentores o declaraciones.' }
+          ]
         },
-        {
-          icon: DollarSign,
-          title: 'Conversión de Moneda y Split en Vivo',
-          desc: 'Cálculo de comisiones por contrato, tipo de cambio en tiempo real y división de beneficios neta.'
+        setups: {
+          badge: 'MÓDULO 05 • LABORATORIO DE ESTRATEGIAS',
+          title: 'Setups Lab y Validación Matemática Multi-Curva',
+          desc: 'Superpón curvas de equidad por estrategia sobre el balance general, calcula la esperanza en $/trade y exporta informes ejecutivos en PDF.',
+          bullets: [
+            { title: 'Fórmula de Esperanza Matemática', desc: 'Conoce el valor esperado en dólares de cada setup con conteo de Takes y Stops.' },
+            { title: 'Comparación de Curvas de Equidad', desc: 'Visualiza curvas independientes para identificar las mejores estrategias.' },
+            { title: 'Atribución de Resultados', desc: 'Descubre qué setups generan ganancias y elimina patrones destructivos.' },
+            { title: 'Exportación Ejecutiva en PDF', desc: 'Genera informes profesionales en alta resolución listos para imprimir.' }
+          ]
         },
-        {
-          icon: FileText,
-          title: 'Informes Ejecutivos en PDF',
-          desc: 'Genera informes completos en PDF de alta resolución con un solo clic para mentores o inversores.'
+        news: {
+          badge: 'MÓDULO 06 • SINCRONIZAÇÃO MACRO',
+          title: 'Calendario Macroeconómico y Horarios Reducidos CME',
+          desc: 'Visualiza eventos de alto impacto (CPI, FOMC, NFP) y feriados bancarios con cierre anticipado sincronizados con tus operaciones.',
+          bullets: [
+            { title: 'Noticias de Alto Impacto', desc: 'Sincronización en tiempo real con datos de inflación, tasas y empleo.' },
+            { title: 'Feriados y Half-Days CME / NYSE', desc: 'Calendario oficial de días no laborables y cierres tempranos.' },
+            { title: 'Control de Riesgo de Volatilidad', desc: 'Evita deslizamientos innecesarios en picos de noticias.' },
+            { title: 'Planificación de Pre-Mercado', desc: 'Prepara tu sesión diaria con los catalizadores clave del mercado.' }
+          ]
+        },
+        import: {
+          badge: 'MÓDULO 07 • INTEGRACIÓN Y REGISTRO',
+          title: 'Importación Automática de Brokers y Modo Simple',
+          desc: 'Sube extractos CSV de Tradovate, NinjaTrader, MetaTrader 4/5 o usa nuestro formulario simplificado ultra rápido para registrar operaciones.',
+          bullets: [
+            { title: 'Importación en 1 Clic Tradovate / NinjaTrader', desc: 'Mapeo automático de columnas y emparejamiento de órdenes.' },
+            { title: 'Lector de Extractos MetaTrader 4 y 5', desc: 'Importa historiales completos desde informes HTML o CSV.' },
+            { title: 'Modo Manual Simplificado', desc: 'Formulario rápido de 5 campos para registro inmediato.' },
+            { title: 'Gestión Multi-Cuenta de Fondeo', desc: 'Separa cuentas de evaluación con reglas de riesgo independientes.' }
+          ]
         }
-      ],
+      },
       simTitle: 'Simulador Interactivo de Beneficio y Esperanza',
       simSubtitle: 'Ajusta los parámetros para proyectar el poder matemático de la consistencia en el trading:',
       simAccount: 'Tamaño de Cuenta:',
@@ -312,15 +510,27 @@ export default function Landing() {
       simResBrl: 'Equivalente en BRL (R$):',
       simResExp: 'Esperanza Matemática:',
       simResPF: 'Profit Factor Proyectado:',
+      featuresTitle: 'Herramientas Diseñadas para tu Consistencia',
+      featuresSubtitle: 'Cada módulo fue creado para resolver los desafíos reales de traders individuales y de cuentas de fondeo.',
+      features: [
+        { icon: Shield, title: 'Protección Anti-Pérdida y Reglas de Fondeo', desc: 'Configura límites diarios de pérdida y monitorea el margen de drawdown restante en tiempo real.' },
+        { icon: Target, title: 'Esperanza Matemática de Setups', desc: 'Identifica qué estrategias son rentables y elimina las perdedoras usando fórmulas estadísticas precisas.' },
+        { icon: Calendar, title: 'Heatmap de Mejores Días y Horarios', desc: 'Descubre los días de la semana y franjas horarias con mejor rendimiento para maximizar tu rentabilidad.' },
+        { icon: UploadCloud, title: 'Importación Automática Multi-Plataforma', desc: 'Compatible con Tradovate, NinjaTrader, MetaTrader, TradingView, CSVs personalizados o modo manual rápido.' },
+        { icon: DollarSign, title: 'Conversión de Moneda y Split en Vivo', desc: 'Cálculo de comisiones por contrato, tipo de cambio en tiempo real y división de beneficios neta.' },
+        { icon: FileText, title: 'Informes Ejecutivos en PDF', desc: 'Genera informes completos en PDF de alta resolución con un solo clic para mentores o inversores.' }
+      ],
       compareTitle: '¿Por qué Quantara supera a las hojas de cálculo?',
       compareSubtitle: 'Compara la experiencia profesional de Quantara frente a métodos tradicionales.',
       faqTitle: 'Preguntas Frecuentes',
       ctaBottomTitle: '¿Listo para Llevar tu Trading al Siguiente Nivel?',
-      ctaBottomDesc: 'Crea tu cuenta gratis hoy mismo y analiza tus operaciones con precisión institucional.',
-      ctaBottomBtn: 'Comenzar Gratis Ahora',
+      ctaBottomDesc: 'Crea tu cuenta hoy mismo y analiza tus operaciones con precisión institucional.',
+      ctaBottomBtn: ctaPrimary,
       loginBtn: 'Iniciar Sesión'
     }
   }[lang];
+
+  const currentLangObj = LANGUAGES.find(l => l.code === lang) || LANGUAGES[0];
 
   const faqs = [
     {
@@ -336,464 +546,784 @@ export default function Landing() {
       a: lang === 'pt' ? 'Você pode criar e marcar seus trades com estratégias específicas (ex: Breakout, Pullback, Scalp 1m). O Quantara gera uma curva de equidade exclusiva para cada setup e calcula a Expectativa Matemática em dólares por operação.' : lang === 'es' ? 'Puedes etiquetar operaciones por estrategia para generar curvas de equidad independientes y calcular la esperanza matemática de cada setup.' : 'You can tag trades with specific strategies (e.g. Breakout, Pullback, Scalp). Quantara overlays an independent equity curve for each setup and computes mathematical expectancy in $/trade.'
     },
     {
-      q: lang === 'pt' ? 'Meus dados ficam seguros?' : lang === 'es' ? '¿Mis datos están seguros?' : 'Is my trading data secure?',
-      a: lang === 'pt' ? 'Sim. Seus dados são criptografados e você tem total controle sobre suas contas, além de poder exportar backups completos ou relatórios em PDF a qualquer momento.' : lang === 'es' ? 'Sí. Tus datos están cifrados y puedes exportar copias de seguridad o informes PDF en cualquier momento.' : 'Yes. All data is encrypted with enterprise-grade security and you can export full backups or PDF reports at any time.'
+      q: lang === 'pt' ? 'Meus dados ficam seguros?' : lang === 'es' ? '¿Mis dados están seguros?' : 'Is my trading data secure?',
+      a: lang === 'pt' ? 'Sim. Seus dados são criptografados com padrões bancários e você pode escolher entre armazenamento local no seu navegador ou sincronização em nuvem segura.' : lang === 'es' ? 'Sí. Tus dados están cifrados con estándares bancarios y puedes elegir entre almacenamiento local o en la nube.' : 'Yes. All data is encrypted with bank-grade security and you can choose between private local storage or encrypted cloud synchronization.'
     }
   ];
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white font-sans relative overflow-x-hidden selection:bg-amber-500 selection:text-black">
+    <div className="min-h-screen bg-[#070709] text-white font-sans relative overflow-x-hidden selection:bg-amber-500 selection:text-black">
+      
       {/* Dynamic Ambient Background Glows */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-15%] left-[-10%] w-[60vw] h-[60vw] bg-amber-500/10 blur-[150px] rounded-full"></div>
-        <div className="absolute top-[40%] right-[-15%] w-[50vw] h-[50vw] bg-cyan-500/5 blur-[160px] rounded-full"></div>
-        <div className="absolute bottom-[-10%] left-[20%] w-[50vw] h-[50vw] bg-amber-600/10 blur-[140px] rounded-full"></div>
-        
-        {/* Subtle grid background */}
-        <div 
-          className="absolute inset-0 opacity-[0.03]" 
-          style={{ backgroundImage: `radial-gradient(rgba(255,255,255,0.4) 1px, transparent 1px)`, backgroundSize: '32px 32px' }}
-        />
+        <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-amber-500/10 blur-[170px] rounded-full" />
+        <div className="absolute top-[35%] right-[-10%] w-[55vw] h-[55vw] bg-yellow-500/5 blur-[180px] rounded-full" />
+        <div className="absolute bottom-[-10%] left-[20%] w-[50vw] h-[50vw] bg-amber-600/10 blur-[160px] rounded-full" />
       </div>
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#09090b]/80 border-b border-white/5 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="relative flex items-center justify-center">
-              <img src="/logo.png" alt="Quantara Logo" className="w-9 h-9 rounded-xl object-contain drop-shadow-[0_0_12px_rgba(245,158,11,0.5)]" />
+      {/* Fixed Navigation Header with Safe-Area Protection */}
+      <header 
+        className="fixed top-0 left-0 right-0 z-50 backdrop-blur-2xl bg-[#070709]/95 border-b border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.6)] transition-all"
+        style={{
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+        }}
+      >
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 h-16 sm:h-20 flex items-center justify-between gap-4">
+          
+          {/* Left: Logo Quantara Aligned Exactly Like Dashboard */}
+          <div 
+            className="flex items-center gap-2.5 lg:gap-3 cursor-pointer active:opacity-70 transition-opacity shrink-0" 
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
+            <img
+              src="/logo.png"
+              alt="Quantara Logo"
+              className="w-8 h-8 lg:w-9 lg:h-9 object-contain drop-shadow-md z-10 rounded-xl"
+              onError={(e: any) => {
+                e.target.style.display = 'none';
+                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div style={{ display: 'none' }} className="w-8 h-8 lg:w-9 lg:h-9 bg-yellow-500 rounded-xl items-center justify-center text-[#121C30] z-0 drop-shadow-md font-bold text-base">
+              🐾
             </div>
-            <div className="flex flex-col">
-              <span className="text-xl font-black font-display tracking-tight text-white flex items-center gap-1.5">
-                Quantara <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">Lab</span>
-              </span>
-            </div>
+            <h1 className="text-lg lg:text-xl font-extrabold tracking-tight font-display text-white">
+              Quantara
+            </h1>
           </div>
 
-          <nav className="hidden lg:flex items-center gap-8 text-sm font-semibold text-gray-300">
-            <a href="#showcase" className="hover:text-amber-400 transition-colors">Dashboard</a>
-            <a href="#features" className="hover:text-amber-400 transition-colors">Recursos</a>
-            <a href="#simulator" className="hover:text-amber-400 transition-colors">Simulador</a>
-            <a href="#comparison" className="hover:text-amber-400 transition-colors">Comparativo</a>
-            <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
+          {/* Center: Jump Nav Links (Desktop) */}
+          <nav className="hidden lg:flex items-center justify-center gap-1 xl:gap-2 flex-1 mx-4">
+            <a href="#dashboard-section" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.dashboard}</a>
+            <a href="#analytics-section" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.analytics}</a>
+            <a href="#calendar-section" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.calendar}</a>
+            <a href="#trades-section" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.trades}</a>
+            <a href="#setups-section" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.setups}</a>
+            <a href="#news-section" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.news}</a>
+            <a href="#import-section" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.import}</a>
+            <a href="#simulator" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.simulator}</a>
+            <a href="#faq" className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-300 hover:text-amber-400 hover:bg-white/5 transition-all">{t.nav.faq}</a>
           </nav>
 
-          <div className="flex items-center gap-3 sm:gap-4">
-            {/* Language Selector */}
-            <div className="flex items-center bg-white/5 border border-white/10 rounded-lg p-1 text-xs font-bold">
-              <button 
-                onClick={() => setLang('pt')} 
-                className={`px-2 py-1 rounded transition-colors ${lang === 'pt' ? 'bg-amber-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
+          {/* Right: Flag Language Selector + Auth Buttons (Aligned Far Right) */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            
+            {/* Language Selector Dropdown with Flags */}
+            <div className="relative" ref={langDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-bold text-gray-200 transition-all cursor-pointer shadow-sm active:scale-95"
+                title="Select Language"
               >
-                PT
+                <span className="text-base leading-none">{currentLangObj.flag}</span>
+                <span className="uppercase text-[11px] font-extrabold text-gray-300">{currentLangObj.code}</span>
+                <ChevronDown size={12} className={`text-gray-400 transition-transform ${langDropdownOpen ? 'rotate-180 text-amber-400' : ''}`} />
               </button>
-              <button 
-                onClick={() => setLang('en')} 
-                className={`px-2 py-1 rounded transition-colors ${lang === 'en' ? 'bg-amber-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
-              >
-                EN
-              </button>
-              <button 
-                onClick={() => setLang('es')} 
-                className={`px-2 py-1 rounded transition-colors ${lang === 'es' ? 'bg-amber-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
-              >
-                ES
-              </button>
+
+              {langDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-36 bg-[#0e0e14]/98 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-2xl py-1.5 z-50 animate-fadeIn">
+                  {LANGUAGES.map((l) => (
+                    <button
+                      key={l.code}
+                      type="button"
+                      onClick={() => {
+                        setLang(l.code);
+                        setLangDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${
+                        lang === l.code ? 'bg-amber-500/15 text-amber-400' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base leading-none">{l.flag}</span>
+                        <span>{l.label}</span>
+                      </div>
+                      {lang === l.code && <Check size={12} className="text-amber-400" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <button 
-              onClick={() => navigate('/auth')} 
-              className="text-sm font-bold text-gray-300 hover:text-white px-3 py-2 rounded-xl transition-colors hidden sm:block"
+            {/* Sign In Button */}
+            <button
+              onClick={() => navigate('/auth')}
+              className="text-xs font-bold text-gray-300 hover:text-white px-3 py-2 transition-colors hidden sm:block cursor-pointer"
             >
               {t.loginBtn}
             </button>
-            <button 
-              onClick={() => navigate('/auth')} 
-              className="bg-gradient-to-r from-amber-500 to-yellow-400 text-black px-5 py-2.5 rounded-xl text-sm font-extrabold shadow-[0_0_25px_rgba(245,158,11,0.4)] hover:shadow-[0_0_35px_rgba(245,158,11,0.6)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5"
+
+            {/* Dynamic CTA Button (Connected to Admin Promotion) */}
+            <button
+              onClick={() => navigate('/auth')}
+              className="bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-xs font-extrabold px-3.5 sm:px-5 py-2.5 rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.35)] hover:shadow-[0_0_35px_rgba(245,158,11,0.5)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              {t.ctaPrimary} <ArrowRight size={16} />
+              <span>{t.ctaPrimary}</span>
+              <ArrowRight size={14} />
+            </button>
+
+            {/* Mobile Hamburger Menu Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-amber-400 hover:bg-white/10 transition-colors lg:hidden cursor-pointer"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
+
         </div>
+
+        {/* Mobile Dropdown Drawer */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden bg-[#0a0a0e]/98 border-b border-white/10 px-6 py-6 space-y-4 backdrop-blur-2xl shadow-2xl animate-fadeIn">
+            
+            {/* Language Selector in Mobile Drawer */}
+            <div className="flex items-center justify-between pb-3 border-b border-white/5">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Language:</span>
+              <div className="flex items-center gap-1.5">
+                {LANGUAGES.map((l) => (
+                  <button
+                    key={l.code}
+                    onClick={() => { setLang(l.code); }}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                      lang === l.code ? 'bg-amber-500 text-black' : 'bg-white/5 text-gray-300'
+                    }`}
+                  >
+                    <span>{l.flag}</span>
+                    <span className="uppercase text-[10px]">{l.code}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+              <a 
+                href="#dashboard-section" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-200 hover:text-amber-400 hover:border-amber-500/30 transition-all flex items-center gap-2"
+              >
+                <Activity size={14} className="text-amber-400" />
+                <span>{t.nav.dashboard}</span>
+              </a>
+              <a 
+                href="#analytics-section" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-200 hover:text-cyan-400 hover:border-cyan-500/30 transition-all flex items-center gap-2"
+              >
+                <BarChart2 size={14} className="text-cyan-400" />
+                <span>{t.nav.analytics}</span>
+              </a>
+              <a 
+                href="#calendar-section" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-200 hover:text-emerald-400 hover:border-emerald-500/30 transition-all flex items-center gap-2"
+              >
+                <Calendar size={14} className="text-emerald-400" />
+                <span>{t.nav.calendar}</span>
+              </a>
+              <a 
+                href="#trades-section" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-200 hover:text-amber-400 hover:border-amber-500/30 transition-all flex items-center gap-2"
+              >
+                <TrendingUp size={14} className="text-amber-400" />
+                <span>{t.nav.trades}</span>
+              </a>
+              <a 
+                href="#setups-section" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-200 hover:text-yellow-400 hover:border-yellow-500/30 transition-all flex items-center gap-2"
+              >
+                <Layers size={14} className="text-yellow-400" />
+                <span>{t.nav.setups}</span>
+              </a>
+              <a 
+                href="#news-section" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-200 hover:text-amber-400 hover:border-amber-500/30 transition-all flex items-center gap-2"
+              >
+                <Globe size={14} className="text-amber-400" />
+                <span>{t.nav.news}</span>
+              </a>
+              <a 
+                href="#import-section" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-200 hover:text-emerald-400 hover:border-emerald-500/30 transition-all flex items-center gap-2"
+              >
+                <UploadCloud size={14} className="text-emerald-400" />
+                <span>{t.nav.import}</span>
+              </a>
+              <a 
+                href="#simulator" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-200 hover:text-amber-400 hover:border-amber-500/30 transition-all flex items-center gap-2"
+              >
+                <Zap size={14} className="text-amber-400" />
+                <span>{t.nav.simulator}</span>
+              </a>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                onClick={() => { setMobileMenuOpen(false); navigate('/auth'); }}
+                className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-xs hover:bg-white/10 transition-colors"
+              >
+                {t.loginBtn}
+              </button>
+              <button
+                onClick={() => { setMobileMenuOpen(false); navigate('/auth'); }}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black text-xs shadow-lg shadow-amber-500/20"
+              >
+                {t.ctaPrimary}
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* Hero Section */}
-      <section className="relative z-10 pt-16 md:pt-24 pb-16 px-4 max-w-7xl mx-auto flex flex-col items-center text-center">
-        {/* Top Pulsing Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold tracking-wider uppercase mb-8 shadow-[0_0_20px_rgba(245,158,11,0.15)] animate-pulse">
+      {/* HERO SECTION WITH SAFE AREA OFFSET */}
+      <section 
+        className="relative z-10 pb-16 px-4 max-w-7xl mx-auto flex flex-col items-center text-center"
+        style={{
+          paddingTop: 'calc(80px + env(safe-area-inset-top, 0px) + 2.5rem)'
+        }}
+      >
+        
+        {/* Top Eyebrow Badge */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold tracking-wider uppercase mb-6 shadow-[0_0_30px_rgba(245,158,11,0.15)] animate-pulse">
           <Sparkles size={14} className="text-amber-400" />
-          {t.badge}
+          <span>{t.badge}</span>
         </div>
 
-        {/* Grand Headline */}
-        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight font-display max-w-5xl leading-[1.1] mb-6">
+        {/* Main Hero Headline */}
+        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black font-display tracking-tight text-white max-w-5xl leading-[1.1] mb-6">
           {t.heroTitlePrefix}
-          <span className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent drop-shadow-[0_0_35px_rgba(245,158,11,0.3)]">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500">
             {t.heroTitleHighlight}
           </span>
           {t.heroTitleSuffix}
         </h1>
 
         {/* Subtitle */}
-        <p className="text-base sm:text-lg md:text-xl text-gray-300 max-w-3xl mb-10 leading-relaxed font-normal">
+        <p className="text-gray-300 text-base sm:text-xl max-w-3xl leading-relaxed mb-10">
           {t.heroDesc}
         </p>
 
-        {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto justify-center mb-16">
+        {/* Hero CTAs */}
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center max-w-md mb-12">
           <button 
             onClick={() => navigate('/auth')} 
-            className="w-full sm:w-auto bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black px-8 py-4 rounded-2xl font-black text-base shadow-[0_0_35px_rgba(245,158,11,0.5)] hover:shadow-[0_0_50px_rgba(245,158,11,0.7)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+            className="w-full sm:w-auto bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-black px-8 py-4 rounded-2xl font-black text-base shadow-[0_0_35px_rgba(245,158,11,0.45)] hover:shadow-[0_0_50px_rgba(245,158,11,0.6)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            <Zap size={20} className="fill-black" />
-            {t.ctaPrimary}
+            <span>{t.ctaPrimary}</span>
             <ArrowRight size={18} />
           </button>
           
           <a 
-            href="#showcase" 
-            className="w-full sm:w-auto bg-white/5 hover:bg-white/10 border border-white/10 text-white px-8 py-4 rounded-2xl font-bold text-base transition-all flex items-center justify-center gap-2 backdrop-blur-md"
+            href="#dashboard-section" 
+            className="w-full sm:w-auto bg-white/5 hover:bg-white/10 border border-white/10 text-white px-8 py-4 rounded-2xl font-bold text-base transition-all flex items-center justify-center gap-2 backdrop-blur-md cursor-pointer"
           >
-            <Play size={18} className="text-amber-400 fill-amber-400" />
-            {t.ctaSecondary}
+            <span>{t.ctaSecondary}</span>
+            <ChevronRight size={18} className="text-amber-400" />
           </a>
         </div>
 
-        {/* Quick Highlights Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl pt-8 border-t border-white/5">
-          <div className="flex flex-col items-center p-3 rounded-xl bg-white/[0.02] border border-white/5">
-            <span className="text-2xl font-black text-amber-400">$50,829.50</span>
-            <span className="text-xs text-gray-400 font-medium">Controle de Saldo & P&L</span>
+        {/* Quick Highlights KPI Bar */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl pt-8 border-t border-white/5 mb-16">
+          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+            <span className="text-2xl font-black text-amber-400">{t.stats.pnlVal}</span>
+            <span className="text-xs text-gray-400 font-medium mt-1">{t.stats.pnlTitle}</span>
           </div>
-          <div className="flex flex-col items-center p-3 rounded-xl bg-white/[0.02] border border-white/5">
-            <span className="text-2xl font-black text-emerald-400">100% Real-Time</span>
-            <span className="text-xs text-gray-400 font-medium">Proteção de Drawdown</span>
+          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+            <span className="text-2xl font-black text-emerald-400">{t.stats.ddVal}</span>
+            <span className="text-xs text-gray-400 font-medium mt-1">{t.stats.ddTitle}</span>
           </div>
-          <div className="flex flex-col items-center p-3 rounded-xl bg-white/[0.02] border border-white/5">
-            <span className="text-2xl font-black text-amber-400">1-Click</span>
-            <span className="text-xs text-gray-400 font-medium">Importação Tradovate / NT8</span>
+          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+            <span className="text-2xl font-black text-yellow-400">{t.stats.importVal}</span>
+            <span className="text-xs text-gray-400 font-medium mt-1">{t.stats.importTitle}</span>
           </div>
-          <div className="flex flex-col items-center p-3 rounded-xl bg-white/[0.02] border border-white/5">
-            <span className="text-2xl font-black text-cyan-400">PDF Report</span>
-            <span className="text-xs text-gray-400 font-medium">Relatórios Executivos</span>
+          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+            <span className="text-2xl font-black text-cyan-400">{t.stats.reportVal}</span>
+            <span className="text-xs text-gray-400 font-medium mt-1">{t.stats.reportTitle}</span>
           </div>
         </div>
+
+        {/* Hero Featured Image Showcase */}
+        <div className="w-full max-w-6xl rounded-3xl p-3 sm:p-4 bg-gradient-to-b from-[#18181e] via-[#101014] to-[#0a0a0c] border border-amber-500/30 shadow-[0_0_100px_rgba(245,158,11,0.15)] relative group">
+          <div className="absolute top-0 left-1/4 right-1/4 h-[2px] bg-gradient-to-r from-transparent via-amber-400 to-transparent"></div>
+          <img
+            src="/screenshots/dashboard-preview.png"
+            alt="Quantara Institutional Trading Dashboard"
+            className="w-full h-auto object-cover rounded-2xl border border-white/10 shadow-2xl transition-transform duration-700 group-hover:scale-[1.008]"
+          />
+        </div>
+
       </section>
 
-      {/* Trust & Broker Compatibility Section */}
-      <section className="relative z-10 py-8 border-y border-white/5 bg-white/[0.01]">
+      {/* TRUSTED PLATFORMS & BROKERS BAR */}
+      <section className="relative z-10 py-10 border-y border-white/5 bg-white/[0.01]">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-6">
             {t.trustedBy}
           </p>
-          <div className="flex flex-wrap justify-center items-center gap-6 sm:gap-12 opacity-70">
+          <div className="flex flex-wrap justify-center items-center gap-6 sm:gap-12 opacity-80">
             <span className="text-sm font-bold text-gray-300 tracking-wider flex items-center gap-1.5"><Award size={16} className="text-amber-400" /> TRADOVATE</span>
             <span className="text-sm font-bold text-gray-300 tracking-wider flex items-center gap-1.5"><Award size={16} className="text-amber-400" /> NINJATRADER 8</span>
             <span className="text-sm font-bold text-gray-300 tracking-wider flex items-center gap-1.5"><Award size={16} className="text-amber-400" /> METATRADER 4/5</span>
             <span className="text-sm font-bold text-gray-300 tracking-wider flex items-center gap-1.5"><Award size={16} className="text-amber-400" /> TRADINGVIEW</span>
-            <span className="text-sm font-bold text-gray-300 tracking-wider flex items-center gap-1.5"><Award size={16} className="text-amber-400" /> TOPSTEP & APEX</span>
+            <span className="text-sm font-bold text-gray-300 tracking-wider flex items-center gap-1.5"><Award size={16} className="text-amber-400" /> APEX TRADER FUNDING</span>
+            <span className="text-sm font-bold text-gray-300 tracking-wider flex items-center gap-1.5"><Award size={16} className="text-amber-400" /> TOPSTEP</span>
+            <span className="text-sm font-bold text-gray-300 tracking-wider flex items-center gap-1.5"><Award size={16} className="text-amber-400" /> B3 FUTURES</span>
           </div>
         </div>
       </section>
 
-      {/* Interactive App Showcase Section (MAIN PRODUCT SHOWCASE) */}
-      <section id="showcase" className="relative z-10 py-20 px-4 max-w-7xl mx-auto">
-        <div className="text-center max-w-3xl mx-auto mb-12">
-          <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-4">
-            A Experiência Completa do <span className="text-amber-400">Quantara</span>
-          </h2>
-          <p className="text-gray-300 text-base sm:text-lg">
-            Navegue pelas abas abaixo e explore cada módulo do software em detalhes com base em dados de operações reais.
-          </p>
-        </div>
+      {/* EXTENSIVE VERTICAL PRODUCT SHOWCASE (ALL MODULES STACKED) */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 py-16 space-y-28">
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center justify-start sm:justify-center gap-2 overflow-x-auto pb-4 mb-8 no-scrollbar">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-5 py-3 rounded-xl font-bold text-sm whitespace-nowrap transition-all flex items-center gap-2 border ${
-              activeTab === 'dashboard'
-                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            <Activity size={18} />
-            {t.tabs.dashboard}
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`px-5 py-3 rounded-xl font-bold text-sm whitespace-nowrap transition-all flex items-center gap-2 border ${
-              activeTab === 'analytics'
-                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            <BarChart2 size={18} />
-            {t.tabs.analytics}
-          </button>
+        {/* ---------------------------------------------------- */}
+        {/* MODULE 1: EXECUTIVE DASHBOARD */}
+        {/* ---------------------------------------------------- */}
+        <section id="dashboard-section" className="scroll-mt-32">
+          <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-b from-[#141419] to-[#09090c] border border-amber-500/25 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent"></div>
 
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`px-5 py-3 rounded-xl font-bold text-sm whitespace-nowrap transition-all flex items-center gap-2 border ${
-              activeTab === 'calendar'
-                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            <Calendar size={18} />
-            {t.tabs.calendar}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('trades')}
-            className={`px-5 py-3 rounded-xl font-bold text-sm whitespace-nowrap transition-all flex items-center gap-2 border ${
-              activeTab === 'trades'
-                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            <TrendingUp size={18} />
-            {t.tabs.trades}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('setups')}
-            className={`px-5 py-3 rounded-xl font-bold text-sm whitespace-nowrap transition-all flex items-center gap-2 border ${
-              activeTab === 'setups'
-                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            <Layers size={18} />
-            {t.tabs.setups}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('journal')}
-            className={`px-5 py-3 rounded-xl font-bold text-sm whitespace-nowrap transition-all flex items-center gap-2 border ${
-              activeTab === 'journal'
-                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            <BookOpen size={18} />
-            {t.tabs.journal}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('import')}
-            className={`px-5 py-3 rounded-xl font-bold text-sm whitespace-nowrap transition-all flex items-center gap-2 border ${
-              activeTab === 'import'
-                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            <UploadCloud size={18} />
-            {t.tabs.import}
-          </button>
-        </div>
-
-        {/* Tab Showcase Card & Preview Window */}
-        <div className="rounded-3xl p-6 sm:p-8 bg-gradient-to-b from-[#16161a] to-[#0d0e12] border border-amber-500/20 shadow-[0_20px_80px_rgba(0,0,0,0.8)] relative overflow-hidden">
-          {/* Subtle top glow bar */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent"></div>
-
-          {/* Tab Header Info */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/5">
-            <div>
-              <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2 mb-2">
-                <Sparkles size={20} className="text-amber-400" />
-                {t.showcaseTitles[activeTab]}
-              </h3>
-              <p className="text-gray-300 text-sm max-w-2xl leading-relaxed">
-                {t.showcaseTitles[`${activeTab}Desc` as keyof typeof t.showcaseTitles]}
+            {/* Section Header */}
+            <div className="max-w-3xl mb-8">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold tracking-wider uppercase mb-3">
+                <Activity size={14} />
+                <span>{t.sections.dashboard.badge}</span>
+              </div>
+              <h2 className="text-2xl sm:text-4xl font-black font-display text-white mb-3">
+                {t.sections.dashboard.title}
+              </h2>
+              <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                {t.sections.dashboard.desc}
               </p>
             </div>
-            
-            <button 
-              onClick={() => navigate('/auth')} 
-              className="self-start md:self-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all"
-            >
-              Testar Este Módulo <ArrowRight size={14} />
-            </button>
+
+            {/* Image Preview */}
+            <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/60 shadow-2xl mb-8 group">
+              <img
+                src="/screenshots/dashboard-preview.png"
+                alt="Quantara Executive Dashboard"
+                className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-[1.005]"
+              />
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {t.sections.dashboard.bullets.map((b, i) => (
+                <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-amber-500/30 transition-all">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 mb-3 font-bold text-xs">
+                    0{i + 1}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1.5">{b.title}</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">{b.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Action CTA */}
+            <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+              <span className="text-xs text-gray-400 font-medium">Equidade em tempo real • Trava de stop diário • Métricas B3 &amp; CME</span>
+              <button 
+                onClick={() => navigate('/auth')}
+                className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <span>Experimentar o Dashboard</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
           </div>
+        </section>
 
-          {/* Visual Display Container */}
-          <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-inner relative group">
-            {activeTab === 'dashboard' && (
-              <div className="flex flex-col gap-4">
-                <img 
-                  src="/screenshots/dashboard-preview.png" 
-                  alt="Quantara Executive Dashboard Preview" 
-                  className="w-full h-auto object-cover rounded-xl shadow-2xl transition-transform duration-500 group-hover:scale-[1.005]" 
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex items-start gap-3">
-                    <CheckCircle2 size={20} className="text-amber-400 shrink-0 mt-0.5" />
-                    <p className="text-xs text-gray-300 leading-relaxed">
-                      <strong className="text-white">Curva de Equidade & Linha de Tendência:</strong> Acompanhe a evolução do seu patrimônio com filtros de período e média linear de crescimento.
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex items-start gap-3">
-                    <CheckCircle2 size={20} className="text-emerald-400 shrink-0 mt-0.5" />
-                    <p className="text-xs text-gray-300 leading-relaxed">
-                      <strong className="text-white">Distribuição Semanal (VOL & P&L):</strong> Descubra o volume de contratos e o P&L líquido gerado em cada dia útil da semana.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+        {/* ---------------------------------------------------- */}
+        {/* MODULE 2: DEEP ANALYTICS */}
+        {/* ---------------------------------------------------- */}
+        <section id="analytics-section" className="scroll-mt-32">
+          <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-b from-[#141419] to-[#09090c] border border-cyan-500/20 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
 
-            {activeTab === 'analytics' && (
-              <div className="flex flex-col gap-4">
-                <img 
-                  src="/screenshots/analytics-preview.png" 
-                  alt="Quantara Analytics Dashboard Preview" 
-                  className="w-full h-auto object-cover rounded-xl shadow-2xl transition-transform duration-500 group-hover:scale-[1.005]" 
-                />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                    <span className="text-xs text-amber-400 font-bold block mb-1">Métricas de Avaliação</span>
-                    <p className="text-xs text-gray-300">Initial Balance, Drawdowns, Profit Factor e Expectancy calculados automaticamente.</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                    <span className="text-xs text-cyan-400 font-bold block mb-1">Performance por Ativo</span>
-                    <p className="text-xs text-gray-300">Ranking visual comparando lucros e perdas no MNQ, NQ, ES, CL e outros símbolos.</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                    <span className="text-xs text-emerald-400 font-bold block mb-1">Long vs Short Ratio</span>
-                    <p className="text-xs text-gray-300">Taxa de acerto e P&L isolados por compras e vendas para calibrar seu viés de mercado.</p>
-                  </div>
-                </div>
+            {/* Section Header */}
+            <div className="max-w-3xl mb-8">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold tracking-wider uppercase mb-3">
+                <BarChart2 size={14} />
+                <span>{t.sections.analytics.badge}</span>
               </div>
-            )}
+              <h2 className="text-2xl sm:text-4xl font-black font-display text-white mb-3">
+                {t.sections.analytics.title}
+              </h2>
+              <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                {t.sections.analytics.desc}
+              </p>
+            </div>
 
-            {activeTab === 'calendar' && (
-              <div className="flex flex-col gap-4">
-                <img 
-                  src="/screenshots/calendar-preview.png" 
-                  alt="Quantara Performance Calendar Preview" 
-                  className="w-full h-auto object-cover rounded-xl shadow-2xl transition-transform duration-500 group-hover:scale-[1.005]" 
-                />
-                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Calendar size={20} className="text-amber-400" />
-                    <span className="text-xs text-gray-300">Resumo de Semanas W1 a W6 com saldo acumulado e zoom de trades ao clicar em qualquer dia.</span>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">Mês Atual: +$535.00</span>
-                </div>
-              </div>
-            )}
+            {/* Image Preview */}
+            <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/60 shadow-2xl mb-8 group">
+              <img
+                src="/screenshots/analytics-preview.png"
+                alt="Quantara Deep Analytics"
+                className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-[1.005]"
+              />
+            </div>
 
-            {activeTab === 'trades' && (
-              <div className="flex flex-col md:flex-row items-center gap-6 p-4">
-                <div className="w-full md:w-1/2">
-                  <img 
-                    src="/screenshots/trades-list-preview.png" 
-                    alt="Quantara Trades Execution List Preview" 
-                    className="w-full h-auto object-cover rounded-xl shadow-2xl border border-white/10" 
-                  />
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {t.sections.analytics.bullets.map((b, i) => (
+                <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-cyan-500/30 transition-all">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-3 font-bold text-xs">
+                    0{i + 1}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1.5">{b.title}</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">{b.desc}</p>
                 </div>
-                <div className="w-full md:w-1/2 flex flex-col gap-4">
-                  <h4 className="text-lg font-bold text-white">Transparência Total em Cada Ordem Executada</h4>
-                  <ul className="space-y-3">
-                    <li className="flex items-start gap-2 text-xs text-gray-300">
-                      <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                      <span><strong>Indicação Buy / Sell:</strong> Visualização instantânea da direção de cada trade (compra ou venda).</span>
-                    </li>
-                    <li className="flex items-start gap-2 text-xs text-gray-300">
-                      <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                      <span><strong>Cálculo Real de Taxas:</strong> Desconto de comissões e taxas de corretora por contrato operado.</span>
-                    </li>
-                    <li className="flex items-start gap-2 text-xs text-gray-300">
-                      <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                      <span><strong>Filtros por Dias Úteis & Símbolos:</strong> Isole dias específicos ou analise apenas o histórico de determinado ativo.</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
 
-            {activeTab === 'setups' && (
-              <div className="p-8 flex flex-col items-center text-center max-w-2xl mx-auto">
-                <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400">
-                  <Layers size={32} />
-                </div>
-                <h4 className="text-2xl font-black text-white mb-2">Laboratório de Setups & Validação Estatística</h4>
-                <p className="text-gray-300 text-sm mb-6 leading-relaxed">
-                  Crie estratégias customizadas (ex: Abertura NY, Pullback VWAP, Reversão 5m) e compare a curva de patrimônio do setup contra o saldo geral da conta.
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full mb-6">
-                  <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                    <span className="text-xs text-gray-400 block">Expectancy Formula</span>
-                    <strong className="text-amber-400 text-sm">$2.64 / trade</strong>
-                  </div>
-                  <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                    <span className="text-xs text-gray-400 block">Takes vs Stops</span>
-                    <strong className="text-emerald-400 text-sm">289 Takes / 335 Stops</strong>
-                  </div>
-                  <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                    <span className="text-xs text-gray-400 block">Relatório PDF</span>
-                    <strong className="text-cyan-400 text-sm">Exportação 1-Click</strong>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => navigate('/auth')} 
-                  className="bg-amber-500 text-black px-6 py-3 rounded-xl font-bold text-sm hover:bg-yellow-400 transition-all flex items-center gap-2"
-                >
-                  Criar Meu Primeiro Setup <ArrowRight size={16} />
-                </button>
-              </div>
-            )}
+            {/* Action CTA */}
+            <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+              <span className="text-xs text-gray-400 font-medium">Rankings de ativos • Regras de consistência de mesa • Viés de compra/venda</span>
+              <button 
+                onClick={() => navigate('/auth')}
+                className="bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <span>Explorar Módulo Analytics</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
 
-            {activeTab === 'journal' && (
-              <div className="p-8 flex flex-col items-center text-center max-w-2xl mx-auto">
-                <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mb-4 text-cyan-400">
-                  <BookOpen size={32} />
-                </div>
-                <h4 className="text-2xl font-black text-white mb-2">Diário de Bordo & Gestão Psicológica</h4>
-                <p className="text-gray-300 text-sm mb-6 leading-relaxed">
-                  O sucesso no trading depende 80% do controle emocional. Registre notas diárias, auto-avaliação disciplinar e anexe capturas de tela do TradingView ou NinjaTrader.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mb-6 text-left">
-                  <div className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center gap-3">
-                    <CheckCircle2 size={18} className="text-amber-400 shrink-0" />
-                    <span className="text-xs text-gray-300">Calendário de Notícias Econômicas integrado (USD / High Impact).</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center gap-3">
-                    <CheckCircle2 size={18} className="text-amber-400 shrink-0" />
-                    <span className="text-xs text-gray-300">Mapeamento de Feriados e Half-Days do mercado CME / NYSE.</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'import' && (
-              <div className="p-8 flex flex-col items-center text-center max-w-2xl mx-auto">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4 text-emerald-400">
-                  <UploadCloud size={32} />
-                </div>
-                <h4 className="text-2xl font-black text-white mb-2">Importação Instantânea & Mapeamento Inteligente</h4>
-                <p className="text-gray-300 text-sm mb-6 leading-relaxed">
-                  Suba seus arquivos CSV do Tradovate ou NinjaTrader com detecção automática de colunas, ou use nosso formulário manual simplificado para lançar operações em segundos.
-                </p>
-                <div className="flex flex-wrap justify-center gap-3">
-                  <span className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-gray-300">CSV Tradovate</span>
-                  <span className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-gray-300">CSV NinjaTrader 8</span>
-                  <span className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-gray-300">MetaTrader 4 & 5</span>
-                  <span className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-gray-300">Modo Manual Simplificado</span>
-                </div>
-              </div>
-            )}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Interactive Simulator Section */}
-      <section id="simulator" className="relative z-10 py-20 px-4 max-w-7xl mx-auto border-t border-white/5">
+        {/* ---------------------------------------------------- */}
+        {/* MODULE 3: PERFORMANCE CALENDAR */}
+        {/* ---------------------------------------------------- */}
+        <section id="calendar-section" className="scroll-mt-32">
+          <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-b from-[#141419] to-[#09090c] border border-emerald-500/20 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"></div>
+
+            {/* Section Header */}
+            <div className="max-w-3xl mb-8">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold tracking-wider uppercase mb-3">
+                <Calendar size={14} />
+                <span>{t.sections.calendar.badge}</span>
+              </div>
+              <h2 className="text-2xl sm:text-4xl font-black font-display text-white mb-3">
+                {t.sections.calendar.title}
+              </h2>
+              <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                {t.sections.calendar.desc}
+              </p>
+            </div>
+
+            {/* Image Preview */}
+            <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/60 shadow-2xl mb-8 group">
+              <img
+                src="/screenshots/calendar-preview.png"
+                alt="Quantara Performance Calendar"
+                className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-[1.005]"
+              />
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {t.sections.calendar.bullets.map((b, i) => (
+                <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-emerald-500/30 transition-all">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 mb-3 font-bold text-xs">
+                    0{i + 1}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1.5">{b.title}</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">{b.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Action CTA */}
+            <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+              <span className="text-xs text-gray-400 font-medium">Heatmap mensal • Semanas W1 a W6 • Detecção inteligente de finais de semana</span>
+              <button 
+                onClick={() => navigate('/auth')}
+                className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <span>Acessar o Calendário</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------- */}
+        {/* MODULE 4: TRADES EXECUTION LOG */}
+        {/* ---------------------------------------------------- */}
+        <section id="trades-section" className="scroll-mt-32">
+          <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-b from-[#141419] to-[#09090c] border border-amber-500/25 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent"></div>
+
+            {/* Section Header */}
+            <div className="max-w-3xl mb-8">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold tracking-wider uppercase mb-3">
+                <TrendingUp size={14} />
+                <span>{t.sections.trades.badge}</span>
+              </div>
+              <h2 className="text-2xl sm:text-4xl font-black font-display text-white mb-3">
+                {t.sections.trades.title}
+              </h2>
+              <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                {t.sections.trades.desc}
+              </p>
+            </div>
+
+            {/* Image Preview */}
+            <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/60 shadow-2xl mb-8 group">
+              <img
+                src="/screenshots/trades-history-preview.jpg"
+                alt="Quantara Trades Execution History"
+                className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-[1.005]"
+              />
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {t.sections.trades.bullets.map((b, i) => (
+                <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-amber-500/30 transition-all">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 mb-3 font-bold text-xs">
+                    0{i + 1}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1.5">{b.title}</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">{b.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Action CTA */}
+            <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+              <span className="text-xs text-gray-400 font-medium">Auditoria de ordens • Preços de entrada e saída • Dedução de taxas por contrato</span>
+              <button 
+                onClick={() => navigate('/auth')}
+                className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <span>Ver Lista de Execuções</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------- */}
+        {/* MODULE 5: SETUPS LAB */}
+        {/* ---------------------------------------------------- */}
+        <section id="setups-section" className="scroll-mt-32">
+          <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-b from-[#141419] to-[#09090c] border border-yellow-500/25 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-yellow-400 to-transparent"></div>
+
+            {/* Section Header */}
+            <div className="max-w-3xl mb-8">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs font-bold tracking-wider uppercase mb-3">
+                <Layers size={14} />
+                <span>{t.sections.setups.badge}</span>
+              </div>
+              <h2 className="text-2xl sm:text-4xl font-black font-display text-white mb-3">
+                {t.sections.setups.title}
+              </h2>
+              <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                {t.sections.setups.desc}
+              </p>
+            </div>
+
+            {/* Image Preview */}
+            <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/60 shadow-2xl mb-8 group">
+              <img
+                src="/screenshots/setups-curves-preview.png"
+                alt="Quantara Setups Multi-Curve Strategy Lab"
+                className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-[1.005]"
+              />
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {t.sections.setups.bullets.map((b, i) => (
+                <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-yellow-500/30 transition-all">
+                  <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-400 mb-3 font-bold text-xs">
+                    0{i + 1}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1.5">{b.title}</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">{b.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Action CTA */}
+            <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+              <span className="text-xs text-gray-400 font-medium">Expectativa $/trade • Curvas independentes de estratégia • Exportação PDF em 1 clique</span>
+              <button 
+                onClick={() => navigate('/auth')}
+                className="bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <span>Validar Seus Setups</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------- */}
+        {/* MODULE 6: ECONOMIC CALENDAR & NEWS */}
+        {/* ---------------------------------------------------- */}
+        <section id="news-section" className="scroll-mt-32">
+          <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-b from-[#141419] to-[#09090c] border border-amber-500/25 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent"></div>
+
+            {/* Section Header */}
+            <div className="max-w-3xl mb-8">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold tracking-wider uppercase mb-3">
+                <Globe size={14} />
+                <span>{t.sections.news.badge}</span>
+              </div>
+              <h2 className="text-2xl sm:text-4xl font-black font-display text-white mb-3">
+                {t.sections.news.title}
+              </h2>
+              <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                {t.sections.news.desc}
+              </p>
+            </div>
+
+            {/* Image Preview */}
+            <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/60 shadow-2xl mb-8 group">
+              <img
+                src="/screenshots/news-calendar-preview.jpg"
+                alt="Quantara Economic News Calendar"
+                className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-[1.005]"
+              />
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {t.sections.news.bullets.map((b, i) => (
+                <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-amber-500/30 transition-all">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 mb-3 font-bold text-xs">
+                    0{i + 1}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1.5">{b.title}</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">{b.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Action CTA */}
+            <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+              <span className="text-xs text-gray-400 font-medium">Notícias de alto impacto • Half-days CME • Sincronização de horários de execução</span>
+              <button 
+                onClick={() => navigate('/auth')}
+                className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <span>Consultar Calendário Macro</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------- */}
+        {/* MODULE 7: IMPORT & PLATFORM ENGINE */}
+        {/* ---------------------------------------------------- */}
+        <section id="import-section" className="scroll-mt-32">
+          <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-b from-[#141419] to-[#09090c] border border-emerald-500/25 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"></div>
+
+            {/* Section Header */}
+            <div className="max-w-3xl mb-8">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold tracking-wider uppercase mb-3">
+                <UploadCloud size={14} />
+                <span>{t.sections.import.badge}</span>
+              </div>
+              <h2 className="text-2xl sm:text-4xl font-black font-display text-white mb-3">
+                {t.sections.import.title}
+              </h2>
+              <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                {t.sections.import.desc}
+              </p>
+            </div>
+
+            {/* Interactive Platform Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="p-6 rounded-2xl bg-black/40 border border-white/10 flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 mb-4">
+                  <UploadCloud size={24} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1">Tradovate CSV</h3>
+                <p className="text-xs text-gray-400">Detecção automática de preenchimentos, taxas e contratos.</p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-black/40 border border-white/10 flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-4">
+                  <UploadCloud size={24} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1">NinjaTrader 8</h3>
+                <p className="text-xs text-gray-400">Importação direta de ordens históricas em segundos.</p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-black/40 border border-white/10 flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 mb-4">
+                  <UploadCloud size={24} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1">MetaTrader 4 &amp; 5</h3>
+                <p className="text-xs text-gray-400">Suporte a relatórios de extrato padrão HTML e CSV.</p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-gradient-to-br from-amber-500/15 to-transparent border border-amber-500/40 flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
+                  <Zap size={24} />
+                </div>
+                <h3 className="text-base font-black text-amber-400 mb-1">Modo Manual Simplificado</h3>
+                <p className="text-xs text-gray-300">Lançamento em 5 campos rápidos: Ativo, Direção, Data, Qtd e P&L.</p>
+              </div>
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {t.sections.import.bullets.map((b, i) => (
+                <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-emerald-500/30 transition-all">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 mb-3 font-bold text-xs">
+                    0{i + 1}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1.5">{b.title}</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">{b.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Action CTA */}
+            <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+              <span className="text-xs text-gray-400 font-medium">Detecção automática de colunas • Múltiplas subcontas isoladas • Zero fricção</span>
+              <button 
+                onClick={() => navigate('/auth')}
+                className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <span>Importar Seus Trades Agora</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+          </div>
+        </section>
+
+      </div>
+
+      {/* INTERACTIVE MATHEMATICAL SIMULATOR */}
+      <section id="simulator" className="relative z-10 py-20 px-4 max-w-7xl mx-auto border-t border-white/5 scroll-mt-32">
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <span className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-2 block">Matemática & Consistência</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-2 block">Matemática &amp; Consistência</span>
           <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-4">
             {t.simTitle}
           </h2>
@@ -803,7 +1333,7 @@ export default function Landing() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-gradient-to-br from-[#16161a] to-[#0d0e12] border border-amber-500/20 p-6 sm:p-10 rounded-3xl shadow-2xl">
-          {/* Controls (Left 7 Cols) */}
+          {/* Controls */}
           <div className="lg:col-span-7 flex flex-col gap-6">
             <div>
               <div className="flex justify-between items-center mb-2">
@@ -875,7 +1405,7 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Results Box (Right 5 Cols) */}
+          {/* Results Box */}
           <div className="lg:col-span-5 bg-black/50 border border-amber-500/30 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl relative overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/5 pb-4">
               <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">{t.simResNet}</span>
@@ -908,7 +1438,7 @@ export default function Landing() {
 
             <button 
               onClick={() => navigate('/auth')} 
-              className="w-full mt-2 bg-gradient-to-r from-amber-500 to-yellow-400 text-black py-3.5 rounded-xl font-black text-sm hover:brightness-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(245,158,11,0.4)]"
+              className="w-full mt-2 bg-gradient-to-r from-amber-500 to-yellow-400 text-black py-3.5 rounded-xl font-black text-sm hover:brightness-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(245,158,11,0.4)] cursor-pointer"
             >
               Aplicar ao Meu Portfólio
             </button>
@@ -916,8 +1446,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Feature Grid Pillars */}
-      <section id="features" className="relative z-10 py-20 px-4 max-w-7xl mx-auto border-t border-white/5">
+      {/* CORE FEATURES GRID */}
+      <section id="features" className="relative z-10 py-20 px-4 max-w-7xl mx-auto border-t border-white/5 scroll-mt-32">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-2 block">Diferenciais Quantara</span>
           <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-4">
@@ -952,146 +1482,151 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Comparison Table Section */}
-      <section id="comparison" className="relative z-10 py-20 px-4 max-w-7xl mx-auto border-t border-white/5">
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-4">
+      {/* COMPARISON TABLE */}
+      <section id="compare" className="relative z-10 py-20 px-4 max-w-6xl mx-auto border-t border-white/5 scroll-mt-32">
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h2 className="text-3xl sm:text-4xl font-black font-display text-white mb-3">
             {t.compareTitle}
           </h2>
-          <p className="text-gray-300 text-base sm:text-lg">
+          <p className="text-gray-400 text-sm sm:text-base">
             {t.compareSubtitle}
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse rounded-2xl overflow-hidden bg-gradient-to-b from-[#16161a] to-[#0d0e12] border border-white/10 text-left text-sm">
+        <div className="rounded-3xl border border-white/10 overflow-hidden bg-[#101014] shadow-2xl">
+          <table className="w-full text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-white/10 bg-white/[0.02]">
-                <th className="p-4 sm:p-6 font-bold text-gray-400">Funcionalidade</th>
-                <th className="p-4 sm:p-6 font-black text-amber-400 text-base bg-amber-500/5">Quantara Lab</th>
-                <th className="p-4 sm:p-6 font-bold text-gray-500">Planilhas Excel Comuns</th>
-                <th className="p-4 sm:p-6 font-bold text-gray-500">Outros Softwares Genéricos</th>
+                <th className="p-4 sm:p-6 text-gray-400 font-bold">Funcionalidade</th>
+                <th className="p-4 sm:p-6 text-amber-400 font-black bg-amber-500/10 text-center">Quantara Trading Lab</th>
+                <th className="p-4 sm:p-6 text-gray-500 font-medium text-center">Planilhas Excel / Sheets</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               <tr>
-                <td className="p-4 sm:p-6 font-semibold text-white">Trava de Limite Diário & Trailing Drawdown em Tempo Real</td>
-                <td className="p-4 sm:p-6 bg-amber-500/5"><Check className="text-emerald-400" size={20} /></td>
-                <td className="p-4 sm:p-6"><X className="text-red-500/50" size={20} /></td>
-                <td className="p-4 sm:p-6 text-gray-500 text-xs">Limitado / Manual</td>
+                <td className="p-4 sm:p-6 font-bold text-white">Curva de Equidade em Tempo Real</td>
+                <td className="p-4 sm:p-6 text-center bg-amber-500/5 text-emerald-400 font-bold">✔ Automático</td>
+                <td className="p-4 sm:p-6 text-center text-gray-500">❌ Gráficos estáticos e manuais</td>
               </tr>
               <tr>
-                <td className="p-4 sm:p-6 font-semibold text-white">Comparativo de Curvas de Equidade por Setup</td>
-                <td className="p-4 sm:p-6 bg-amber-500/5"><Check className="text-emerald-400" size={20} /></td>
-                <td className="p-4 sm:p-6"><X className="text-red-500/50" size={20} /></td>
-                <td className="p-4 sm:p-6"><X className="text-red-500/50" size={20} /></td>
+                <td className="p-4 sm:p-6 font-bold text-white">Expectativa Matemática por Setup</td>
+                <td className="p-4 sm:p-6 text-center bg-amber-500/5 text-emerald-400 font-bold">✔ $/Trade &amp; Curvas Isoladas</td>
+                <td className="p-4 sm:p-6 text-center text-gray-500">❌ Fórmulas complexas e frágeis</td>
               </tr>
               <tr>
-                <td className="p-4 sm:p-6 font-semibold text-white">Cálculo Automático de Expectativa Matemática ($/trade)</td>
-                <td className="p-4 sm:p-6 bg-amber-500/5"><Check className="text-emerald-400" size={20} /></td>
-                <td className="p-4 sm:p-6 text-gray-500 text-xs">Fórmulas complexas</td>
-                <td className="p-4 sm:p-6"><Check className="text-emerald-400" size={20} /></td>
+                <td className="p-4 sm:p-6 font-bold text-white">Trava de Stop Loss Diário &amp; Trailing Drawdown</td>
+                <td className="p-4 sm:p-6 text-center bg-amber-500/5 text-emerald-400 font-bold">✔ Alertas ao Vivo</td>
+                <td className="p-4 sm:p-6 text-center text-gray-500">❌ Sem proteção em tempo real</td>
               </tr>
               <tr>
-                <td className="p-4 sm:p-6 font-semibold text-white">Calendário com Heatmap & Resumos W1-W6</td>
-                <td className="p-4 sm:p-6 bg-amber-500/5"><Check className="text-emerald-400" size={20} /></td>
-                <td className="p-4 sm:p-6"><X className="text-red-500/50" size={20} /></td>
-                <td className="p-4 sm:p-6 text-gray-500 text-xs">Básico</td>
+                <td className="p-4 sm:p-6 font-bold text-white">Importação CSV 1-Clique (Tradovate, NT8)</td>
+                <td className="p-4 sm:p-6 text-center bg-amber-500/5 text-emerald-400 font-bold">✔ Mapeamento Inteligente</td>
+                <td className="p-4 sm:p-6 text-center text-gray-500">❌ Copiar e colar linha a linha</td>
               </tr>
               <tr>
-                <td className="p-4 sm:p-6 font-semibold text-white">Exportação de Relatórios Executivos em PDF de Alta Resolução</td>
-                <td className="p-4 sm:p-6 bg-amber-500/5"><Check className="text-emerald-400" size={20} /></td>
-                <td className="p-4 sm:p-6"><X className="text-red-500/50" size={20} /></td>
-                <td className="p-4 sm:p-6"><X className="text-red-500/50" size={20} /></td>
-              </tr>
-              <tr>
-                <td className="p-4 sm:p-6 font-semibold text-white">Suporte Tradovate, NinjaTrader e Modo Simplificado</td>
-                <td className="p-4 sm:p-6 bg-amber-500/5"><Check className="text-emerald-400" size={20} /></td>
-                <td className="p-4 sm:p-6 text-gray-500 text-xs">Apenas digitação manual</td>
-                <td className="p-4 sm:p-6 text-gray-500 text-xs">Configuração complexa</td>
+                <td className="p-4 sm:p-6 font-bold text-white">Relatórios Executivos em PDF</td>
+                <td className="p-4 sm:p-6 text-center bg-amber-500/5 text-emerald-400 font-bold">✔ Exportação em 1 Clique</td>
+                <td className="p-4 sm:p-6 text-center text-gray-500">❌ Formatação quebrada</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      {/* FAQ Section */}
-      <section id="faq" className="relative z-10 py-20 px-4 max-w-4xl mx-auto border-t border-white/5">
+      {/* FAQ SECTION */}
+      <section id="faq" className="relative z-10 py-16 px-4 max-w-4xl mx-auto border-t border-white/5 scroll-mt-32">
         <div className="text-center mb-12">
-          <span className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-2 block">Dúvidas Comuns</span>
-          <h2 className="text-3xl sm:text-4xl font-black font-display tracking-tight text-white mb-4">
+          <h2 className="text-3xl sm:text-4xl font-black font-display text-white mb-3">
             {t.faqTitle}
           </h2>
         </div>
 
-        <div className="flex flex-col gap-4">
-          {faqs.map((faq, i) => {
-            const isOpen = activeFaq === i;
-            return (
-              <div 
-                key={i} 
-                className="rounded-2xl border border-white/5 bg-[#16161a] overflow-hidden transition-all"
+        <div className="space-y-4">
+          {faqs.map((faq, i) => (
+            <div 
+              key={i} 
+              className="rounded-2xl border border-white/10 bg-[#121216] overflow-hidden transition-all"
+            >
+              <button
+                type="button"
+                onClick={() => setActiveFaq(activeFaq === i ? null : i)}
+                className="w-full p-5 text-left font-bold text-sm sm:text-base text-white flex items-center justify-between gap-4 hover:text-amber-400 transition-colors cursor-pointer"
               >
-                <button 
-                  onClick={() => setActiveFaq(isOpen ? null : i)} 
-                  className="w-full p-6 text-left font-bold text-base text-white flex items-center justify-between gap-4 hover:text-amber-400 transition-colors"
-                >
-                  <span>{faq.q}</span>
-                  <ChevronDown size={18} className={`shrink-0 transition-transform ${isOpen ? 'rotate-180 text-amber-400' : 'text-gray-400'}`} />
-                </button>
-                {isOpen && (
-                  <div className="px-6 pb-6 text-sm text-gray-300 leading-relaxed border-t border-white/5 pt-4">
-                    {faq.a}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                <span>{faq.q}</span>
+                <ChevronRight 
+                  size={18} 
+                  className={`text-amber-400 transition-transform ${activeFaq === i ? 'rotate-90' : ''}`} 
+                />
+              </button>
+              {activeFaq === i && (
+                <div className="px-5 pb-5 text-xs sm:text-sm text-gray-400 leading-relaxed border-t border-white/5 pt-3">
+                  {faq.a}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* Bottom CTA Banner */}
-      <section className="relative z-10 py-20 px-4 max-w-7xl mx-auto">
-        <div className="rounded-3xl p-8 sm:p-14 bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 border border-amber-500/30 text-center relative overflow-hidden shadow-[0_0_80px_rgba(245,158,11,0.2)]">
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-amber-400/20 blur-[100px] rounded-full"></div>
-          
-          <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-4 max-w-3xl mx-auto">
-            {t.ctaBottomTitle}
-          </h2>
-          <p className="text-gray-300 text-base sm:text-lg max-w-2xl mx-auto mb-8">
-            {t.ctaBottomDesc}
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button 
-              onClick={() => navigate('/auth')} 
-              className="w-full sm:w-auto bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black px-10 py-4 rounded-2xl font-black text-base shadow-[0_0_35px_rgba(245,158,11,0.5)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+      {/* FINAL CALL TO ACTION BANNER */}
+      <section className="relative z-10 py-20 px-4 max-w-6xl mx-auto">
+        <div className="rounded-3xl p-8 sm:p-16 bg-gradient-to-r from-amber-600/30 via-yellow-500/20 to-amber-600/30 border border-amber-500/40 text-center relative overflow-hidden shadow-[0_0_80px_rgba(245,158,11,0.25)]">
+          <div className="max-w-3xl mx-auto space-y-6">
+            <h2 className="text-3xl sm:text-5xl font-black font-display text-white">
+              {t.ctaBottomTitle}
+            </h2>
+            <p className="text-gray-200 text-sm sm:text-lg">
+              {t.ctaBottomDesc}
+            </p>
+            <button
+              onClick={() => navigate('/auth')}
+              className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-black font-black px-10 py-4 rounded-2xl text-base shadow-[0_0_35px_rgba(245,158,11,0.5)] hover:shadow-[0_0_50px_rgba(245,158,11,0.7)] hover:brightness-110 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer"
             >
-              <Zap size={20} className="fill-black" />
-              {t.ctaBottomBtn}
+              <span>{t.ctaBottomBtn}</span>
               <ArrowRight size={18} />
             </button>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-white/10 py-12 bg-black/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-6 text-sm text-gray-500">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Quantara Logo" className="w-7 h-7 rounded-lg object-contain" />
-            <span className="font-bold text-white">Quantara Trading Lab</span>
-            <span className="text-xs">&copy; 2026. Todos os direitos reservados.</span>
+      {/* FOOTER */}
+      <footer className="relative z-10 py-12 border-t border-white/5 bg-[#050507]">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          
+          <div 
+            className="flex items-center gap-2.5 lg:gap-3 cursor-pointer active:opacity-70 transition-opacity" 
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
+            <img
+              src="/logo.png"
+              alt="Quantara Logo"
+              className="w-8 h-8 lg:w-9 lg:h-9 object-contain drop-shadow-md z-10 rounded-xl"
+              onError={(e: any) => {
+                e.target.style.display = 'none';
+                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div style={{ display: 'none' }} className="w-8 h-8 lg:w-9 lg:h-9 bg-yellow-500 rounded-xl items-center justify-center text-[#121C30] z-0 drop-shadow-md font-bold text-base">
+              🐾
+            </div>
+            <h1 className="text-lg lg:text-xl font-extrabold tracking-tight font-display text-white">
+              Quantara
+            </h1>
           </div>
 
-          <div className="flex items-center gap-6 text-xs text-gray-400 font-medium">
-            <a href="#" className="hover:text-amber-400 transition-colors">Termos de Uso</a>
-            <a href="#" className="hover:text-amber-400 transition-colors">Política de Privacidade</a>
-            <a href="#showcase" className="hover:text-amber-400 transition-colors">Recursos</a>
-            <button onClick={() => navigate('/auth')} className="hover:text-amber-400 transition-colors">Login</button>
+          <div className="text-xs text-gray-500 text-center">
+            © {new Date().getFullYear()} Quantara Trading Lab. All rights reserved. Precision analytics for modern traders.
           </div>
+
+          <div className="flex items-center gap-4 text-xs font-bold text-gray-400">
+            <a href="#dashboard-section" className="hover:text-amber-400 transition-colors">Features</a>
+            <a href="#simulator" className="hover:text-amber-400 transition-colors">Simulator</a>
+            <button onClick={() => navigate('/auth')} className="hover:text-amber-400 transition-colors cursor-pointer">Login</button>
+          </div>
+
         </div>
       </footer>
+
     </div>
   );
 }
