@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { TrendingUp, RefreshCw, Plus, X, Trash2, Edit2, Target } from 'lucide-react';
+import { t as tFunc, type Lang } from '../../utils/i18n';
 
 declare global {
   interface Window {
@@ -153,8 +154,11 @@ export default function TradingPageView({
   favorites = [], 
   onSaveFavorite, 
   onDeleteFavorite, 
-  onUpdateFavorite 
+  onUpdateFavorite,
+  t: tProp,
+  lang = 'en'
 }: any) {
+  const t = tProp || ((k: string) => tFunc(k, lang));
   const assets = favorites;
 
   const [activeSymbol, setActiveSymbol] = useState<string>(
@@ -249,7 +253,7 @@ export default function TradingPageView({
            timezone: "America/New_York",
            theme: "dark",
            style: "1",
-           locale: "en",
+           locale: lang === 'pt' ? 'br' : lang === 'es' ? 'es' : 'en',
            enable_publishing: false,
            allow_symbol_change: true,
            withdateranges: true,
@@ -271,7 +275,7 @@ export default function TradingPageView({
     } else {
        loadTV();
     }
-  }, [activeSymbol, theme]);
+  }, [activeSymbol, theme, lang]);
 
   return (
     <div
@@ -285,7 +289,7 @@ export default function TradingPageView({
       >
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-[9px] font-bold tracking-widest uppercase px-1 opacity-40" style={{ color: theme.textoPrincipal }}>
-            Favorites
+            {t('trading.favorites')}
           </h3>
           <button onClick={openAddModal} className="p-1.5 rounded-md hover:bg-white/10 transition-colors bg-white/5 border hidden md:block" style={{ color: theme.textoPrincipal, borderColor: theme.contornoGeral }}>
             <Plus size={12} />
@@ -296,7 +300,7 @@ export default function TradingPageView({
             <div className="flex flex-col items-center justify-center flex-1 gap-2 px-3 py-6 text-center opacity-50">
               <TrendingUp size={28} className="opacity-30" style={{ color: theme.textoPrincipal }} />
               <p className="text-[9px] font-bold leading-relaxed hidden md:block" style={{ color: theme.textoPrincipal }}>
-                Adicione seus ativos favoritos usando o botão <span className="text-yellow-400">+</span> para carregá-los no widget.
+                {t('trading.emptyFavorites')}
               </p>
             </div>
           ) : (
@@ -328,7 +332,7 @@ export default function TradingPageView({
         <div className="flex items-center gap-3 px-2 md:px-0 pt-4 pb-2 shrink-0 flex-wrap mb-2 ml-4">
           <TrendingUp size={26} className="text-yellow-500" />
           <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
-            Trading
+            {t('trading.title')}
           </h1>
 
           <div className="flex-1" />
@@ -358,13 +362,13 @@ export default function TradingPageView({
           {!activeSymbol && (
              <div className="flex flex-col items-center gap-4 opacity-30 select-none">
                 <Target size={64} style={{ color: theme.textoPrincipal }} />
-                <p className="font-display font-medium text-lg uppercase tracking-[0.3em]" style={{ color: theme.textoPrincipal }}>Nenhum gráfico selecionado</p>
+                <p className="font-display font-medium text-lg uppercase tracking-[0.3em]" style={{ color: theme.textoPrincipal }}>{t('trading.noChartSelected')}</p>
                 <button 
                   onClick={openAddModal}
                   className="px-4 py-2 rounded-lg border text-[10px] uppercase font-bold tracking-widest hover:bg-white/10 transition-colors"
                   style={{ color: theme.textoPrincipal, borderColor: theme.contornoGeral }}
                 >
-                  Adicionar Carta Favorita
+                  {t('trading.addFavorite')}
                 </button>
              </div>
           )}
@@ -375,37 +379,37 @@ export default function TradingPageView({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4 border shadow-2xl animate-fade-in" style={{ ...glassStyle, borderColor: theme.contornoGeral, background: theme.fundoGeral }}>
             <div className="flex justify-between items-center mb-2">
-              <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>{editingAsset ? 'Edit Chart' : 'Add Chart'}</h2>
+              <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>{editingAsset ? t('trading.editChart') : t('trading.addChart')}</h2>
               <button onClick={() => setShowAddModal(false)} className="opacity-50 hover:opacity-100 transition-colors" style={{ color: theme.textoPrincipal }}><X size={16}/></button>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Symbol <span className="text-red-500">*</span></label>
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>{t('trading.symbol')} <span className="text-red-500">*</span></label>
                 <input value={newSymbol} onChange={e=>setNewSymbol(e.target.value)} placeholder="NDX" className="bg-black/30 p-2.5 rounded-lg border outline-none text-xs font-bold font-mono focus:border-yellow-500/50" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Exchange <span className="text-red-500">*</span></label>
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>{t('trading.exchange')} <span className="text-red-500">*</span></label>
                 <input value={newExchange} onChange={e=>setNewExchange(e.target.value)} placeholder="NASDAQ" className="bg-black/30 p-2.5 rounded-lg border outline-none text-xs font-bold font-mono focus:border-yellow-500/50" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} />
               </div>
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Name</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>{t('trading.name')}</label>
               <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Nasdaq 100" className="bg-black/30 p-2.5 rounded-lg border outline-none text-xs font-bold focus:border-yellow-500/50" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Type</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>{t('trading.type')}</label>
               <select value={newType} onChange={e=>setNewType(e.target.value)} className="bg-black/30 p-2.5 rounded-lg border outline-none text-xs font-bold focus:border-yellow-500/50" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, WebkitAppearance: 'none' }}>
-                <option value="index">Index</option>
-                <option value="crypto">Crypto</option>
-                <option value="stock">Stock</option>
-                <option value="forex">Forex</option>
+                <option value="index">{t('trading.index')}</option>
+                <option value="crypto">{t('trading.crypto')}</option>
+                <option value="stock">{t('trading.stock')}</option>
+                <option value="forex">{t('trading.forex')}</option>
               </select>
             </div>
 
-            <button onClick={handleAddAsset} className="mt-2 w-full py-3 rounded-xl font-bold text-black uppercase tracking-widest text-xs transition-transform active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)]" style={{ background: '#eab308' }}>{editingAsset ? 'Save Changes' : 'Insert Chart'}</button>
+            <button onClick={handleAddAsset} className="mt-2 w-full py-3 rounded-xl font-bold text-black uppercase tracking-widest text-xs transition-transform active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)]" style={{ background: '#eab308' }}>{editingAsset ? t('trading.saveChanges') : t('trading.insertChart')}</button>
           </div>
         </div>
       )}

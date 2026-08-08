@@ -129,7 +129,7 @@ export default function SettingsView({
                   style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
                 >
                   {isSyncing
-                    ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
+                    ? <><Loader2 size={16} className="animate-spin" /> {t('settings.saving', lang)}</>
                     : <><CheckCircle2 size={16} /> {t('settings.saveChanges', lang)}</>
                   }
                 </button>
@@ -217,7 +217,7 @@ export default function SettingsView({
                 </select>
               </div>
 
-              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>Mobile Table Columns</h3>
+              <h3 className="text-[15px] font-bold capitalize mb-4" style={{ color: theme.textoSecundario }}>{t('settings.mobileTableColumns', lang)}</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.keys(settings.mobileTableColumns || DEFAULT_SETTINGS.mobileTableColumns).map(col => (
                   <label key={col} className="flex items-center gap-2 cursor-pointer">
@@ -346,7 +346,7 @@ export default function SettingsView({
                   {settings.gradientType === 'linear' && (
                     <div className="space-y-2">
                       <label className="text-xs font-bold flex justify-between" style={{ color: theme.textoSecundario }}>
-                        <span>Angle Rotation (Top to Bottom, Left to Right, etc.)</span>
+                        <span>{t('settings.angleRotation', lang)}</span>
                         <span className="font-bold">{settings.gradientAngle}°</span>
                       </label>
                       <input
@@ -361,9 +361,9 @@ export default function SettingsView({
                 {/* Gradient Colors */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                   {[
-                    { key: 'gradColor1', label: 'Color 1 (Start/Top/Left)' },
-                    { key: 'gradColor2', label: 'Color 2 (Middle)' },
-                    { key: 'gradColor3', label: 'Color 3 (End/Bottom/Right)' }
+                    { key: 'gradColor1', label: t('settings.gradColor1', lang) },
+                    { key: 'gradColor2', label: t('settings.gradColor2', lang) },
+                    { key: 'gradColor3', label: t('settings.gradColor3', lang) }
                   ].map(c => (
                     <div key={c.key} className="space-y-2">
                       <label className="text-xs font-bold" style={{ color: theme.textoSecundario }}>{c.label}</label>
@@ -464,7 +464,7 @@ export default function SettingsView({
                 style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}
               >
                 {isSyncing
-                  ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
+                  ? <><Loader2 size={16} className="animate-spin" /> {t('settings.saving', lang)}</>
                   : <><CheckCircle2 size={16} /> {t('settings.saveChanges', lang)}</>
                 }
               </button>
@@ -483,7 +483,7 @@ export default function SettingsView({
                 </div>
                 <h3 className="text-[15px] font-bold capitalize mb-2" style={{ color: theme.textoSecundario }}>{t('settings.exportJson', lang)}</h3>
                 <p className="text-xs mb-6 opacity-60" style={{ color: theme.textoSecundario }}>{t('settings.exportJsonDesc', lang)}</p>
-                <button className="px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:opacity-80" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>Export JSON</button>
+                <button className="px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:opacity-80" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>{t('settings.exportJsonBtn', lang)}</button>
               </div>
               {/* Import */}
               <div className="rounded-xl p-6 shadow-xl transition-all flex flex-col items-center text-center" style={getGlassStyle(theme.fundoCards)}>
@@ -492,7 +492,7 @@ export default function SettingsView({
                 </div>
                 <h3 className="text-[15px] font-bold capitalize mb-2" style={{ color: theme.textoSecundario }}>{t('settings.importJson', lang)}</h3>
                 <p className="text-xs mb-6 opacity-60" style={{ color: theme.textoSecundario }}>{t('settings.importJsonDesc', lang)}</p>
-                <button className="px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:opacity-80" style={{ backgroundColor: '#EAB308', color: '#000' }}>Upload JSON File</button>
+                <button className="px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:opacity-80" style={{ backgroundColor: '#EAB308', color: '#000' }}>{t('settings.importJsonBtn', lang)}</button>
               </div>
             </div>
           </div>

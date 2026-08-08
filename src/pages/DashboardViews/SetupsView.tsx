@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
 import * as mammoth from 'mammoth';
+import { t as tUtil } from '../../utils/i18n';
 
 export default function SetupsView({
   theme,
@@ -11,7 +12,7 @@ export default function SetupsView({
   settings,
   accountSettings,
   t,
-  lang,
+  lang = 'en',
   trades,
   setups,
   saveSetup,
@@ -29,8 +30,10 @@ export default function SetupsView({
   const [viewMode, setViewMode] = useState<'home'|'create'|'edit'|'view'>('home');
   const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null);
 
+  const tLocal = (key: string) => (t ? t(key, lang) : tUtil(key, lang));
+
   const setupTargets = useMemo(() => {
-    return (rawSetupTargets || []).filter((t: any) => !activeAccountId || t.account_id === activeAccountId || !t.account_id);
+    return (rawSetupTargets || []).filter((tItem: any) => !activeAccountId || tItem.account_id === activeAccountId || !tItem.account_id);
   }, [rawSetupTargets, activeAccountId]);
 
   // Table State
@@ -157,41 +160,41 @@ export default function SetupsView({
   // Open a read-only preview of a group's targets in a new tab
   const handleOpenPreview = useCallback((groupName: string, setupTitle: string) => {
     const myTargets = (setupTargets || []).filter(
-      (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName && !t.disabled && t.asset_str !== '__empty__' && t.date
+      (tItem: any) => tItem.setup_id === selectedSetupId && tItem.group_name === groupName && !tItem.disabled && tItem.asset_str !== '__empty__' && tItem.date
     );
     if (myTargets.length === 0) return;
 
     // Convert targets to synthetic trades
     // qty = takes + stops (each is 1 trade), commission per trade = t.commission
-    const syntheticTrades = myTargets.map((t: any) => {
-      const takes = Number(t.takes) || 0;
-      const stops = Number(t.stops) || 0;
-      const breakevens = Number(t.breakevens) || 0;
+    const syntheticTrades = myTargets.map((tItem: any) => {
+      const takes = Number(tItem.takes) || 0;
+      const stops = Number(tItem.stops) || 0;
+      const breakevens = Number(tItem.breakevens) || 0;
       const totalOps = takes + stops + breakevens;
       return {
-        id: `synth-${t.id}`,
-        date: t.date,
-        symbol: t.asset_str || 'SETUP',
-        pnl: parseFloat(t.pnl) || 0,                // gross pnl
+        id: `synth-${tItem.id}`,
+        date: tItem.date,
+        symbol: tItem.asset_str || 'SETUP',
+        pnl: parseFloat(tItem.pnl) || 0,                // gross pnl
         qty: totalOps > 0 ? totalOps : 1,  // total ops
         takes,
         stops,
         breakevens,
-        commission_per_trade: parseFloat(t.commission) || 0,
+        commission_per_trade: parseFloat(tItem.commission) || 0,
       };
     });
 
     // Filter real trades to only the active account and normalize fields
     const activeAccountTrades = (trades || [])
-      .filter((t: any) => !activeAccountId || t.accountId === activeAccountId)
-      .filter((t: any) => t.date && t.pnl != null)
-      .map((t: any) => ({
-        date: typeof t.date === 'string' ? t.date.slice(0, 10) : '',
-        pnl: Number(t.pnl) || 0,
-        commission: Number(t.commission) || 0,
-        qty: Number(t.qty) || 1,
+      .filter((tItem: any) => !activeAccountId || tItem.accountId === activeAccountId)
+      .filter((tItem: any) => tItem.date && tItem.pnl != null)
+      .map((tItem: any) => ({
+        date: typeof tItem.date === 'string' ? tItem.date.slice(0, 10) : '',
+        pnl: Number(tItem.pnl) || 0,
+        commission: Number(tItem.commission) || 0,
+        qty: Number(tItem.qty) || 1,
       }))
-      .filter((t: any) => t.date);
+      .filter((tItem: any) => tItem.date);
 
     const previewKey = `preview_${crypto.randomUUID()}`;
     const payload = {
@@ -316,11 +319,8 @@ export default function SetupsView({
       images: [formFileName]
     });
     if (isCreating) {
-      // New setup: full navigation resets state correctly
       handleSelect('view', newId);
     } else {
-      // Editing existing setup: just switch back to view WITHOUT resetting
-      // group selections, staging targets, or disabled weekdays.
       setViewMode('view');
       setSelectedSetupId(newId);
       setIsExpandedDoc(false);
@@ -328,7 +328,7 @@ export default function SetupsView({
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Delete this setup?')) {
+    if (window.confirm(tLocal('setups.deleteConfirm'))) {
       deleteSetup(id);
       if (selectedSetupId === id) handleSelect('home');
     }
@@ -359,7 +359,7 @@ export default function SetupsView({
      const map: Record<string, string> = { ...activeChartGroupNames };
      setups.forEach((s:any) => {
        if (!map[s.id]) {
-          const myT = (setupTargets||[]).find((t:any) => t.setup_id === s.id && t.group_name);
+          const myT = (setupTargets||[]).find((tItem:any) => tItem.setup_id === s.id && tItem.group_name);
           if (myT) map[s.id] = myT.group_name;
        }
      });
@@ -367,13 +367,13 @@ export default function SetupsView({
   }, [activeChartGroupNames, setups, setupTargets]);
 
   const chartData = useMemo(() => {
-    const validTrades = trades.filter((t:any) => t.date);
-    const validTargets = (setupTargets||[]).filter((t:any) => t.date);
+    const validTrades = trades.filter((tItem:any) => tItem.date);
+    const validTargets = (setupTargets||[]).filter((tItem:any) => tItem.date);
     const validLogs = (setupConfigLogs||[]).filter((l:any) => l.date);
 
     const allDates = Array.from(new Set([
-      ...validTrades.map((t:any) => t.date),
-      ...validTargets.map((t:any) => t.date),
+      ...validTrades.map((tItem:any) => tItem.date),
+      ...validTargets.map((tItem:any) => tItem.date),
       ...validLogs.map((l:any) => l.date)
     ])).sort();
 
@@ -388,15 +388,15 @@ export default function SetupsView({
     });
 
     const tradesByDate: Record<string, any[]> = {};
-    validTrades.forEach((t:any) => {
-       if (!tradesByDate[t.date]) tradesByDate[t.date] = [];
-       tradesByDate[t.date].push(t);
+    validTrades.forEach((tItem:any) => {
+       if (!tradesByDate[tItem.date]) tradesByDate[tItem.date] = [];
+       tradesByDate[tItem.date].push(tItem);
     });
 
     const targetsByDate: Record<string, any[]> = {};
-    validTargets.forEach((t:any) => {
-       if (!targetsByDate[t.date]) targetsByDate[t.date] = [];
-       targetsByDate[t.date].push(t);
+    validTargets.forEach((tItem:any) => {
+       if (!targetsByDate[tItem.date]) targetsByDate[tItem.date] = [];
+       targetsByDate[tItem.date].push(tItem);
     });
 
     const logsByDate: Record<string, any[]> = {};
@@ -455,51 +455,48 @@ export default function SetupsView({
   // Groups derived for current selected setup
   const setupGroups = useMemo(() => {
     if (viewMode !== 'view' || !selectedSetupId) return [];
-    const myTargets = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId && t.asset_str !== '__empty__');
+    const myTargets = (setupTargets||[]).filter((tItem:any) => tItem.setup_id === selectedSetupId && tItem.asset_str !== '__empty__');
     
     const groupsMap: Record<string, { takes: number, stops: number, breakevens: number, pnl: number }> = {};
     
     const currentSetup = setups.find((s:any) => s.id === selectedSetupId);
-    myTargets.forEach((t:any) => {
-       const g = t.group_name || `Default - ${currentSetup?.title || 'Setup'}`;
+    myTargets.forEach((tItem:any) => {
+       const g = tItem.group_name || `Default - ${currentSetup?.title || 'Setup'}`;
        if (!groupsMap[g]) groupsMap[g] = { takes: 0, stops: 0, breakevens: 0, pnl: 0 };
-       if (!t.disabled) {
-         groupsMap[g].takes += t.takes || 0;
-         groupsMap[g].stops += t.stops || 0;
-         groupsMap[g].breakevens += t.breakevens || 0;
-         groupsMap[g].pnl += parseFloat(t.pnl) || 0;
+       if (!tItem.disabled) {
+         groupsMap[g].takes += tItem.takes || 0;
+         groupsMap[g].stops += tItem.stops || 0;
+         groupsMap[g].breakevens += tItem.breakevens || 0;
+         groupsMap[g].pnl += parseFloat(tItem.pnl) || 0;
        }
     });
 
     return Object.keys(groupsMap).map(k => {
        const takesNum = groupsMap[k].takes;
        const stopsNum = groupsMap[k].stops;
-       const breakevensNum = groupsMap[k].breakevens;
        const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
        return { name: k, pnl: groupsMap[k].pnl, winRate: winRateCalc };
     }).sort((a,b) => b.pnl - a.pnl);
   }, [setupTargets, viewMode, selectedSetupId, setups]);
 
-  // Helper: get all DB targets for a specific named group
-  // Handles null group_name for "Default" groups created before group_name was tracked
   const getTargetsForGroup = (groupName: string): any[] => {
     const isDefaultGroup = groupName.startsWith('Default');
-    return (setupTargets||[]).filter((t:any) => {
-      if (t.setup_id !== selectedSetupId) return false;
-      if (t.asset_str === '__empty__') return false; // skip placeholder
-      if (isDefaultGroup && (!t.group_name || t.group_name === '')) return true;
-      return t.group_name === groupName;
+    return (setupTargets||[]).filter((tItem:any) => {
+      if (tItem.setup_id !== selectedSetupId) return false;
+      if (tItem.asset_str === '__empty__') return false;
+      if (isDefaultGroup && (!tItem.group_name || tItem.group_name === '')) return true;
+      return tItem.group_name === groupName;
     });
   };
 
   // Table rows depend on stagingTargets now
   const tableRows = useMemo(() => {
-    let arr = stagingTargets.filter((t: any) => t.asset_str !== '__empty__');
+    let arr = stagingTargets.filter((tItem: any) => tItem.asset_str !== '__empty__');
     if (filterPeriod !== 'All Time') {
-       arr = arr.filter((t:any) => {
-         if(!t.date) return false;
+       arr = arr.filter((tItem:any) => {
+         if(!tItem.date) return false;
          try {
-           let dStr = t.date;
+           let dStr = tItem.date;
            if (dStr.includes('T')) dStr = dStr.split('T')[0];
            const [y, m, d] = dStr.split('-');
            const dt = new Date(Number(y), Number(m)-1, Number(d));
@@ -520,11 +517,11 @@ export default function SetupsView({
     if (viewMode !== 'view' || !selectedSetupId) return ['All Time'];
     const p = new Set<string>();
     p.add('All Time');
-    const myTargets = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId);
-    myTargets.forEach((t:any) => {
-       if(t.date) {
+    const myTargets = (setupTargets||[]).filter((tItem:any) => tItem.setup_id === selectedSetupId);
+    myTargets.forEach((tItem:any) => {
+       if(tItem.date) {
          try {
-           let dStr = t.date;
+           let dStr = tItem.date;
            if (dStr.includes('T')) dStr = dStr.split('T')[0];
            const [y, m, d] = dStr.split('-');
            const dt = new Date(Number(y), Number(m)-1, Number(d));
@@ -555,7 +552,7 @@ export default function SetupsView({
   const handleBulkDelete = () => {
     if (selectedTargetIds.size === 0) return;
     if (!window.confirm(`Delete ${selectedTargetIds.size} target(s) from staging?`)) return;
-    setStagingTargets(prev => prev.filter(t => !selectedTargetIds.has(t.id)));
+    setStagingTargets(prev => prev.filter(tItem => !selectedTargetIds.has(tItem.id)));
     setSelectedTargetIds(new Set());
   };
 
@@ -577,13 +574,12 @@ export default function SetupsView({
     const takesNum = Number(editValues.takes) || 0;
     const stopsNum = Number(editValues.stops) || 0;
     const breakevensNum = Number(editValues.breakevens) || 0;
-    const totalOps = takesNum + stopsNum + breakevensNum;
     const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
     
-    setStagingTargets(prev => prev.map(t => {
-       if (t.id === editingTargetId) {
+    setStagingTargets(prev => prev.map(tItem => {
+       if (tItem.id === editingTargetId) {
           return {
-            ...t,
+            ...tItem,
             date: editValues.date,
             asset_str: editValues.assetStr,
             takes: takesNum,
@@ -594,7 +590,7 @@ export default function SetupsView({
             win_rate: winRateCalc
           };
        }
-       return t;
+       return tItem;
     }));
     
     setEditingTargetId(null);
@@ -618,17 +614,15 @@ export default function SetupsView({
      const takesNum = Number(targetTakes) || 0;
      const stopsNum = Number(targetStops) || 0;
      const breakevensNum = Number(targetBreakevens) || 0;
-     const totalOps = takesNum + stopsNum + breakevensNum;
      const winRateCalc = (takesNum + stopsNum) > 0 ? (takesNum / (takesNum + stopsNum)) * 100 : 0;
      
-     const isAutoCalc = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
+     const isAutoCalcLocal = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
      let finalPnl = Number(targetPnl) || 0;
 
-     if (isAutoCalc) {
+     if (isAutoCalcLocal) {
         const sp = Number(targetStopPoints) || 0;
         const tpRaw = Number(targetRiskReward) || 0;
         const pv = Number(targetPointValue) || 0;
-        // Se tpRaw < 10 e sp > 0, trata como multiplicador R/R (ex: 2 = 2x Stop), senão como Pts de Take diretos (ex: 125)
         const takesValue = (tpRaw < 10 && sp > 0) ? takesNum * (sp * tpRaw * pv) : takesNum * (tpRaw * pv);
         const stopsValue = stopsNum * (sp * pv);
         finalPnl = takesValue - stopsValue;
@@ -650,17 +644,14 @@ export default function SetupsView({
      };
 
      setStagingTargets(prev => {
-       const filtered = prev.filter(t => t.date !== dateStr);
+       const filtered = prev.filter(tItem => tItem.date !== dateStr);
        return [newTarget, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
      });
      
-     // Clear only per-entry fields; day/month/year/asset/commission persist as reference
      setTargetTakes('');
      setTargetStops('');
      setTargetBreakevens('');
      setTargetPnl('');
-     // targetDay, targetMonth, targetYear, targetAsset, targetStopPoints,
-     // targetRiskReward, targetPointValue, targetCommission intentionally kept
   };
 
   const handleBulkInsert = () => {
@@ -670,7 +661,7 @@ export default function SetupsView({
     const newTargetsMap = new Map();
     const currentYear = targetYear ? Number(targetYear) : new Date().getFullYear();
     const asset = targetAsset || 'SETUP';
-    const isAutoCalc = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
+    const isAutoCalcLocal = targetStopPoints !== '' || targetRiskReward !== '' || targetPointValue !== '';
     const sp = Number(targetStopPoints) || 0;
     const rr = Number(targetRiskReward) || 0;
     const pv = Number(targetPointValue) || 0;
@@ -681,7 +672,6 @@ export default function SetupsView({
       const lineLower = lineTrim.toLowerCase();
       if (!lineTrim || lineLower.startsWith('data') || lineLower.startsWith('date')) continue;
       
-      // Suporta delimitadores por Pipe '|', Tab '\t' ou Espaços '\s+'
       let cols: string[];
       if (lineTrim.includes('|')) {
         cols = lineTrim.split('|').map(s => s.trim());
@@ -713,23 +703,18 @@ export default function SetupsView({
       let pnl = 0;
       let commission = 0;
 
-      // ── Detecção de formato ───────────────────────────────────────────────────
       const WEEKDAYS_PT = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'sab', 'dom'];
       const WEEKDAYS_EN = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
       const col1Lower = cols[1]?.toLowerCase().trim() ?? '';
       const hasDayCol = cols.length >= 6 && ([...WEEKDAYS_PT, ...WEEKDAYS_EN].some(wd => col1Lower.startsWith(wd)));
 
       if (hasDayCol && cols.length >= 6) {
-        // Tabela com coluna Dia: e.g. Data | Dia | Take | Stop | BE | Result | Win Rate | Seq (Tabela sem Fees)
-        // OU: Data | Dia | Take | Stop | Result | Fees | Win Rate | Seq (Com Fees)
         takesNum = Number(cols[2]) || 0;
         stopsNum = Number(cols[3]) || 0;
 
         const col4Str = cols[4]?.trim() ?? '';
         const col5Str = cols[5]?.trim() ?? '';
 
-        // Identifica se col4 é BE (Break-Even) ou Resultado (PnL)
-        // Se col5 tem sinal (+/-), $ ou decimal/vírgula, col5 é o Resultado e col4 é o BE
         const col5HasSign = col5Str.startsWith('+') || col5Str.startsWith('-') || col5Str.includes('$') || col5Str.includes(',') || col5Str.includes('.');
         const col4HasSign = col4Str.startsWith('+') || col4Str.startsWith('-') || col4Str.includes('$');
 
@@ -744,7 +729,6 @@ export default function SetupsView({
           if (!isNaN(col4Num) && col4Num >= 0 && col4Num <= 10 && !isNaN(col5Num) && Math.abs(col5Num) > 10) {
             isCol4BE = true;
           } else {
-            // Padrão: formato da imagem com BE na col 4 e Result na col 5
             isCol4BE = true;
           }
         }
@@ -760,7 +744,6 @@ export default function SetupsView({
           feesRaw = cols[5]?.trim() ?? '';
         }
 
-        // Validação/Fallback via coluna de Sequência (emojis)
         const seqCol = cols.find(c => c.includes('🟢') || c.includes('🔴') || c.includes('⚪'));
         if (seqCol) {
           let seqTakes = 0, seqStops = 0, seqBes = 0;
@@ -797,7 +780,7 @@ export default function SetupsView({
           } else {
             commission = globalComm;
           }
-        } else if (isAutoCalc) {
+        } else if (isAutoCalcLocal) {
           const tpRaw = rr;
           const takesValue = (tpRaw < 10 && sp > 0) ? takesNum * (sp * tpRaw * pv) : takesNum * (tpRaw * pv);
           const stopsValue = stopsNum * (sp * pv);
@@ -809,7 +792,6 @@ export default function SetupsView({
         }
 
       } else {
-        // ── FORMATO SEM COLUNA DIA (ex: DD/MM | Takes | Stops | Resultado...) ──
         const seq = cols[cols.length - 1];
         if (seq && (seq.includes('🟢') || seq.includes('🔴') || seq.includes('⚪'))) {
           for (const char of seq) {
@@ -843,7 +825,7 @@ export default function SetupsView({
             totalFees = Number(feeStr) || 0;
             if (totalOps > 0) commission = totalFees / totalOps;
           }
-        } else if (isAutoCalc) {
+        } else if (isAutoCalcLocal) {
           const takesValue = takesNum * (sp * rr * pv);
           const stopsValue = stopsNum * (sp * pv);
           pnl = takesValue - stopsValue;
@@ -891,21 +873,16 @@ export default function SetupsView({
 
     const newTargets = Array.from(newTargetsMap.values());
     if (newTargets.length > 0) {
-      // Compute merged outside the state updater to avoid side effects in React's updater fn
       setStagingTargets(prev => {
-        const newDates = new Set(newTargets.map(t => t.date));
-        const filtered = prev.filter(t => !newDates.has(t.date));
+        const newDates = new Set(newTargets.map(tItem => tItem.date));
+        const filtered = prev.filter(tItem => !newDates.has(tItem.date));
         return [...newTargets, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       });
 
-      // Save to Supabase outside the state updater (safe, no double-invocation risk)
       if (activeGroupName && selectedSetupId) {
-        // Compute the same merged array for saving
-        const newDates = new Set(newTargets.map(t => t.date));
-        // We use a functional approach: read current staging inline
-        // Since setStagingTargets is async, we build merged from what we know
+        const newDates = new Set(newTargets.map(tItem => tItem.date));
         const currentStaging = stagingTargets;
-        const filtered = currentStaging.filter(t => !newDates.has(t.date));
+        const filtered = currentStaging.filter(tItem => !newDates.has(tItem.date));
         const merged = [...newTargets, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         let bitmask = 0;
@@ -929,16 +906,14 @@ export default function SetupsView({
         };
         const withGroup = [
           configRow,
-          ...merged.map(t => {
-            const rowDate = new Date(t.date + 'T00:00:00');
+          ...merged.map(tItem => {
+            const rowDate = new Date(tItem.date + 'T00:00:00');
             const isDisabled = disabledWeekdays.has(rowDate.getDay());
-            return { ...t, group_name: activeGroupName, disabled: isDisabled };
+            return { ...tItem, group_name: activeGroupName, disabled: isDisabled };
           })
         ];
         saveBatchSetupTargets(withGroup, selectedSetupId as string, activeGroupName, originalGroupName);
-        // Keep originalGroupName in sync so future saves use the correct name
         setOriginalGroupName(activeGroupName);
-        // Activate chart for this group if not already set
         if (!activeChartGroupNames[selectedSetupId as string]) {
           setActiveChartGroupNames(prev => ({ ...prev, [selectedSetupId as string]: activeGroupName }));
         }
@@ -974,22 +949,18 @@ export default function SetupsView({
       disabled: false
     };
 
-    // Mark rows from disabled weekdays with disabled:true, keep all rows in DB
     const updatedStaging = [
       configRow,
-      ...stagingTargets.map(t => {
-        const rowDate = new Date(t.date + 'T00:00:00');
+      ...stagingTargets.map(tItem => {
+        const rowDate = new Date(tItem.date + 'T00:00:00');
         const isDisabled = disabledWeekdays.has(rowDate.getDay());
-        return { ...t, group_name: groupName, disabled: isDisabled };
+        return { ...tItem, group_name: groupName, disabled: isDisabled };
       })
     ];
     
     await saveBatchSetupTargets(updatedStaging, selectedSetupId as string, groupName, originalGroupName);
-    
-    // Update originalGroupName after save
     setOriginalGroupName(groupName);
     
-    // Activate chart for this group initially
     if (!activeChartGroupNames[selectedSetupId as string]) {
        setActiveChartGroupNames(prev => ({ ...prev, [selectedSetupId as string]: groupName }));
     }
@@ -1001,7 +972,7 @@ export default function SetupsView({
 
   const restoreDisabledWeekdays = (groupName: string) => {
     const configRow = (setupTargets || []).find(
-      (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName && t.asset_str === '__empty__'
+      (tItem: any) => tItem.setup_id === selectedSetupId && tItem.group_name === groupName && tItem.asset_str === '__empty__'
     );
 
     const disabledDays = new Set<number>();
@@ -1013,13 +984,12 @@ export default function SetupsView({
         }
       }
     } else {
-      // Fallback: restore from actual targets' disabled flags
       const myT = (setupTargets || []).filter(
-        (t: any) => t.setup_id === selectedSetupId && t.group_name === groupName && t.asset_str !== '__empty__'
+        (tItem: any) => tItem.setup_id === selectedSetupId && tItem.group_name === groupName && tItem.asset_str !== '__empty__'
       );
-      myT.forEach((t: any) => {
-        if (t.disabled && t.date) {
-          const d = new Date(t.date + 'T00:00:00');
+      myT.forEach((tItem: any) => {
+        if (tItem.disabled && tItem.date) {
+          const d = new Date(tItem.date + 'T00:00:00');
           disabledDays.add(d.getDay());
         }
       });
@@ -1043,8 +1013,6 @@ export default function SetupsView({
   }, [tableRows, disabledWeekdays]);
 
   const grandNetPnl = grandTotal.pnl - grandTotal.commission;
-
-  const grandTotalOps = grandTotal.takes + grandTotal.stops + grandTotal.breakevens;
   const grandWinRate = (grandTotal.takes + grandTotal.stops) > 0 
     ? (grandTotal.takes / (grandTotal.takes + grandTotal.stops)) * 100 
     : 0;
@@ -1061,16 +1029,26 @@ export default function SetupsView({
     });
   }, []);
 
+  const dayNames = [
+    tLocal('cal.sun'),
+    tLocal('cal.mon'),
+    tLocal('cal.tue'),
+    tLocal('cal.wed'),
+    tLocal('cal.thu'),
+    tLocal('cal.fri'),
+    tLocal('cal.sat'),
+  ];
+
   const globalChartNode = useMemo(() => (
     <div className="p-2 md:p-6 rounded-2xl border flex flex-col shadow-sm min-h-[450px]" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
         <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
-          <TrendingUp size={12} /> Equity Curves Comparison (All Strategies)
+          <TrendingUp size={12} /> {tLocal('setups.equityCurvesComparison')}
         </h3>
         
         {/* Filter Controls */}
         <div className="flex flex-wrap gap-2 items-center">
-           <span className="text-[9px] font-bold uppercase opacity-40 mr-2" style={{ color: theme.textoPrincipal }}>Filter:</span>
+           <span className="text-[9px] font-bold uppercase opacity-40 mr-2" style={{ color: theme.textoPrincipal }}>{tLocal('setups.filter')}</span>
            {setupNames.map((name, i) => {
              const isHidden = hiddenSetups.has(name);
              const color = lineColors[i % lineColors.length];
@@ -1102,7 +1080,7 @@ export default function SetupsView({
                formatter={(val: number, name: string) => {
                    const bareName = name.replace('_real', '').replace('_target', '');
                    if (hiddenSetups.has(bareName)) return [];
-                   return [`$${val.toFixed(2)}`, name.endsWith('_real') ? `${bareName} (Real)` : `${bareName} (Almejado)`];
+                   return [`$${val.toFixed(2)}`, name.endsWith('_real') ? `${bareName} (${tLocal('setups.real')})` : `${bareName} (${tLocal('setups.target')})`];
                }}
              />
              {setupNames.filter(name => !hiddenSetups.has(name)).map((name, i) => {
@@ -1155,21 +1133,21 @@ export default function SetupsView({
       <div className="flex flex-wrap gap-3 mt-4 overflow-y-auto max-h-16 hide-scrollbar justify-center">
          <div className="flex items-center gap-1.5 shrink-0 mr-4">
            <div className="w-3 h-1 rounded-full" style={{ backgroundColor: lineColors[0] }} />
-           <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>Price Action (Real)</span>
+           <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>Price Action ({tLocal('setups.real')})</span>
          </div>
-         {setupNames.filter(n => n !== 'Price Action').map((name, i) => (
+         {setupNames.filter(n => n !== 'Price Action').map((name) => (
            <div key={`${name}-t`} className="flex items-center gap-1.5 shrink-0">
              <div className="w-3 h-1 rounded-full border-t border-dashed" style={{ borderColor: lineColors[(setupNames.indexOf(name)) % lineColors.length] }} />
-             <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>{name} (Almejado)</span>
+             <span className="text-[9px] uppercase font-bold tracking-wider opacity-60" style={{ color: theme.textoPrincipal }}>{name} ({tLocal('setups.target')})</span>
            </div>
          ))}
       </div>
     </div>
-  ), [chartData, hiddenSetups, theme, getGlassStyle, lineColors, setupNames, toggleSetupVisible]);
+  ), [chartData, hiddenSetups, theme, getGlassStyle, lineColors, setupNames, toggleSetupVisible, t, lang]);
 
   return (
     <div className="flex w-full min-h-[calc(100vh-140px)] animate-tab-enter relative" style={{ background: theme.fundoGeral }}>
-       {/* LEFT SIDEBAR (Infinite) */}
+       {/* LEFT SIDEBAR */}
        <div className="w-16 md:w-64 self-stretch border-r shrink-0 hidden sm:flex flex-col pt-5 pb-0 px-2 md:px-4" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
           <button 
             onClick={() => handleSelect('create')}
@@ -1177,11 +1155,11 @@ export default function SetupsView({
             style={{ background: '#eab308' }}
           >
             <Plus size={18} />
-            <span className="hidden md:block uppercase tracking-wider text-xs text-center">New Setup</span>
+            <span className="hidden md:block uppercase tracking-wider text-xs text-center">{tLocal('setups.newSetup')}</span>
           </button>
 
           <div className="text-[11px] md:text-xs uppercase font-bold tracking-widest opacity-50 px-2 mt-4 mb-1 cursor-pointer hover:opacity-100 transition-opacity" style={{ color: theme.textoPrincipal }} onClick={() => handleSelect('home')}>
-            All Strategies Chart
+            {tLocal('setups.allStrategiesChart')}
           </div>
 
           <nav className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-1 mt-2 pb-5">
@@ -1200,8 +1178,6 @@ export default function SetupsView({
                     <div className="flex items-center justify-center gap-0.5">
                       <button onClick={(e) => {
                         e.stopPropagation();
-                        // If already viewing this same setup, enter edit mode WITHOUT resetting group state.
-                        // Only do a full navigation reset when switching to a different setup.
                         if (selectedSetupId === s.id && viewMode === 'view') {
                           setViewMode('edit');
                           const found = setups.find((x: any) => x.id === s.id);
@@ -1213,8 +1189,8 @@ export default function SetupsView({
                         } else {
                           handleSelect('edit', s.id);
                         }
-                      }} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors" style={{ color: theme.textoPrincipal }} title="Edit Setup"><Edit2 size={11} /></button>
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-500 transition-colors" title="Delete Setup"><Trash2 size={11} /></button>
+                      }} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors" style={{ color: theme.textoPrincipal }} title={tLocal('setups.editTitle')}><Edit2 size={11} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-500 transition-colors" title={tLocal('setups.deleteConfirm')}><Trash2 size={11} /></button>
                     </div>
                   </div>
                 )
@@ -1230,12 +1206,12 @@ export default function SetupsView({
                 <div className="flex items-center gap-3">
                   <Target size={28} className="text-yellow-500" />
                   <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight flex items-center gap-3" style={{ color: theme.textoPrincipal }}>
-                    Setups & Strategy
+                    {tLocal('setups.title')}
                   </h1>
                 </div>
                 {viewMode !== 'home' && (
                    <button onClick={() => handleSelect('home')} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest opacity-60 hover:opacity-100 px-3 py-2 rounded-lg bg-black/20" style={{ color: theme.textoPrincipal }}>
-                      <ChevronLeft size={14}/> Back
+                      <ChevronLeft size={14}/> {tLocal('setups.back')}
                    </button>
                 )}
              </div>
@@ -1252,29 +1228,29 @@ export default function SetupsView({
           {(viewMode === 'create' || viewMode === 'edit') && !isExpandedDoc && (
              <div className="flex-1 max-w-4xl w-full mx-auto p-6 rounded-2xl border flex flex-col gap-3 shadow-sm" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
                <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 flex items-center justify-between" style={{ color: theme.textoPrincipal }}>
-                 {viewMode === 'create' ? 'Create New Setup' : 'Edit Setup'}
+                 {viewMode === 'create' ? tLocal('setups.createTitle') : tLocal('setups.editTitle')}
                </h3>
                
                <div>
-                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 mb-2 block" style={{ color: theme.textoPrincipal }}>Setup Title</span>
+                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 mb-2 block" style={{ color: theme.textoPrincipal }}>{tLocal('setups.setupTitle')}</span>
                  <input 
                    type="text" 
                    value={formTitle}
                    onChange={e => setFormTitle(e.target.value)}
-                   placeholder="e.g. OBR Pullback"
+                   placeholder={tLocal('setups.setupTitlePlaceholder')}
                    className="w-full bg-black/20 hover:bg-black/30 rounded-xl p-4 text-xl font-bold font-display outline-none focus:ring-1 ring-yellow-500/50 transition-all border border-transparent focus:border-yellow-500/20"
                    style={{ color: theme.textoPrincipal }}
                  />
                </div>
                
                <div className="flex-1 flex flex-col">
-                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 mb-2 block" style={{ color: theme.textoPrincipal }}>Strategy Document (PDF, DOCX or Image)</span>
+                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50 mb-2 block" style={{ color: theme.textoPrincipal }}>{tLocal('setups.strategyDoc')}</span>
                  
                  {!formDesc ? (
                    <label className="flex-1 w-full min-h-[300px] border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors bg-black/10 hover:bg-black/20" style={{ borderColor: theme.contornoGeral }}>
                      <Upload size={40} className="mb-4 opacity-50" style={{ color: theme.textoPrincipal }} />
-                     <span className="text-sm font-bold opacity-70 mb-2" style={{ color: theme.textoPrincipal }}>Click or drag a file to upload</span>
-                     <span className="text-xs opacity-40 uppercase tracking-widest font-bold" style={{ color: theme.textoPrincipal }}>Accepts .pdf, .docx, .jpg, .png</span>
+                     <span className="text-sm font-bold opacity-70 mb-2" style={{ color: theme.textoPrincipal }}>{tLocal('setups.clickOrDrag')}</span>
+                     <span className="text-xs opacity-40 uppercase tracking-widest font-bold" style={{ color: theme.textoPrincipal }}>{tLocal('setups.acceptsFiles')}</span>
                      <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/jpeg,image/png" className="hidden" onChange={handleFileUpload} />
                    </label>
                  ) : (
@@ -1287,11 +1263,11 @@ export default function SetupsView({
                      <span className="text-lg font-bold mb-6 text-center break-all" style={{ color: theme.textoPrincipal }}>{formFileName || 'File Loaded'}</span>
                      <div className="flex gap-4">
                        <label className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors uppercase text-[10px] font-bold tracking-widest cursor-pointer" style={{ color: theme.textoPrincipal }}>
-                         Change File
+                         {tLocal('setups.changeFile')}
                          <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/jpeg,image/png" className="hidden" onChange={handleFileUpload} />
                        </label>
                        <button onClick={removeFile} className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-500 transition-colors uppercase text-[10px] font-bold tracking-widest">
-                         Remove File
+                         {tLocal('setups.removeFile')}
                        </button>
                      </div>
                    </div>
@@ -1304,7 +1280,7 @@ export default function SetupsView({
                    className="px-8 py-3 rounded-xl flex items-center gap-2 font-bold text-sm text-black transition-all hover:brightness-110 active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.2)]"
                    style={{ background: '#eab308' }}
                  >
-                   <Save size={16} /> Save Setup
+                   <Save size={16} /> {tLocal('setups.saveSetup')}
                  </button>
                </div>
              </div>
@@ -1323,13 +1299,13 @@ export default function SetupsView({
                     </h2>
                     
                     <div className="flex items-center gap-2 shrink-0">
-                       <a href={formDesc} download={formFileName || 'SetupDocument'} className="flex items-center justify-center p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border" style={{ borderColor: theme.contornoGeral }} title="Download Document">
+                       <a href={formDesc} download={formFileName || 'SetupDocument'} className="flex items-center justify-center p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border" style={{ borderColor: theme.contornoGeral }} title={tLocal('setups.downloadFile')}>
                           <Download size={15} style={{ color: theme.textoPrincipal }} /> 
                        </a>
                        {formDesc && (
-                         <button onClick={() => setIsExpandedDoc(!isExpandedDoc)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-yellow-500 hover:brightness-110 text-black transition-colors text-[9px] font-bold uppercase tracking-widest" title={isExpandedDoc ? 'Collapse Document' : 'Read Document'}>
+                         <button onClick={() => setIsExpandedDoc(!isExpandedDoc)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-yellow-500 hover:brightness-110 text-black transition-colors text-[9px] font-bold uppercase tracking-widest" title={isExpandedDoc ? tLocal('setups.collapseDoc') : tLocal('setups.readDoc')}>
                             {isExpandedDoc ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                            <span>{isExpandedDoc ? 'Collapse' : 'Read'}</span>
+                            <span>{isExpandedDoc ? tLocal('setups.collapseDoc') : tLocal('setups.readDoc')}</span>
                          </button>
                        )}
                      </div>
@@ -1341,13 +1317,13 @@ export default function SetupsView({
                       {!formDesc ? (
                          <div className="py-16 text-center opacity-50 flex flex-col items-center justify-center gap-3 italic" style={{ color: theme.textoPrincipal }}>
                            <FileText size={32} className="opacity-20" />
-                           No document attached.
+                           {tLocal('setups.noDoc')}
                          </div>
                       ) : formDesc.startsWith('data:application/pdf') ? (
                          <object data={formDesc} type="application/pdf" className="w-full h-[1100px] bg-white">
                            <div className="p-10 flex flex-col items-center justify-center text-center h-full">
-                             <p className="mb-4 font-bold text-black">Your browser does not support embedded PDFs.</p>
-                             <a href={formDesc} download={formFileName || 'Setup_Doc.pdf'} className="px-6 py-2 bg-yellow-500 text-black font-bold text-xs uppercase tracking-widest rounded-lg">Download PDF</a>
+                             <p className="mb-4 font-bold text-black">{tLocal('setups.pdfNotSupported')}</p>
+                             <a href={formDesc} download={formFileName || 'Setup_Doc.pdf'} className="px-6 py-2 bg-yellow-500 text-black font-bold text-xs uppercase tracking-widest rounded-lg">{tLocal('setups.downloadPdf')}</a>
                            </div>
                          </object>
                       ) : formDesc.includes('wordprocessingml') || formFileName.endsWith('.docx') ? (
@@ -1355,7 +1331,7 @@ export default function SetupsView({
                            {isParsingDocx ? (
                               <div className="flex flex-col gap-4 py-10 items-center justify-center opacity-50">
                                  <div className="w-10 h-10 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mb-4" />
-                                 <span className="font-bold tracking-widest uppercase text-xs">Parsing DOCX...</span>
+                                 <span className="font-bold tracking-widest uppercase text-xs">{tLocal('setups.parsingDocx')}</span>
                               </div>
                            ) : docxHtml ? (
                               <>
@@ -1387,7 +1363,7 @@ export default function SetupsView({
                                  `}</style>
                                  <div className="docx-reader" dangerouslySetInnerHTML={{ __html: docxHtml }} /></>
                            ) : (
-                              <div className="py-10 text-center text-red-500 font-bold">Failed to render DOCX inline. Please download it using the button above.</div>
+                              <div className="py-10 text-center text-red-500 font-bold">{tLocal('setups.docxError')}</div>
                            )}
                          </div>
                       ) : formDesc.startsWith('data:image/') ? (
@@ -1400,7 +1376,7 @@ export default function SetupsView({
                            <div className="w-14 h-14 bg-blue-500/20 text-blue-500 rounded-full flex items-center justify-center"><FileText size={28} /></div>
                            <p className="text-sm font-bold text-black">{formFileName}</p>
                            <a href={formDesc} download={formFileName || 'SetupDocument'} className="px-8 py-3 bg-yellow-500 text-black font-bold text-xs uppercase tracking-widest rounded-lg flex items-center gap-2">
-                             <Download size={16} /> Download File
+                             <Download size={16} /> {tLocal('setups.downloadFile')}
                            </a>
                          </div>
                       )}
@@ -1415,20 +1391,19 @@ export default function SetupsView({
                      {globalChartNode}
                    </div>
                    
-                   {/* 3. PERFORMANCE DATA TABLE (Grid Layout for Versions) */}
+                   {/* 3. PERFORMANCE DATA TABLE */}
                    <div className="w-full flex flex-col md:flex-row gap-4 mt-4">
                      
                      {/* COLUMN 1: Performance Versions Card */}
                      <div className="w-full md:w-1/3 p-5 rounded-2xl border flex flex-col shadow-sm max-h-[700px] overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
                        <div className="flex justify-between items-center mb-4">
                          <h3 className="text-xs font-black tracking-widest uppercase flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
-                           <CalendarDays size={14} className="text-yellow-500" /> Performance Versions
+                           <CalendarDays size={14} className="text-yellow-500" /> {tLocal('setups.performanceVersions')}
                          </h3>
                        </div>
 
                        <button 
                          onClick={() => {
-                           // Reset staging table and local states
                            setActiveGroupName('');
                            setOriginalGroupName('');
                            setStagingTargets([]);
@@ -1445,7 +1420,7 @@ export default function SetupsView({
                          className="w-full py-3 mb-4 rounded-xl font-bold text-black transition-all hover:brightness-110 active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.2)] flex justify-center items-center gap-2 text-xs uppercase tracking-widest"
                          style={{ background: '#eab308' }}
                        >
-                         <Plus size={16} /> New Performance
+                         <Plus size={16} /> {tLocal('setups.newPerformance')}
                        </button>
 
                         <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-3 pb-2 pr-1">
@@ -1463,33 +1438,29 @@ export default function SetupsView({
                                 }`}
                                 style={{ borderColor: isSelected && isEditingGroup ? undefined : isSelected ? theme.contornoGeral : 'transparent', border: isSelected && isEditingGroup ? '1px solid rgba(234,179,8,0.5)' : undefined }}
                                 onClick={() => {
-                                  // Click on card = read-only view
                                   setActiveGroupName(g.name);
                                   setOriginalGroupName(g.name);
                                   setIsEditingGroup(false);
                                   const myT = getTargetsForGroup(g.name);
                                   setStagingTargets(myT.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
                                   restoreDisabledWeekdays(g.name);
-                                  // Also set as active chart group
                                   setActiveChartGroupNames(prev => ({...prev, [selectedSetupId as string]: g.name}));
                                 }}
                               >
                                 <div className="flex items-start gap-2 min-w-0">
                                   <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                                     <h4 className="text-xs font-black font-display uppercase truncate" style={{ color: theme.textoPrincipal }} title={g.name}>{g.name}</h4>
-                                    {isActiveChart && <span className="text-[9px] text-yellow-500 font-bold uppercase tracking-widest">◉ Active Chart</span>}
+                                    {isActiveChart && <span className="text-[9px] text-yellow-500 font-bold uppercase tracking-widest">◉ {tLocal('setups.activeChart')}</span>}
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                                     {/* Preview button */}
                                      <button
                                        onClick={() => handleOpenPreview(g.name, formTitle)}
                                        className="p-1.5 rounded-lg transition-colors hover:bg-purple-500/20 opacity-60 hover:opacity-100"
                                        style={{ color: '#a855f7' }}
-                                       title="Abrir preview do dashboard nesta versão"
+                                       title={tLocal('setups.previewTooltip')}
                                      >
                                        <Search size={12} />
                                      </button>
-                                    {/* Chart toggle icon */}
                                     <button
                                       onClick={() => {
                                         setActiveChartGroupNames(prev => ({
@@ -1499,7 +1470,7 @@ export default function SetupsView({
                                       }}
                                       className={`p-1.5 rounded-lg transition-colors ${isActiveChart ? 'bg-yellow-500/20 text-yellow-500' : 'hover:bg-white/10 opacity-40 hover:opacity-100'}`}
                                       style={{ color: isActiveChart ? undefined : theme.textoPrincipal }}
-                                      title={isActiveChart ? 'Desativar do gráfico' : 'Mostrar no gráfico'}
+                                      title={isActiveChart ? tLocal('setups.chartDisableTooltip') : tLocal('setups.chartEnableTooltip')}
                                     >
                                       <TrendingUp size={12} />
                                     </button>
@@ -1514,14 +1485,14 @@ export default function SetupsView({
                                       }}
                                       className={`p-1.5 rounded-lg transition-colors ${ isSelected && isEditingGroup ? 'bg-yellow-500 text-black' : 'hover:bg-white/10'}`} 
                                       style={{ color: isSelected && isEditingGroup ? '#000' : theme.textoPrincipal }} 
-                                      title="Edit Version"
+                                      title={tLocal('setups.editVersionTooltip')}
                                     >
                                       <Edit2 size={12} />
                                     </button>
                                     <button 
                                       onClick={async () => {
-                                        if(window.confirm(`Deletar a versão de performance "${g.name}" e todos seus dados?`)) {
-                                           const myT = (setupTargets||[]).filter((t:any) => t.setup_id === selectedSetupId && t.group_name === g.name);
+                                        if(window.confirm(tLocal('setups.deleteVersionConfirm').replace('{name}', g.name))) {
+                                           const myT = (setupTargets||[]).filter((tItem:any) => tItem.setup_id === selectedSetupId && tItem.group_name === g.name);
                                            if (myT.length > 0) {
                                               await deleteSetupTarget(myT.map((x:any)=>x.id));
                                            }
@@ -1537,7 +1508,7 @@ export default function SetupsView({
                                         }
                                       }}
                                       className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-500 transition-colors"
-                                      title="Deletar Versão"
+                                      title={tLocal('setups.deleteVersionTooltip')}
                                     >
                                       <Trash2 size={12} />
                                     </button>
@@ -1552,7 +1523,7 @@ export default function SetupsView({
                           })}
                           {setupGroups.length === 0 && (
                             <div className="p-4 text-center opacity-40 text-xs font-bold uppercase tracking-widest mt-10" style={{ color: theme.textoPrincipal }}>
-                              Nenhuma versão salva ainda.
+                              {tLocal('setups.noVersions')}
                             </div>
                           )}
                         </div>
@@ -1566,7 +1537,7 @@ export default function SetupsView({
                             type="text"
                             value={activeGroupName}
                             onChange={(e) => setActiveGroupName(e.target.value)}
-                            placeholder="Nome da versão (ex: V1, RR 1:2)"
+                            placeholder={tLocal('setups.versionPlaceholder')}
                             readOnly={!isEditingGroup}
                             className={`w-full bg-black/20 border p-2 rounded-xl text-sm font-bold font-display outline-none transition-colors placeholder:text-gray-500 ${
                               isEditingGroup ? 'focus:border-yellow-500 cursor-text' : 'opacity-70 cursor-default'
@@ -1574,7 +1545,7 @@ export default function SetupsView({
                             style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
                           />
                           </div>
-                                                <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2">
                               <div className="flex bg-black/40 rounded-lg border" style={{ borderColor: theme.contornoGeral }}>
                                 <select 
                                    value={filterPeriod} 
@@ -1582,7 +1553,7 @@ export default function SetupsView({
                                    className="bg-transparent text-[9px] font-bold uppercase tracking-wider outline-none px-2 py-1.5"
                                    style={{ color: theme.textoPrincipal }}
                                 >
-                                   {availablePeriods.map(p => <option key={p} value={p} className="bg-gray-900 normal-case">{p}</option>)}
+                                   {availablePeriods.map(p => <option key={p} value={p} className="bg-gray-900 normal-case">{p === 'All Time' ? tLocal('setups.allTime') : p}</option>)}
                                 </select>
                               </div>
                               {isEditingGroup ? (
@@ -1594,7 +1565,7 @@ export default function SetupsView({
                                          setStagingTargets(myT.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
                                       }}
                                       className="h-8 w-8 flex items-center justify-center rounded-lg font-bold bg-white/5 hover:bg-red-500/20 text-red-500 border-none transition-all shrink-0"
-                                      title="Cancelar Edições"
+                                      title={tLocal('setups.cancelEditTooltip')}
                                    >
                                       <X size={14} />
                                    </button>
@@ -1603,7 +1574,7 @@ export default function SetupsView({
                                      disabled={!activeGroupName}
                                      className="h-8 px-4 rounded-lg font-bold text-black border-none text-[10px] uppercase tracking-widest bg-yellow-500 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shrink-0"
                                    >
-                                      <Check size={13} /> Save
+                                      <Check size={13} /> {tLocal('setups.save')}
                                    </button>
                                  </>
                               ) : (
@@ -1612,7 +1583,7 @@ export default function SetupsView({
                                      disabled={!activeGroupName}
                                      className="h-8 px-4 rounded-lg font-bold text-black border-none text-[10px] uppercase tracking-widest bg-yellow-500 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0"
                                    >
-                                      <Edit2 size={13} /> Edit
+                                      <Edit2 size={13} /> {tLocal('setups.edit')}
                                    </button>
                               )}
                               <button
@@ -1623,19 +1594,18 @@ export default function SetupsView({
                                  }} 
                                  className="h-8 px-4 rounded-lg font-bold text-white border-none text-[10px] uppercase tracking-widest bg-blue-500 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0"
                               >
-                                 <Settings size={13} /> Params
+                                 <Settings size={13} /> {tLocal('setups.params')}
                               </button>
                            </div>
                         </div>
 
                          <div className="w-full overflow-x-auto hide-scrollbar flex flex-col h-full">
-                         {/* TARGET FORM — only visible in edit mode */}
+                         {/* TARGET FORM */}
                          {isEditingGroup && (
                          <div className="flex flex-col gap-3 p-3 bg-black/20 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
-                             {/* ROW 1: Reference fields (persistent) — Dia, Mês, Ano + Stop Pts, R/R, Val/Pt, Ativo */}
                              <div className="flex flex-wrap items-end gap-2">
                                 <div className="flex flex-col gap-1 w-[52px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Dia</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>{tLocal('setups.day')}</label>
                                    <input
                                      type="number" min={1} max={31} placeholder="DD"
                                      className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold text-center"
@@ -1648,7 +1618,7 @@ export default function SetupsView({
                                    />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[52px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Mês</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>{tLocal('setups.month')}</label>
                                    <input
                                      type="number" min={1} max={12} placeholder="MM"
                                      className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold text-center"
@@ -1661,7 +1631,7 @@ export default function SetupsView({
                                    />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[68px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Ano</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>{tLocal('setups.year')}</label>
                                    <input
                                      type="number" min={2000} max={2099} placeholder="AAAA"
                                      className="h-8 px-1 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold text-center"
@@ -1672,49 +1642,48 @@ export default function SetupsView({
                                 </div>
                                 <div className="w-px h-8 bg-white/10 self-end" />
                                 <div className="flex flex-col gap-1 w-[110px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Pts de Stop</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>{tLocal('setups.stopPts')}</label>
                                    <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetStopPoints} onChange={e => setTargetStopPoints(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[110px]">
-                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Pts de Take</label>
+                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>{tLocal('setups.takePts')}</label>
                                     <input type="number" placeholder="Ex: 100" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetRiskReward} onChange={e => setTargetRiskReward(e.target.value ? Number(e.target.value) : '')} />
                                  </div>
                                 <div className="flex flex-col gap-1 w-[80px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Val/Pt $</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>{tLocal('setups.valPt')}</label>
                                    <input type="number" step="0.01" placeholder="0.20" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetPointValue} onChange={e => setTargetPointValue(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[80px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Comissão</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>{tLocal('setups.commission')}</label>
                                    <input type="number" step="0.01" placeholder="Ex: 1.50" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetCommission} onChange={e => setTargetCommission(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[120px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>Ativo</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-yellow-500" style={{ color: theme.textoPrincipal }}>{tLocal('setups.asset')}</label>
                                    <input type="text" placeholder="Ex: EURUSD" className="h-8 px-2 rounded-lg bg-black/40 border outline-none focus:border-yellow-500 w-full text-[9px] font-mono font-bold uppercase" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }} value={targetAsset} onChange={e => setTargetAsset(e.target.value.toUpperCase())} />
                                 </div>
                                 <div className="flex flex-col gap-1 ml-auto text-[8px] opacity-30 italic max-w-[140px] text-right pb-1" style={{ color: theme.textoPrincipal }}>
-                                   Referência — persiste entre entradas
+                                   {tLocal('setups.refPersists')}
                                 </div>
                              </div>
 
                              <div className="w-full h-px bg-white/5 my-0.5" style={{ background: theme.contornoGeral }}></div>
 
-                             {/* ROW 2: Per-entry fields (cleared after each Add) */}
                              <div className="flex flex-wrap items-end gap-2">
                                 <div className="flex flex-col gap-1 w-[64px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-green-500">Takes</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-green-500">{tLocal('setups.takes')}</label>
                                    <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-green-500/20 text-[9px] font-mono font-bold w-full outline-none focus:bg-white/10 text-center" style={{ color: theme.textoPrincipal }} value={targetTakes} onChange={e => setTargetTakes(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[64px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">Stops</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-red-500">{tLocal('setups.stops')}</label>
                                    <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-red-500/20 text-[9px] font-mono font-bold w-full outline-none focus:bg-white/10 text-center" style={{ color: theme.textoPrincipal }} value={targetStops} onChange={e => setTargetStops(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[64px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate">Breakeven</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate">{tLocal('setups.breakeven')}</label>
                                    <input type="number" placeholder="0" className="h-8 px-2 rounded-lg bg-white/5 border border-[#00B0F0]/20 text-[9px] font-mono font-bold w-full outline-none focus:bg-white/10 text-center" style={{ color: theme.textoPrincipal }} value={targetBreakevens} onChange={e => setTargetBreakevens(e.target.value ? Number(e.target.value) : '')} />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[84px]">
                                    <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 flex items-center justify-between" style={{ color: theme.textoPrincipal }}>
-                                     Val $ {isAutoCalc && <span className="text-yellow-500 text-[6px] ml-1">(Auto)</span>}
+                                     {tLocal('setups.val')} {isAutoCalc && <span className="text-yellow-500 text-[6px] ml-1">(Auto)</span>}
                                    </label>
                                    <input 
                                      type={isAutoCalc ? "text" : "number"} 
@@ -1728,7 +1697,7 @@ export default function SetupsView({
                                    />
                                 </div>
                                 <div className="flex flex-col gap-1 w-[64px]">
-                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate" title="Win Rate">W.Rate</label>
+                                   <label className="text-[8px] uppercase font-bold tracking-widest opacity-50 text-[#00B0F0] truncate" title="Win Rate">{tLocal('setups.winRate')}</label>
                                    <div className="h-8 px-2 rounded-lg bg-black/20 border text-[9px] font-mono font-bold w-full flex items-center justify-center" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
                                       {targetTakes !== '' && targetStops !== '' && (Number(targetTakes)+Number(targetStops)) > 0 ? ((Number(targetTakes)/(Number(targetTakes)+Number(targetStops)))*100).toFixed(0) + '%' : '—'}
                                    </div>
@@ -1738,24 +1707,23 @@ export default function SetupsView({
                                     onClick={() => setShowBulkModal(true)}
                                     className="h-8 px-4 flex-1 sm:flex-none rounded-lg bg-yellow-500 text-black font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 uppercase tracking-widest flex items-center justify-center gap-1.5"
                                   >
-                                    <List size={12} /> Colar Op.
+                                    <List size={12} /> {tLocal('setups.pasteOps')}
                                   </button>
                                   <button 
                                     onClick={handleSubmitTarget}
                                     disabled={!(Number(targetDay) > 0 && Number(targetMonth) > 0 && Number(targetYear) > 0) || !targetAsset}
                                     className="h-8 px-5 flex-1 sm:flex-none rounded-lg bg-[#00B0F0] text-white font-bold text-[10px] shadow-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest flex items-center justify-center gap-1.5"
                                   >
-                                    <Plus size={12} /> Add
+                                    <Plus size={12} /> {tLocal('setups.add')}
                                   </button>
                                 </div>
                              </div>
 
-                             {/* ROW 3: Weekday Filters */}
+                             {/* Weekday Filters */}
                              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                <span className="text-[8px] uppercase font-bold tracking-widest opacity-50 shrink-0" style={{ color: theme.textoPrincipal }}>Dias Habilitados:</span>
+                                <span className="text-[8px] uppercase font-bold tracking-widest opacity-50 shrink-0" style={{ color: theme.textoPrincipal }}>{tLocal('setups.enabledDays')}</span>
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   {[0, 1, 2, 3, 4, 5, 6].map(dayIdx => {
-                                    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
                                     const isEnabled = !disabledWeekdays.has(dayIdx);
                                     return (
                                       <button
@@ -1797,14 +1765,14 @@ export default function SetupsView({
                                   onChange={handleSelectAll} 
                                   checked={tableRows.length > 0 && selectedTargetIds.size === tableRows.length} 
                                 />
-                                <span className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Select All</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>{tLocal('setups.selectAll')}</span>
                              </div>
                              {selectedTargetIds.size > 0 && (
                                 <button 
                                   onClick={handleBulkDelete}
                                   className="px-3 py-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 text-[9px] uppercase font-bold tracking-widest rounded transition-colors flex items-center gap-1.5"
                                 >
-                                  <Trash2 size={12} /> Delete Selected ({selectedTargetIds.size})
+                                  <Trash2 size={12} /> {tLocal('setups.deleteSelected')} ({selectedTargetIds.size})
                                 </button>
                              )}
                           </div>
@@ -1815,20 +1783,20 @@ export default function SetupsView({
                               <thead className="sticky top-0 z-10" style={{ backgroundColor: theme.fundoCards || '#0a0a0a' }}>
                                  <tr className="border-b text-[10px] uppercase font-bold tracking-widest opacity-80" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}>
                                    {isEditingGroup && <th className="py-3 px-3 w-8"></th>}
-                                   <th className="py-3 px-2 font-bold text-center">Date</th>
-                                   <th className="py-3 px-2 font-bold text-center">Asset</th>
-                                   <th className="py-3 px-2 font-bold text-center">TAKES</th>
-                                   <th className="py-3 px-2 font-bold text-center">STOPS</th>
-                                   <th className="py-3 px-2 font-bold text-center">BREAKEVEN</th>
-                                   <th className="py-3 px-2 font-bold text-center">Gross P&L</th>
-                                   <th className="py-3 px-2 font-bold text-center text-orange-400">Comissão</th>
-                                   <th className="py-3 px-2 font-bold text-center">Net P&L</th>
-                                   <th className="py-3 px-2 font-bold text-center">Win Rate</th>
-                                   <th className="py-3 px-2 font-bold text-center w-16">Action</th>
+                                   <th className="py-3 px-2 font-bold text-center">{tLocal('setups.date')}</th>
+                                   <th className="py-3 px-2 font-bold text-center">{tLocal('setups.asset')}</th>
+                                   <th className="py-3 px-2 font-bold text-center">{tLocal('setups.takes')}</th>
+                                   <th className="py-3 px-2 font-bold text-center">{tLocal('setups.stops')}</th>
+                                   <th className="py-3 px-2 font-bold text-center">{tLocal('setups.breakeven')}</th>
+                                   <th className="py-3 px-2 font-bold text-center">{tLocal('setups.grossPnl')}</th>
+                                   <th className="py-3 px-2 font-bold text-center text-orange-400">{tLocal('setups.commission')}</th>
+                                   <th className="py-3 px-2 font-bold text-center">{tLocal('setups.netPnl')}</th>
+                                   <th className="py-3 px-2 font-bold text-center">{tLocal('setups.winRate')}</th>
+                                   <th className="py-3 px-2 font-bold text-center w-16">{tLocal('setups.action')}</th>
                                 </tr>
                              </thead>
                              <tbody>
-                                {tableRows.map((r, i) => {
+                                {tableRows.map((r) => {
                                   const isSelected = selectedTargetIds.has(r.id);
                                   const isEditing = editingTargetId === r.id;
                                   
@@ -1880,8 +1848,8 @@ export default function SetupsView({
                                            </td>
                                            <td className="py-1 px-1 text-center">
                                               <div className="flex items-center justify-center gap-1.5">
-                                                 <button onClick={saveInlineEdit} className="p-1 rounded bg-green-500/20 text-green-500 hover:bg-green-500/40 transition-colors" title="Save"><Check size={14}/></button>
-                                                 <button onClick={cancelInlineEdit} className="p-1 rounded bg-red-500/20 text-red-500 hover:bg-red-500/40 transition-colors" title="Cancel"><X size={14}/></button>
+                                                 <button onClick={saveInlineEdit} className="p-1 rounded bg-green-500/20 text-green-500 hover:bg-green-500/40 transition-colors" title={tLocal('setups.save')}><Check size={14}/></button>
+                                                 <button onClick={cancelInlineEdit} className="p-1 rounded bg-red-500/20 text-red-500 hover:bg-red-500/40 transition-colors" title={tLocal('setups.cancel')}><X size={14}/></button>
                                               </div>
                                            </td>
                                          </>
@@ -1907,13 +1875,13 @@ export default function SetupsView({
                                            <td className="py-2.5 px-2 text-center">
                                                {isEditingGroup ? (
                                                <div className="flex items-center justify-center gap-1">
-                                                  <button onClick={() => startInlineEdit(r)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white inline-flex" title="Editar">
+                                                  <button onClick={() => startInlineEdit(r)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white inline-flex" title={tLocal('setups.edit')}>
                                                      <Edit2 size={13} />
                                                   </button>
                                                   <button 
-                                                    onClick={() => { if(window.confirm('Remover este registro do staging?')) { setStagingTargets(prev => prev.filter(t => t.id !== r.id)); } }}
+                                                    onClick={() => { if(window.confirm(tLocal('setups.removeStagingConfirm'))) { setStagingTargets(prev => prev.filter(tItem => tItem.id !== r.id)); } }}
                                                     className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors inline-flex"
-                                                    title="Remover"
+                                                    title={tLocal('setups.removeFile')}
                                                   >
                                                      <Trash2 size={13} />
                                                   </button>
@@ -1928,14 +1896,14 @@ export default function SetupsView({
                                   );
                                 })}
                                 {tableRows.length === 0 && (
-                                  <tr><td colSpan={9} className="py-12 text-center text-xs opacity-50 italic" style={{ color: theme.textoPrincipal }}>Staging table is empty. Input below to add rows.</td></tr>
+                                  <tr><td colSpan={10} className="py-12 text-center text-xs opacity-50 italic" style={{ color: theme.textoPrincipal }}>{tLocal('setups.emptyStaging')}</td></tr>
                                 )}
                              </tbody>
                               {tableRows.length > 0 && (
                                  <tfoot className="sticky bottom-0 z-10" style={{ backgroundColor: theme.fundoCards || '#0a0a0a' }}>
                                    <tr>
-                                      <td className="py-3 px-2 text-[10px] font-black uppercase tracking-widest text-center" colSpan={3} style={{ color: theme.textoPrincipal }}>
-                                         Grand Total ({grandTotal.takes + grandTotal.stops + grandTotal.breakevens} Ops)
+                                      <td className="py-3 px-2 text-[10px] font-black uppercase tracking-widest text-center" colSpan={isEditingGroup ? 4 : 3} style={{ color: theme.textoPrincipal }}>
+                                         {tLocal('setups.grandTotal')} ({grandTotal.takes + grandTotal.stops + grandTotal.breakevens} Ops)
                                       </td>
                                       <td className="py-3 px-2 text-[10px] font-black text-green-500 text-center">{grandTotal.takes}</td>
                                       <td className="py-3 px-2 text-[10px] font-black text-red-500 text-center">{grandTotal.stops}</td>
@@ -1950,17 +1918,17 @@ export default function SetupsView({
                                         {grandNetPnl < 0 ? '-' : ''}${Math.abs(grandNetPnl).toFixed(2)}
                                       </td>
                                       <td className={`py-3 px-2 text-[10px] font-black text-center ${grandWinRate >= 50 ? 'text-[#00B0F0]' : 'text-orange-400'}`} colSpan={2}>
-                                        {grandWinRate.toFixed(1)}% Avg
+                                        {grandWinRate.toFixed(1)}% {tLocal('setups.avg')}
                                       </td>
                                    </tr>
                                 </tfoot>
                              )}
-                          </table>
+                           </table>
                         </div>
                      </div>
                   </div>
                  </div>
-               </div>
+                 </div>
                )}
               </div>
             )}
@@ -1982,7 +1950,7 @@ export default function SetupsView({
                <div className="w-full max-w-2xl flex flex-col shadow-2xl relative border rounded-2xl overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
                      <h3 className="text-sm font-black tracking-widest uppercase flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
-                        <List size={16} className="text-yellow-500" /> Colar ou Importar Operações
+                        <List size={16} className="text-yellow-500" /> {tLocal('setups.pasteImportTitle')}
                      </h3>
                      <button onClick={() => setShowBulkModal(false)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
                         <X size={16} style={{ color: theme.textoPrincipal }} />
@@ -1990,29 +1958,29 @@ export default function SetupsView({
                   </div>
                   <div className="flex flex-col gap-3 p-6 flex-1 overflow-y-auto">
                      <p className="text-xs opacity-70 leading-relaxed" style={{ color: theme.textoPrincipal }}>
-                       Cole o texto ou envie um <strong>print/imagem da tabela</strong> (OCR automático).<br/>
-                       Formato esperado: <code className="bg-black/30 px-1 rounded">Data | Dia | Take | Stop | BE | Result | Win Rate | Seq</code>
+                       {tLocal('setups.pasteImportDesc')}<br/>
+                       {tLocal('setups.expectedFormat')} <code className="bg-black/30 px-1 rounded">Data | Dia | Take | Stop | BE | Result | Win Rate | Seq</code>
                      </p>
 
                      {/* OCR Image Upload & Paste Area */}
                      <div className="flex items-center gap-3 p-3 rounded-xl border border-dashed bg-white/[0.02]" style={{ borderColor: theme.contornoGeral }}>
                         <label className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/20 transition-all text-xs font-bold uppercase tracking-wider cursor-pointer shrink-0">
-                           {isOcrProcessing ? <Loader2 size={15} className="animate-spin" /> : <ImageIcon size={15} />}
-                           {isOcrProcessing ? 'Lendo Imagem...' : 'Carregar Print (OCR)'}
-                           <input 
-                             type="file" 
-                             accept="image/*" 
-                             disabled={isOcrProcessing}
-                             className="hidden" 
-                             onChange={(e) => {
-                               const file = e.target.files?.[0];
-                               if (file) handleOcrImage(file);
-                               e.target.value = '';
-                             }}
-                           />
+                            {isOcrProcessing ? <Loader2 size={15} className="animate-spin" /> : <ImageIcon size={15} />}
+                            {isOcrProcessing ? tLocal('setups.readingImage') : tLocal('setups.uploadOcr')}
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              disabled={isOcrProcessing}
+                              className="hidden" 
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleOcrImage(file);
+                                e.target.value = '';
+                              }}
+                            />
                         </label>
                         <span className="text-[10px] opacity-60 leading-tight" style={{ color: theme.textoPrincipal }}>
-                           {isOcrProcessing ? (ocrStatus || 'Processando...') : 'Ou cole uma imagem/print diretamente com Ctrl+V neste modal.'}
+                           {isOcrProcessing ? (ocrStatus || 'Processando...') : tLocal('setups.pasteHint')}
                         </span>
                      </div>
 
@@ -2027,10 +1995,10 @@ export default function SetupsView({
                   </div>
                   <div className="flex justify-end gap-3 px-6 py-4 border-t shrink-0" style={{ borderColor: theme.contornoGeral, background: 'rgba(0,0,0,0.2)' }}>
                      <button onClick={() => setShowBulkModal(false)} className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white/5 transition-colors" style={{ color: theme.textoPrincipal }}>
-                        Cancelar
+                        {tLocal('setups.cancel')}
                      </button>
                      <button onClick={handleBulkInsert} disabled={isOcrProcessing} className="px-6 py-2 rounded-lg text-black bg-yellow-500 hover:brightness-110 active:scale-95 transition-all text-xs font-bold uppercase tracking-widest flex items-center gap-2 disabled:opacity-50">
-                        <Check size={14} /> Processar
+                        <Check size={14} /> {tLocal('setups.process')}
                      </button>
                   </div>
                </div>
@@ -2047,7 +2015,7 @@ export default function SetupsView({
                <div className="w-full max-w-3xl h-[88vh] min-h-[600px] flex flex-col shadow-2xl relative border rounded-2xl overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }} onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: theme.contornoGeral }}>
                      <h3 className="text-sm font-black tracking-widest uppercase flex items-center gap-2" style={{ color: theme.textoPrincipal }}>
-                        <BookOpen size={16} className="text-blue-400" /> Strategy Log
+                        <BookOpen size={16} className="text-blue-400" /> {tLocal('setups.strategyLog')}
                         <span className="text-[10px] opacity-40 font-normal normal-case tracking-normal ml-1">
                           {setups.find((s:any) => s.id === selectedSetupId)?.title}
                         </span>
@@ -2058,7 +2026,7 @@ export default function SetupsView({
                   </div>
                   <div className="flex items-end gap-3 px-6 py-4 border-b shrink-0" style={{ borderColor: theme.contornoGeral, background: 'rgba(0,0,0,0.2)' }}>
                      <div className="flex flex-col gap-1">
-                        <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>Data da entrada</label>
+                        <label className="text-[8px] uppercase font-bold tracking-widest opacity-50" style={{ color: theme.textoPrincipal }}>{tLocal('setups.entryDate')}</label>
                         <input type="date" value={configDate} onChange={e => setConfigDate(e.target.value)} className="h-8 px-3 rounded-lg bg-black/30 border text-[11px] font-bold outline-none focus:border-blue-400 w-[150px]" style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, colorScheme: 'dark' }} />
                      </div>
                      <button disabled={!configDate} onClick={() => {
@@ -2067,15 +2035,15 @@ export default function SetupsView({
                            setConfigDate(new Date().toISOString().split('T')[0]);
                         }
                      }} className="h-8 px-4 rounded-lg font-bold text-white text-[10px] uppercase tracking-widest bg-blue-500 hover:brightness-110 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
-                        <Plus size={13} /> Criar entrada
+                        <Plus size={13} /> {tLocal('setups.createEntry')}
                      </button>
-                     <p className="text-[10px] opacity-30 italic mb-1" style={{ color: theme.textoPrincipal }}>O texto e salvo ao sair do campo.</p>
+                     <p className="text-[10px] opacity-30 italic mb-1" style={{ color: theme.textoPrincipal }}>{tLocal('setups.notesSavedHint')}</p>
                   </div>
                   <div className="flex flex-col gap-3 overflow-y-auto hide-scrollbar px-6 py-4 flex-1" style={{ minHeight: 0 }}>
                      {myLogs.length === 0 && (
                         <div className="py-16 flex flex-col items-center gap-3 opacity-30">
                            <BookOpen size={32} style={{ color: theme.textoPrincipal }} />
-                           <p className="text-xs font-bold uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>Nenhum log ainda. Crie uma entrada acima.</p>
+                           <p className="text-xs font-bold uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>{tLocal('setups.noLogsYet')}</p>
                         </div>
                      )}
                      {myLogs.map((log:any, idx:number) => (
@@ -2093,7 +2061,7 @@ export default function SetupsView({
                                  }
                               }}
                               rows={12}
-                              placeholder="Escreva suas anotacoes aqui... (ex: Mudei o RR para 1:2, Ajustei a MM...)"
+                              placeholder={tLocal('setups.notesPlaceholder')}
                               className="w-full min-h-[220px] bg-black/20 border rounded-lg p-3 text-[11px] font-medium outline-none focus:border-blue-400/60 resize-y leading-relaxed"
                               style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal }}
                            />

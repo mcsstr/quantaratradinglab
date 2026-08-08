@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import {
-  ListIcon, Trash2, Search, ArrowDown, ArrowUp, Edit2, CalendarDays, X
+  ListIcon, Trash2, Search, ArrowDown, ArrowUp, Edit2, CalendarDays
 } from '../../components/Icons';
 import { hexToRgba } from '../../utils/constants';
+import { t as tUtil } from '../../utils/i18n';
 
 const SectionTitle = ({ icon: Icon, title, theme, rightElement = null }: any) => (
   <div className="flex items-center justify-between mb-4 w-full">
@@ -24,6 +25,7 @@ export default function TradesView({
   toggleWeekday,
   onResetFilters,
   allTradesCount = 0,
+  t,
   lang = 'en',
   selectedTrades,
   setSelectedTrades,
@@ -58,8 +60,7 @@ export default function TradesView({
   const [isConfirmDeleteAllOpen, setIsConfirmDeleteAllOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isPt = lang === 'pt';
-  const isEs = lang === 'es';
+  const tLocal = (key: string) => (t ? t(key, lang) : tUtil(key, lang));
 
   const moCol = settings?.mobileTableColumns || {};
   const getColClass = (key: string, desktopClass: string = '') => {
@@ -77,9 +78,9 @@ export default function TradesView({
           .eq('account_id', activeAccountId);
         if (error) throw error;
       }
-      setTrades((prev: any[]) => prev.filter((t: any) => t.accountId !== activeAccountId));
+      setTrades((prev: any[]) => prev.filter((tItem: any) => tItem.accountId !== activeAccountId));
       setIsConfirmDeleteAllOpen(false);
-      setToastMessage(isPt ? 'Todos os trades foram excluídos.' : isEs ? 'Todos los trades fueron eliminados.' : 'All trades deleted successfully.');
+      setToastMessage(tLocal('trades.allDeletedToast'));
       setTimeout(() => setToastMessage(''), 3000);
     } catch (err: any) {
       console.error('Delete All error:', err);
@@ -101,15 +102,9 @@ export default function TradesView({
           .in('id', selectedTrades);
         if (error) throw error;
       }
-      setTrades((prev: any[]) => prev.filter((t: any) => !selectedTrades.includes(t.id)));
+      setTrades((prev: any[]) => prev.filter((tItem: any) => !selectedTrades.includes(tItem.id)));
       setSelectedTrades([]);
-      setToastMessage(
-        isPt
-          ? `${selectedTrades.length} trade(s) excluído(s) com sucesso.`
-          : isEs
-          ? `${selectedTrades.length} trade(s) eliminado(s) con éxito.`
-          : `${selectedTrades.length} trade(s) deleted successfully.`
-      );
+      setToastMessage(tLocal('trades.selectedDeletedToast').replace('{count}', String(selectedTrades.length)));
       setTimeout(() => setToastMessage(''), 3000);
     } catch (err: any) {
       console.error('Delete Selected error:', err);
@@ -129,7 +124,7 @@ export default function TradesView({
           .eq('id', tradeId);
         if (error) throw error;
       }
-      setTrades((prev: any[]) => prev.filter((t: any) => t.id !== tradeId));
+      setTrades((prev: any[]) => prev.filter((tItem: any) => tItem.id !== tradeId));
     } catch (err: any) {
       console.error('Delete Single error:', err);
       setToastMessage(`Error: ${err.message}`);
@@ -138,25 +133,29 @@ export default function TradesView({
   };
 
   const filteredTradesPnl = filteredTrades
-    .filter((t: any) => !t.rawMetadata?.voided)
-    .reduce((acc: number, t: any) => acc + t.pnl - Number(t.commission || 0), 0);
+    .filter((tItem: any) => !tItem.rawMetadata?.voided)
+    .reduce((acc: number, tItem: any) => acc + tItem.pnl - Number(tItem.commission || 0), 0);
 
   const hasActiveFilters = Boolean(
     searchTerm || filterMonth !== 'all' || filterYear !== 'all' || (disabledWeekdays && disabledWeekdays.size > 0)
   );
 
-  const dayNames = isPt
-    ? ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-    : isEs
-    ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNames = [
+    tLocal('cal.sun'),
+    tLocal('cal.mon'),
+    tLocal('cal.tue'),
+    tLocal('cal.wed'),
+    tLocal('cal.thu'),
+    tLocal('cal.fri'),
+    tLocal('cal.sat'),
+  ];
 
   return (
     <div key="trades" className="space-y-6 max-w-[1600px] mx-auto w-full animate-tab-enter">
       <div className="flex items-center gap-3 shrink-0 px-2 md:px-0 mb-2">
         <ListIcon size={26} className="text-yellow-500" />
         <h1 className="text-xl md:text-2xl font-bold tracking-tight" style={{ color: theme.textoPrincipal }}>
-          {isPt ? 'Histórico de Trades' : isEs ? 'Historial de Trades' : 'Trades History'}
+          {tLocal('trades.historyTitle')}
         </h1>
       </div>
 
@@ -164,7 +163,7 @@ export default function TradesView({
         <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
           <SectionTitle
             icon={Search}
-            title={isPt ? 'Busca e Ordenação' : isEs ? 'Búsqueda y Orden' : 'Search & Sorting'}
+            title={tLocal('trades.searchSorting')}
             theme={theme}
           />
           <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4">
@@ -172,7 +171,7 @@ export default function TradesView({
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 transition-colors" style={{ color: theme.textoSecundario }} />
               <input
                 type="text"
-                placeholder={isPt ? 'Buscar por ativo, notas...' : isEs ? 'Buscar símbolo, notas...' : 'Search symbol, notes...'}
+                placeholder={tLocal('trades.searchPlaceholder')}
                 className="rounded-lg py-2 pl-9 pr-4 text-xs w-full outline-none transition-all shadow-sm focus:ring-1 bg-transparent"
                 style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid', color: theme.textoPrincipal }}
                 value={searchTerm}
@@ -181,14 +180,14 @@ export default function TradesView({
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="text-[10px] font-bold opacity-50 uppercase" style={{ color: theme.textoSecundario }}>
-                {isPt ? 'Ordem:' : isEs ? 'Orden:' : 'Order:'}
+                {tLocal('trades.order')}
               </span>
               <div className="flex flex-1 sm:flex-none rounded-lg p-0.5 shadow-sm bg-transparent border-white/5" style={{ borderColor: theme.contornoGeral, borderWidth: settings.borderWidthGeral, borderStyle: 'solid' }}>
                 <button onClick={() => setSortOrder('recent')} className="flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all text-center" style={{ backgroundColor: sortOrder === 'recent' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: sortOrder === 'recent' ? theme.textoPrincipal : theme.textoSecundario }}>
-                  {isPt ? 'Recente' : isEs ? 'Reciente' : 'Recent'}
+                  {tLocal('trades.recent')}
                 </button>
                 <button onClick={() => setSortOrder('oldest')} className="flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all text-center" style={{ backgroundColor: sortOrder === 'oldest' ? hexToRgba(theme.fundoPrincipal, 0.5) : 'transparent', color: sortOrder === 'oldest' ? theme.textoPrincipal : theme.textoSecundario }}>
-                  {isPt ? 'Antigo' : isEs ? 'Antiguo' : 'Oldest'}
+                  {tLocal('trades.oldest')}
                 </button>
               </div>
             </div>
@@ -198,7 +197,7 @@ export default function TradesView({
         <div className="rounded-xl p-6 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
           <SectionTitle
             icon={CalendarDays}
-            title={isPt ? 'Filtro de Histórico' : isEs ? 'Filtro de Historial' : 'History Filter'}
+            title={tLocal('trades.historyFilter')}
             theme={theme}
             rightElement={
               <span className="font-bold text-sm md:text-base" style={{ color: filteredTradesPnl >= 0 ? theme.textoPositivo : theme.textoNegativo }}>
@@ -215,7 +214,7 @@ export default function TradesView({
                   value={filterMonth}
                   onChange={e => setFilterMonth(e.target.value)}
                 >
-                  <option value="all" className="bg-gray-800">{isPt ? 'Mês: Todos' : isEs ? 'Mes: Todos' : 'Month: All'}</option>
+                  <option value="all" className="bg-gray-800">{tLocal('trades.monthAll')}</option>
                   {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={(i + 1).toString().padStart(2, '0')} className="bg-gray-800">{new Date(2000, i).toLocaleString(userLocale, { month: 'long' })}</option>)}
                 </select>
                 <select
@@ -224,7 +223,7 @@ export default function TradesView({
                   value={filterYear}
                   onChange={e => setFilterYear(e.target.value)}
                 >
-                  <option value="all" className="bg-gray-800">{isPt ? 'Ano: Todos' : isEs ? 'Año: Todos' : 'Year: All'}</option>
+                  <option value="all" className="bg-gray-800">{tLocal('trades.yearAll')}</option>
                   <option value="2024" className="bg-gray-800">2024</option>
                   <option value="2025" className="bg-gray-800">2025</option>
                   <option value="2026" className="bg-gray-800">2026</option>
@@ -237,7 +236,7 @@ export default function TradesView({
                     onClick={() => setIsConfirmDeleteAllOpen(true)}
                     className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap"
                   >
-                    <Trash2 size={14} /> {isPt ? 'Excluir Todos' : isEs ? 'Eliminar Todos' : 'Delete All'}
+                    <Trash2 size={14} /> {tLocal('trades.deleteAll')}
                   </button>
                 )}
                 {selectedTrades.length > 0 && (
@@ -246,7 +245,7 @@ export default function TradesView({
                     disabled={isDeleting}
                     className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 whitespace-nowrap disabled:opacity-40"
                   >
-                    <Trash2 size={14} /> {isDeleting ? (isPt ? 'Excluindo...' : isEs ? 'Eliminando...' : 'Deleting...') : `${isPt ? 'Excluir Selecionados' : isEs ? 'Eliminar Seleccionados' : 'Delete Selected'} (${selectedTrades.length})`}
+                    <Trash2 size={14} /> {isDeleting ? tLocal('trades.deleting') : `${tLocal('trades.deleteSelected')} (${selectedTrades.length})`}
                   </button>
                 )}
               </div>
@@ -254,7 +253,7 @@ export default function TradesView({
 
             <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="text-[10px] uppercase font-bold tracking-widest opacity-50 shrink-0" style={{ color: theme.textoPrincipal }}>
-                {isPt ? 'Dias da Semana:' : isEs ? 'Días de la Semana:' : 'Weekdays:'}
+                {tLocal('trades.weekdays')}
               </span>
               <div className="flex items-center gap-1.5 flex-wrap">
                 {[0, 1, 2, 3, 4, 5, 6].map(dayIdx => {
@@ -283,7 +282,7 @@ export default function TradesView({
                     onClick={onResetFilters}
                     className="text-[10px] font-bold uppercase tracking-wider text-yellow-500 hover:underline ml-2"
                   >
-                    {isPt ? '↺ Limpar Filtros' : isEs ? '↺ Restablecer' : '↺ Reset Filters'}
+                    {tLocal('trades.resetFilters')}
                   </button>
                 )}
               </div>
@@ -297,11 +296,7 @@ export default function TradesView({
           <div className="flex items-center gap-2">
             <span>⚠️</span>
             <span>
-              {isPt
-                ? `Existem ${allTradesCount} trades nesta conta, mas estão ocultos pelos filtros atuais.`
-                : isEs
-                ? `Hay ${allTradesCount} trades en esta cuenta, pero están ocultos por los filtros actuales.`
-                : `There are ${allTradesCount} trades in this account, but they are hidden by current filters.`}
+              {tLocal('trades.hiddenNotice').replace('{count}', String(allTradesCount))}
             </span>
           </div>
           {onResetFilters && (
@@ -309,7 +304,7 @@ export default function TradesView({
               onClick={onResetFilters}
               className="px-3 py-1.5 rounded-lg bg-yellow-500 text-black font-bold text-xs hover:bg-yellow-400 transition-all shrink-0"
             >
-              {isPt ? 'Limpar Filtros' : isEs ? 'Restablecer Filtros' : 'Reset All Filters'}
+              {tLocal('trades.resetAllFilters')}
             </button>
           )}
         </div>
@@ -320,20 +315,20 @@ export default function TradesView({
           <table className="w-full text-left text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap">
             <thead className="text-[9px] sm:text-[10px] md:text-xs tracking-wider font-bold" style={{ backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100), color: theme.textoSecundario }}>
               <tr>
-                <th className="px-2 py-3 md:px-4 md:py-4 w-10 text-center"><input type="checkbox" className="cursor-pointer" checked={paginatedTrades.length > 0 && selectedTrades.length === paginatedTrades.length} onChange={(e) => { if (e.target.checked) setSelectedTrades(paginatedTrades.map((t: any) => t.id)); else setSelectedTrades([]); }} /></th>
-                <th className={`${getColClass('symbol')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Ativo' : isEs ? 'Símb' : 'Sym'}</th>
-                <th className={`${getColClass('dateTime')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Data & Hora' : isEs ? 'Fecha & Hora' : 'Date & Time'}</th>
-                <th className={`${getColClass('direction')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Lado' : isEs ? 'Dir' : 'Dir'}</th>
-                <th className={`${getColClass('qty', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Qtd' : isEs ? 'Contratos' : 'Contracts'}</th>
-                <th className={`${getColClass('buyPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Preço Compra' : isEs ? 'Precio Compra' : 'Buy Price'}</th>
-                <th className={`${getColClass('buyTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Hora Entrada' : isEs ? 'Hora Entrada' : 'Buy Time'}</th>
-                <th className={`${getColClass('duration', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Duração' : isEs ? 'Duración' : 'Duration'}</th>
-                <th className={`${getColClass('sellTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Hora Saída' : isEs ? 'Hora Salida' : 'Sell Time'}</th>
-                <th className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Preço Venda' : isEs ? 'Precio Venta' : 'Sell Price'}</th>
-                <th className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Taxas' : isEs ? 'Comisiones' : 'Fees'}</th>
-                {showStrategyCol && <th className={`${getColClass('strategy', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Estratégia' : isEs ? 'Estrategia' : 'Strategy'}</th>}
-                <th className={`${getColClass('pnl')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Resultado' : isEs ? 'Resultado' : 'Gross P&L'}</th>
-                <th className={`${getColClass('action')} px-2 py-3 md:px-4 md:py-4 text-center`}>{isPt ? 'Ações' : isEs ? 'Acciones' : 'Action'}</th>
+                <th className="px-2 py-3 md:px-4 md:py-4 w-10 text-center"><input type="checkbox" className="cursor-pointer" checked={paginatedTrades.length > 0 && selectedTrades.length === paginatedTrades.length} onChange={(e) => { if (e.target.checked) setSelectedTrades(paginatedTrades.map((tItem: any) => tItem.id)); else setSelectedTrades([]); }} /></th>
+                <th className={`${getColClass('symbol')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.sym')}</th>
+                <th className={`${getColClass('dateTime')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.dateTime')}</th>
+                <th className={`${getColClass('direction')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.dir')}</th>
+                <th className={`${getColClass('qty', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.contracts')}</th>
+                <th className={`${getColClass('buyPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.buyPrice')}</th>
+                <th className={`${getColClass('buyTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.buyTime')}</th>
+                <th className={`${getColClass('duration', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.duration')}</th>
+                <th className={`${getColClass('sellTime', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.sellTime')}</th>
+                <th className={`${getColClass('sellPrice', 'hidden lg:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.sellPrice')}</th>
+                <th className={`${getColClass('fees', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.fees')}</th>
+                {showStrategyCol && <th className={`${getColClass('strategy', 'hidden md:table-cell')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.strategy')}</th>}
+                <th className={`${getColClass('pnl')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.grossPnl')}</th>
+                <th className={`${getColClass('action')} px-2 py-3 md:px-4 md:py-4 text-center`}>{tLocal('trades.action')}</th>
               </tr>
             </thead>
             <tbody>
@@ -403,7 +398,7 @@ export default function TradesView({
                           const nextVoided = !isVoided;
                           const newMetadata = { ...trade.rawMetadata, voided: nextVoided };
                           
-                          setTrades((prev: any) => prev.map((t: any) => t.id === trade.id ? { ...t, rawMetadata: newMetadata } : t));
+                          setTrades((prev: any) => prev.map((tItem: any) => tItem.id === trade.id ? { ...tItem, rawMetadata: newMetadata } : tItem));
                           
                           try {
                             if (session) {
@@ -414,11 +409,11 @@ export default function TradesView({
                             console.error('Error toggling void status:', err);
                             setToastMessage(`Error toggling void status: ${err.message}`);
                             setTimeout(() => setToastMessage(''), 4000);
-                            setTrades((prev: any) => prev.map((t: any) => t.id === trade.id ? { ...t, rawMetadata: trade.rawMetadata } : t));
+                            setTrades((prev: any) => prev.map((tItem: any) => tItem.id === trade.id ? { ...tItem, rawMetadata: trade.rawMetadata } : tItem));
                           }
                         }} 
                         className="p-1 sm:p-1.5 md:p-2 rounded-md transition-colors hover:bg-white/20" 
-                        title={isVoided ? (isPt ? "Reativar Trade" : isEs ? "Reactivar Trade" : "Reactivate Trade") : (isPt ? "Anular Trade" : isEs ? "Anular Trade" : "Void Trade")}
+                        title={isVoided ? tLocal('trades.reactivate') : tLocal('trades.void')}
                         style={{ color: isVoided ? '#ef4444' : theme.textoSecundario }}
                       >
                         {isVoided ? <EyeOff size={isMobile ? 12 : 14} /> : <Eye size={isMobile ? 12 : 14} />}
@@ -432,13 +427,13 @@ export default function TradesView({
               {paginatedTrades.length === 0 && (
                 <tr>
                   <td colSpan={showStrategyCol ? 14 : 13} className="p-12 text-center" style={{ color: theme.textoSecundario }}>
-                    <p className="italic text-sm">{isPt ? 'Nenhum trade encontrado.' : isEs ? 'No se encontraron trades.' : 'No trades found.'}</p>
+                    <p className="italic text-sm">{tLocal('trades.noTrades')}</p>
                     {hasActiveFilters && onResetFilters && (
                       <button
                         onClick={onResetFilters}
                         className="mt-3 px-4 py-1.5 rounded-lg text-xs font-bold text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 transition-all inline-flex items-center gap-1.5"
                       >
-                        {isPt ? 'Limpar Filtros' : isEs ? 'Restablecer Filtros' : 'Reset Filters'}
+                        {tLocal('trades.resetAllFilters')}
                       </button>
                     )}
                   </td>
@@ -449,20 +444,19 @@ export default function TradesView({
           {filteredTrades.length > historyItemsPerPage && (
             <div className="flex justify-between items-center p-3 md:p-4 border-t" style={{ borderColor: theme.contornoGeral, backgroundColor: hexToRgba(theme.fundoPrincipal, settings.cardOpacity / 100) }}>
               <span className="text-[10px] md:text-xs font-medium" style={{ color: theme.textoSecundario }}>
-                {isPt
-                  ? `Exibindo ${(historyPage - 1) * historyItemsPerPage + 1} - ${Math.min(historyPage * historyItemsPerPage, filteredTrades.length)} de ${filteredTrades.length} trades`
-                  : isEs
-                  ? `Mostrando ${(historyPage - 1) * historyItemsPerPage + 1} - ${Math.min(historyPage * historyItemsPerPage, filteredTrades.length)} de ${filteredTrades.length} trades`
-                  : `Showing ${(historyPage - 1) * historyItemsPerPage + 1} - ${Math.min(historyPage * historyItemsPerPage, filteredTrades.length)} of ${filteredTrades.length} trades`}
+                {tLocal('trades.showingPagination')
+                  .replace('{start}', String((historyPage - 1) * historyItemsPerPage + 1))
+                  .replace('{end}', String(Math.min(historyPage * historyItemsPerPage, filteredTrades.length)))
+                  .replace('{total}', String(filteredTrades.length))}
               </span>
               <div className="flex items-center gap-2">
                 <button
                   disabled={historyPage === 1}
                   onClick={() => setHistoryPage((p: number) => Math.max(1, p - 1))}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-30 border"
-                      style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, backgroundColor: hexToRgba(theme.fundoCards, 0.5) }}
+                  style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, backgroundColor: hexToRgba(theme.fundoCards, 0.5) }}
                 >
-                  {isPt ? 'Anterior' : isEs ? 'Anterior' : 'Previous'}
+                  {tLocal('trades.previous')}
                 </button>
                 <span className="text-xs font-bold px-2" style={{ color: theme.textoPrincipal }}>
                   {historyPage} / {Math.max(1, Math.ceil(filteredTrades.length / historyItemsPerPage))}
@@ -473,7 +467,7 @@ export default function TradesView({
                   className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-30 border"
                   style={{ borderColor: theme.contornoGeral, color: theme.textoPrincipal, backgroundColor: hexToRgba(theme.fundoCards, 0.5) }}
                 >
-                  {isPt ? 'Próximo' : isEs ? 'Siguiente' : 'Next'}
+                  {tLocal('trades.next')}
                 </button>
               </div>
             </div>
@@ -496,14 +490,10 @@ export default function TradesView({
                   <Trash2 size={24} className="text-red-400" />
                 </div>
                 <p className="text-base font-bold text-white mb-1">
-                  {isPt ? 'Excluir Todos os Trades?' : isEs ? '¿Eliminar Todos los Trades?' : 'Delete All Trades?'}
+                  {tLocal('trades.deleteAllTitle')}
                 </p>
                 <p className="text-sm text-white/40 leading-relaxed">
-                  {isPt
-                    ? 'Isso excluirá permanentemente todos os trades desta conta ativa. Esta ação não pode ser desfeita.'
-                    : isEs
-                    ? 'Esto eliminará permanentemente todos los trades de esta cuenta activa. Esta acción no se puede deshacer.'
-                    : 'This will permanently delete all trades from this active account. This cannot be undone.'}
+                  {tLocal('trades.deleteAllDesc')}
                 </p>
               </div>
               <div className="px-5 pb-5 flex gap-3">
@@ -511,14 +501,14 @@ export default function TradesView({
                   onClick={() => setIsConfirmDeleteAllOpen(false)}
                   className="flex-1 py-3 rounded-xl border border-white/10 text-sm font-bold text-white/40 hover:bg-white/5 transition-all"
                 >
-                  {isPt ? 'Cancelar' : isEs ? 'Cancelar' : 'Cancel'}
+                  {tLocal('trades.cancel')}
                 </button>
                 <button
                   onClick={handleDeleteAll}
                   disabled={isDeleting}
                   className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:bg-red-600 bg-red-500 text-white active:scale-95 shadow-lg disabled:opacity-40"
                 >
-                  {isDeleting ? (isPt ? 'Excluindo...' : isEs ? 'Eliminando...' : 'Deleting...') : (isPt ? 'Excluir Tudo' : isEs ? 'Eliminar Todo' : 'Delete All')}
+                  {isDeleting ? tLocal('trades.deleting') : tLocal('trades.confirmDeleteAll')}
                 </button>
               </div>
             </div>

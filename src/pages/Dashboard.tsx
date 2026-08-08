@@ -2112,7 +2112,13 @@ export default function Dashboard() {
 
   const handleDeleteAccount = async (accountId) => {
     try {
-      const { error } = await supabase.from('accounts').delete().eq('id', accountId).eq('user_id', session.user.id); // FILTRO DE ISOLAMENTO OBRIGATÓRIO
+      // 1. Purge all trades belonging to this account
+      await supabase.from('trades').delete().eq('account_id', accountId).eq('user_id', session.user.id);
+      // 2. Purge all setup targets and config logs for this account
+      await supabase.from('setup_targets').delete().eq('account_id', accountId).eq('user_id', session.user.id);
+      await supabase.from('setup_config_logs').delete().eq('account_id', accountId).eq('user_id', session.user.id);
+      // 3. Delete the account record
+      const { error } = await supabase.from('accounts').delete().eq('id', accountId).eq('user_id', session.user.id);
       if (error) throw error;
 
       setAccounts(prev => prev.filter(a => a.id !== accountId));
@@ -2631,9 +2637,9 @@ export default function Dashboard() {
           style={{ bottom: `calc(var(--nav-bottom-height, 65px) + env(safe-area-inset-bottom, 0px) + 1.5rem)`, gap: `${LAYOUT.fab.gap}rem` }}
         >
           {[
-            { id: 'import', icon: Plus, label: 'Trade', locked: false, ...LAYOUT.fab.colors.trade, offsetY: LAYOUT.fab.arcOffsets[0] },
-            { id: 'news', icon: Newspaper, label: 'News', locked: isFreePlan, ...LAYOUT.fab.colors.news, offsetY: LAYOUT.fab.arcOffsets[1] },
-            { id: 'holidays', icon: CalendarDays, label: 'Holidays', locked: isFreePlan, ...LAYOUT.fab.colors.holidays, offsetY: LAYOUT.fab.arcOffsets[2] }
+            { id: 'import', icon: Plus, label: t('nav.trades', settings.appLanguage), locked: false, ...LAYOUT.fab.colors.trade, offsetY: LAYOUT.fab.arcOffsets[0] },
+            { id: 'news', icon: Newspaper, label: t('nav.news', settings.appLanguage), locked: isFreePlan, ...LAYOUT.fab.colors.news, offsetY: LAYOUT.fab.arcOffsets[1] },
+            { id: 'holidays', icon: CalendarDays, label: t('nav.holidays', settings.appLanguage), locked: isFreePlan, ...LAYOUT.fab.colors.holidays, offsetY: LAYOUT.fab.arcOffsets[2] }
           ].map((item, idx) => (
             <div
               key={item.id}
@@ -2700,7 +2706,7 @@ export default function Dashboard() {
             <div className="text-sm font-medium" style={{ color: theme.textoPrincipal }}>
               {mobileTooltipContent}
             </div>
-            <button onClick={() => setMobileTooltipContent(null)} className="mt-4 w-full py-2.5 rounded-lg text-xs font-bold transition-opacity hover:opacity-80" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>Close</button>
+            <button onClick={() => setMobileTooltipContent(null)} className="mt-4 w-full py-2.5 rounded-lg text-xs font-bold transition-opacity hover:opacity-80" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>{t('setups.cancel', settings.appLanguage)}</button>
           </div>
         </>,
         document.body
@@ -2725,7 +2731,7 @@ export default function Dashboard() {
         {isMobile && ['settings'].includes(activeTab) && activeTab !== 'dashboard' ? (
           <button onClick={() => { startTransition(() => { setActiveTab(prevTab); setSettingsHideTabs(false); }); }} className="flex items-center gap-1.5 py-1 pr-4 active:opacity-70 transition-opacity lg:w-[160px] xl:w-[220px]" style={{ color: '#00B0F0' }}>
             <ChevronLeft size={24} />
-            <span className="font-bold text-lg font-display">Back</span>
+            <span className="font-bold text-lg font-display">{t('nav.back', settings.appLanguage)}</span>
           </button>
         ) : (
           <div className="flex items-center gap-2 lg:gap-3 lg:w-[160px] xl:w-[220px] cursor-pointer active:opacity-70 transition-opacity" onClick={() => startTransition(() => setActiveTab('dashboard'))}>
@@ -2747,16 +2753,16 @@ export default function Dashboard() {
         {/* Centro: Menu Novo Estilo "Pill" (Aparece Apenas no Desktop) */}
         <div className="hidden lg:flex justify-center gap-2 overflow-x-auto hide-scrollbar flex-1">
           {[
-            { id: 'dashboard', icon: LayoutDashboard, title: 'Dashboard', locked: blockedModules.includes('dashboard') },
-            { id: 'analytics', icon: BarChart2, title: 'Analytics', locked: blockedModules.includes('analytics') },
-            { id: 'journal', icon: BookOpen, title: 'Journal', locked: blockedModules.includes('journal') },
-            { id: 'trading', icon: TrendingUp, title: 'Trading', locked: blockedModules.includes('trading') },
-            { id: 'setups', icon: Target, title: 'Setups', locked: blockedModules.includes('setups') },
-            { id: 'trades', icon: ListIcon, title: 'Trades', locked: blockedModules.includes('trades') },
-            { id: 'import', icon: Import, title: 'Import', locked: blockedModules.includes('import') },
-            { id: 'news', icon: Newspaper, title: 'News', locked: blockedModules.includes('news') },
-            { id: 'holidays', icon: CalendarDays, title: 'Holidays', locked: blockedModules.includes('holidays') },
-            { id: 'settings', icon: SettingsIcon, title: 'Settings', locked: blockedModules.includes('settings') }
+            { id: 'dashboard', icon: LayoutDashboard, title: t('nav.dashboard', settings.appLanguage), locked: blockedModules.includes('dashboard') },
+            { id: 'analytics', icon: BarChart2, title: t('nav.analytics', settings.appLanguage), locked: blockedModules.includes('analytics') },
+            { id: 'journal', icon: BookOpen, title: t('nav.journal', settings.appLanguage), locked: blockedModules.includes('journal') },
+            { id: 'trading', icon: TrendingUp, title: t('nav.trading', settings.appLanguage), locked: blockedModules.includes('trading') },
+            { id: 'setups', icon: Target, title: t('nav.setups', settings.appLanguage), locked: blockedModules.includes('setups') },
+            { id: 'trades', icon: ListIcon, title: t('nav.trades', settings.appLanguage), locked: blockedModules.includes('trades') },
+            { id: 'import', icon: Import, title: t('nav.import', settings.appLanguage), locked: blockedModules.includes('import') },
+            { id: 'news', icon: Newspaper, title: t('nav.news', settings.appLanguage), locked: blockedModules.includes('news') },
+            { id: 'holidays', icon: CalendarDays, title: t('nav.holidays', settings.appLanguage), locked: blockedModules.includes('holidays') },
+            { id: 'settings', icon: SettingsIcon, title: t('nav.settings', settings.appLanguage), locked: blockedModules.includes('settings') }
           ].map(item => (
             <button
               key={item.id}
@@ -2845,7 +2851,7 @@ export default function Dashboard() {
                     )}
                   </div>
                   <p className="text-sm font-bold" style={{ color: theme.textoPrincipal }}>{settings.userName || 'User'}</p>
-                  <p className="text-[11px] font-bold mt-0.5" style={{ color: '#00d4ff' }}>Status: {settings.userPlan || 'Free'} Plan</p>
+                  <p className="text-[11px] font-bold mt-0.5" style={{ color: '#00d4ff' }}>{t('dash.profile.status', settings.appLanguage)}: {settings.userPlan || 'Free'} Plan</p>
                 </button>
                 {/* Separador */}
                 <div className="mx-4 border-t" style={{ borderColor: theme.contornoGeral }} />
@@ -2860,7 +2866,7 @@ export default function Dashboard() {
                     style={{ textDecoration: 'none' }}
                   >
                     <UserIcon size={18} style={{ color: theme.linhaGrafico }} className="group-hover:scale-110 transition-transform" />
-                    <span style={{ color: theme.textoPrincipal }}>My Profile</span>
+                    <span style={{ color: theme.textoPrincipal }}>{t('dash.profile.myProfile', settings.appLanguage)}</span>
                   </button>
                   {/* ADMIN LINK — visível apenas para email administrador */}
                   {session?.user?.email === 'mcsstr@icloud.com' && (
@@ -2873,7 +2879,7 @@ export default function Dashboard() {
                       style={{ textDecoration: 'none' }}
                     >
                       <ShieldAlert size={18} style={{ color: '#f59e0b' }} className="group-hover:scale-110 transition-transform" />
-                      <span style={{ color: theme.textoPrincipal }}>Administrador</span>
+                      <span style={{ color: theme.textoPrincipal }}>{t('dash.profile.admin', settings.appLanguage)}</span>
                     </button>
                   )}
                   <button onClick={() => {
@@ -2882,7 +2888,7 @@ export default function Dashboard() {
                     disabled={isGeneratingPdf}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all hover:bg-white/5 group ${isGeneratingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <Download size={18} style={{ color: '#22c55e' }} className={isGeneratingPdf ? 'animate-pulse' : 'group-hover:scale-110 transition-transform'} />
-                    <span style={{ color: theme.textoPrincipal }}>{isGeneratingPdf ? 'Generating...' : 'Generate PDF Report'}</span>
+                    <span style={{ color: theme.textoPrincipal }}>{isGeneratingPdf ? 'Generating...' : t('dash.profile.pdfReport', settings.appLanguage)}</span>
                   </button>
                   <div className="mx-1 my-1 border-t" style={{ borderColor: theme.contornoGeral }} />
                   <button
@@ -2901,7 +2907,7 @@ export default function Dashboard() {
                     className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all hover:bg-white/5 group cursor-pointer"
                   >
                     <LogOutIcon size={18} style={{ color: '#f87171' }} className="group-hover:scale-110 transition-transform" />
-                    <span style={{ color: theme.textoPrincipal }}>{settings.appLanguage === 'pt' ? 'Sair' : 'Logout'}</span>
+                    <span style={{ color: theme.textoPrincipal }}>{t('nav.logout', settings.appLanguage)}</span>
                   </button>
                 </div>
               </div>
@@ -2916,7 +2922,7 @@ export default function Dashboard() {
 
         {isFreePlan && (
           <div className="mx-auto max-w-4xl bg-red-900/20 border border-red-500/30 text-red-200 px-4 py-3 rounded-xl mb-4 mt-6 text-xs md:text-sm font-medium flex items-center justify-center text-center shadow-sm animate-fade-in backdrop-blur-md">
-            <span><strong className="text-red-400">⚠️ {settings.appLanguage === 'pt' ? 'Aviso Plano Free' : 'Free Plan Notice'}:</strong> {settings.appLanguage === 'pt' ? 'Seus dados de Trades, Notícias e Feriados estão sendo salvos apenas localmente neste dispositivo. Mude para Premium para Sincronização em Nuvem e Backup.' : 'Your Trades, News, and Holidays data are only saved locally on this device. Upgrade to Premium for Cloud Sync and Backup.'}</span>
+            <span><strong className="text-red-400">⚠️ {t('dash.freePlanNoticeTitle')}:</strong> {t('dash.freePlanNoticeDesc')}</span>
           </div>
         )}
         {activeTab === 'mobile_menu' && isMobile && (
@@ -2929,11 +2935,17 @@ export default function Dashboard() {
             settings={settings}
             setPrevTab={setPrevTab}
             activeTab={activeTab}
+            t={t}
+            lang={settings.appLanguage || 'en'}
             setShowLogoutConfirm={() => {
-              if (window.confirm('Are you sure you want to sign out?')) {
-                startTransition(() => {
-                  window.location.href = '/';
-                });
+              if (window.confirm(t('journal.deleteConfirm') || 'Are you sure?')) {
+                if (typeof (window as any).quantaraLogout === 'function') {
+                  (window as any).quantaraLogout();
+                } else {
+                  startTransition(() => {
+                    window.location.href = '/';
+                  });
+                }
               }
             }}
           />
@@ -3011,6 +3023,8 @@ export default function Dashboard() {
                   <AnalyticsView
                     theme={theme}
                     settings={accountSettings}
+                    t={t}
+                    lang={settings.appLanguage || 'en'}
                     getGlassStyle={getGlassStyle}
                     getFullDateString={getFullDateString}
                     activeAccountDays={activeAccountDays}
@@ -3050,6 +3064,7 @@ export default function Dashboard() {
                     onResetFilters={resetTradesFilters}
                     allTradesCount={allAccountTrades.length}
                     lang={settings.appLanguage || 'en'}
+                    t={t}
                     settings={accountSettings}
                     searchTerm={searchTerm}
                     setSearchTerm={setSearchTerm}
@@ -3281,11 +3296,11 @@ export default function Dashboard() {
       >
         {
           [
-            { id: 'dashboard', icon: LayoutDashboard, title: 'Home' },
-            { id: 'trades', icon: ListIcon, title: 'Trades' },
-            { id: 'fab', icon: isFabOpen ? X : Plus, title: 'Add', isFab: true },
-            { id: 'analytics', icon: BarChart2, title: 'Analytics' },
-            { id: 'mobile_menu', icon: MenuIcon, title: 'Menu' }
+            { id: 'dashboard', icon: LayoutDashboard, title: t('nav.home', settings.appLanguage) },
+            { id: 'trades', icon: ListIcon, title: t('nav.trades', settings.appLanguage) },
+            { id: 'fab', icon: isFabOpen ? X : Plus, title: t('setups.add', settings.appLanguage), isFab: true },
+            { id: 'analytics', icon: BarChart2, title: t('nav.analytics', settings.appLanguage) },
+            { id: 'mobile_menu', icon: MenuIcon, title: t('nav.menu', settings.appLanguage) }
           ].map(item => {
             if (item.isFab) {
               return (
@@ -3395,7 +3410,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex-1 text-left">
                         <p className="text-sm font-bold" style={{ color: acc.id === activeAccountId ? '#00B0F0' : '#fff' }}>{acc.name}</p>
-                        <p className="text-xs text-white/30">Balance: ${Number(acc.initialBalance).toLocaleString()}</p>
+                        <p className="text-xs text-white/30">{t('switcher.balance', settings.appLanguage)}: {formatCurrency(acc.initialBalance)}</p>
                       </div>
                       {acc.id === activeAccountId && <Check size={16} className="text-[#00B0F0]" />}
                     </button>

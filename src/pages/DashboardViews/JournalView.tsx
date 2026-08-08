@@ -4,13 +4,14 @@ import {
   Tag, Save, ChevronRight, ChevronLeft, Smile, Frown, Meh, Zap, Coffee, Trash2, ArrowUp, ArrowDown
 } from 'lucide-react';
 import RichTextEditor from '../../components/RichTextEditor';
+import { t as tFunc } from '../../utils/i18n';
 
 export default function JournalView({
   theme,
   getGlassStyle,
   settings,
-  t,
-  lang,
+  t: tProp,
+  lang = 'en',
   trades,
   activeAccountId,
   journals,
@@ -19,6 +20,7 @@ export default function JournalView({
   setups,
   formatDate
 }: any) {
+  const t = tProp || ((k: string) => tFunc(k, lang));
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [accountMode] = useState<'general'>('general');
   const [leftNavSelection, setLeftNavSelection] = useState<string>('All Entries');
@@ -237,7 +239,13 @@ export default function JournalView({
     return <Icon size={size} color={m.color} />;
   };
 
-  const navLabels: Record<string,string> = { 'All Entries': 'Entries', 'Daily Recap': 'Recap', 'Strategies': 'Setups', 'Emotional Stats': 'Emotional', 'Reports': 'Reports' };
+  const navLabels: Record<string,string> = { 
+    'All Entries': t('journal.entries'), 
+    'Daily Recap': t('journal.recap'), 
+    'Strategies': t('journal.setups'), 
+    'Emotional Stats': t('journal.emotional'), 
+    'Reports': t('journal.reports') 
+  };
   const navItems = ['All Entries', 'Daily Recap', 'Strategies', 'Emotional Stats', 'Reports'];
 
   const renderCalendar = () => {
@@ -246,7 +254,7 @@ export default function JournalView({
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    let days: (Date | null)[] = [];
+    const days = [];
     for (let i = 0; i < firstDay; i++) days.push(null);
     for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
 
@@ -320,13 +328,13 @@ export default function JournalView({
           style={{ background: '#eab308' }}
         >
           <Plus size={18} />
-          <span className="hidden md:block uppercase tracking-wider text-xs text-center">New Journal</span>
+          <span className="hidden md:block uppercase tracking-wider text-xs text-center">{t('journal.newEntry')}</span>
         </button>
 
-        <h3 className="text-[9px] font-bold tracking-widest uppercase mb-3 px-2 opacity-40 mt-4" style={{ color: theme.textoPrincipal }}>Market news</h3>
+        <h3 className="text-[9px] font-bold tracking-widest uppercase mb-3 px-2 opacity-40 mt-4" style={{ color: theme.textoPrincipal }}>{t('journal.marketNews')}</h3>
         <div className="flex-1 overflow-y-auto hide-scrollbar px-2 flex flex-col gap-2 pb-5">
           {rssNews.length === 0 ? (
-             <div className="text-[10px] opacity-40 italic text-center mt-5" style={{ color: theme.textoPrincipal }}>Loading news...</div>
+             <div className="text-[10px] opacity-40 italic text-center mt-5" style={{ color: theme.textoPrincipal }}>{t('journal.loadingNews')}</div>
           ) : (
              rssNews.map((news, i) => (
                  <a
@@ -354,7 +362,7 @@ export default function JournalView({
         <div className="flex items-center gap-3 shrink-0 mb-2 mt-1">
           <CalendarDays size={26} className="text-yellow-500" />
           <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
-            Trading Journal
+            {t('journal.title')}
           </h1>
         </div>
 
@@ -381,9 +389,9 @@ export default function JournalView({
           <div className="flex flex-col p-4 rounded-2xl border shadow-sm overflow-hidden h-full" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
             <div className="flex justify-between items-center mb-2 shrink-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold tracking-widest uppercase opacity-50" style={{ color: theme.textoPrincipal }}>Key trades</h3>
+                <h3 className="text-xs font-bold tracking-widest uppercase opacity-50" style={{ color: theme.textoPrincipal }}>{t('journal.keyTrades')}</h3>
                 <button onClick={() => setKeyTradesSort(s => s === 'asc' ? 'desc' : 'asc')} className="text-[8px] bg-black/20 px-1.5 py-0.5 rounded opacity-50 hover:opacity-100 uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>
-                  {keyTradesSort === 'asc' ? 'Oldest First' : 'Recent First'}
+                  {keyTradesSort === 'asc' ? t('journal.oldestFirst') : t('journal.recentFirst')}
                 </button>
               </div>
               <div className="flex items-baseline gap-1">
@@ -394,11 +402,11 @@ export default function JournalView({
             </div>
 
             {dayTrades.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center text-[10px] opacity-40 italic" style={{ color: theme.textoPrincipal }}>No trades this day.</div>
+              <div className="flex-1 flex items-center justify-center text-[10px] opacity-40 italic" style={{ color: theme.textoPrincipal }}>{t('journal.noTradesDay')}</div>
             ) : (
               <div className="flex flex-col gap-1.5 overflow-y-auto hide-scrollbar flex-1">
                 <div className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr] text-[10px] font-bold tracking-wider uppercase opacity-40 pb-1 text-center items-center" style={{ color: theme.textoPrincipal }}>
-                  <div className="text-left pl-1">Asset</div><div>Time</div><div>Dir</div><div className="truncate">Setup</div><div className="text-right pr-1">Gross</div>
+                  <div className="text-left pl-1">{t('journal.asset')}</div><div>{t('journal.time')}</div><div>{t('journal.dir')}</div><div className="truncate">{t('journal.setup')}</div><div className="text-right pr-1">{t('journal.gross')}</div>
                 </div>
                 {dayTrades.map((tt: any) => {
                   const setupMatch = setups?.find((s: any) => s.id === tt.setup_id);
@@ -424,7 +432,7 @@ export default function JournalView({
           <div className="flex flex-col p-3 rounded-2xl border shadow-sm overflow-hidden h-full" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
             <div className="flex justify-between items-center mb-2 shrink-0 relative z-10 flex-wrap gap-1">
               <h3 className="text-[9px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: theme.textoPrincipal }}>
-                Economic calendar
+                {t('journal.economicCalendar')}
                 {ecoLoading && <span className="w-2 h-2 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin ml-1" />}
               </h3>
               
@@ -442,7 +450,7 @@ export default function JournalView({
                   className="bg-black/20 font-bold outline-none rounded px-1 py-0.5 appearance-none cursor-pointer"
                   style={{ color: theme.textoSecundario, fontSize: '9px' }}
                 >
-                  <option value="ALL">All</option>
+                  <option value="ALL">{t('news.all')}</option>
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
                   <option value="GBP">GBP</option>
@@ -455,10 +463,10 @@ export default function JournalView({
                   className="bg-black/20 font-bold outline-none rounded px-1 py-0.5 appearance-none cursor-pointer"
                   style={{ color: theme.textoSecundario, fontSize: '9px' }}
                 >
-                  <option value="ALL">All</option>
-                  <option value="HIGH">High</option>
-                  <option value="MEDIUM">Med</option>
-                  <option value="LOW">Low</option>
+                  <option value="ALL">{t('news.all')}</option>
+                  <option value="HIGH">{t('news.highImpact')}</option>
+                  <option value="MEDIUM">{t('news.medImpact')}</option>
+                  <option value="LOW">{t('news.lowImpact')}</option>
                 </select>
               </div>
             </div>
@@ -472,11 +480,11 @@ export default function JournalView({
                 });
 
                 if (ecoLoading && ecoEvents.length === 0) {
-                  return <div className="flex-1 flex items-center justify-center text-[10px] font-bold italic opacity-40 p-4" style={{ color: theme.textoPrincipal }}>Carregando eventos...</div>;
+                  return <div className="flex-1 flex items-center justify-center text-[10px] font-bold italic opacity-40 p-4" style={{ color: theme.textoPrincipal }}>{t('journal.loadingNews')}</div>;
                 }
 
                 if (ecoError || filteredEvents.length === 0) {
-                  return <div className="flex-1 flex items-center justify-center text-[10px] font-bold italic opacity-40 p-4 text-center" style={{ color: theme.textoPrincipal }}>Nenhum evento disponível no momento</div>;
+                  return <div className="flex-1 flex items-center justify-center text-[10px] font-bold italic opacity-40 p-4 text-center" style={{ color: theme.textoPrincipal }}>{t('news.noNews')}</div>;
                 }
 
                 return filteredEvents.map((eco, i) => (
@@ -514,7 +522,7 @@ export default function JournalView({
           {/* Market & Mood Section */}
           <div className="flex-1 flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-              <span className="text-[8px] font-bold tracking-widest uppercase opacity-40" style={{ color: theme.textoPrincipal }}>Market</span>
+              <span className="text-[8px] font-bold tracking-widest uppercase opacity-40" style={{ color: theme.textoPrincipal }}>{t('journal.market')}</span>
               <div className="flex flex-wrap gap-2">
                 {marketSentiments.map(s => (
                   <button key={s.id} onClick={() => setMarketSentiment(v => v === s.id ? '' : s.id)} title={s.id}
@@ -531,7 +539,7 @@ export default function JournalView({
             <div className="w-px self-stretch bg-white/10" />
 
             <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-              <span className="text-[8px] font-bold tracking-widest uppercase opacity-40" style={{ color: theme.textoPrincipal }}>Emotional State</span>
+              <span className="text-[8px] font-bold tracking-widest uppercase opacity-40" style={{ color: theme.textoPrincipal }}>{t('journal.emotionalState')}</span>
               <div className="flex flex-wrap gap-2">
                 {traderMoods.map(m => (
                   <button key={m.id} onClick={() => setTraderMood(v => v === m.id ? '' : m.id)} title={m.id}
@@ -554,13 +562,13 @@ export default function JournalView({
         >
           <div className="flex justify-between items-center mb-3 shrink-0 min-h-[28px]">
             <h3 className="text-[9px] font-bold tracking-widest uppercase opacity-50" style={{ color: theme.textoPrincipal }}>
-              {isEditing ? `Editing diary — ${selectedDate}` : 'New diary'}
+              {isEditing ? `${t('journal.editingSaved')} — ${selectedDate}` : t('journal.newEntry')}
             </h3>
             {isEditing && (
               <button onClick={() => { setIsEditing(false); setNotes(''); setMarketSentiment(''); setTraderMood(''); }}
                 className="text-[8px] font-bold uppercase tracking-widest opacity-50 hover:opacity-100 px-2 py-1 rounded-md bg-white/5 transition-colors"
                 style={{ color: theme.textoPrincipal }}>
-                Clear / New
+                {t('journal.clearNew')}
               </button>
             )}
           </div>
@@ -571,16 +579,16 @@ export default function JournalView({
 
           <div className="flex justify-between items-center mt-3 pt-3 border-t shrink-0" style={{ borderColor: theme.contornoGeral }}>
             <span className="text-[9px] opacity-40 italic" style={{ color: theme.textoPrincipal }}>
-              {isEditing ? 'Editing saved entry' : 'Writing new entry'}
+              {isEditing ? t('journal.editingSaved') : t('journal.writingNew')}
             </span>
             
             <div className="flex items-center gap-2">
               {isEditing && (
                  <button
-                   onClick={() => { if (window.confirm('Delete this journal entry?')) { deleteJournal(currentJournal.id); handleNewEntry(); } }}
+                   onClick={() => { if (window.confirm(t('journal.deleteConfirm'))) { deleteJournal(currentJournal.id); handleNewEntry(); } }}
                    className="px-4 py-2 rounded-lg flex items-center gap-2 font-bold text-xs text-red-500 bg-red-500/10 hover:bg-red-500/20 transition-all"
                  >
-                   <Trash2 size={13} /> Delete
+                   <Trash2 size={13} /> {t('dash.delete')}
                  </button>
               )}
               <button
@@ -588,7 +596,7 @@ export default function JournalView({
                 className="px-5 py-2 rounded-lg flex items-center gap-2 font-bold text-xs text-black transition-all hover:brightness-110 active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.2)]"
                 style={{ background: '#eab308' }}
               >
-                <Save size={13} /> Save Journal
+                <Save size={13} /> {t('journal.saveJournal')}
               </button>
             </div>
           </div>
@@ -597,7 +605,7 @@ export default function JournalView({
 
       {/* RIGHT SIDEBAR — History */}
       <div className="w-60 self-stretch border-l shrink-0 hidden lg:flex flex-col pt-5 pb-0" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
-        <h3 className="text-[9px] font-bold tracking-widest uppercase mb-3 px-4 opacity-40" style={{ color: theme.textoPrincipal }}>History</h3>
+        <h3 className="text-[9px] font-bold tracking-widest uppercase mb-3 px-4 opacity-40" style={{ color: theme.textoPrincipal }}>{t('journal.history')}</h3>
         <div className="flex-1 overflow-y-auto hide-scrollbar px-4 flex flex-col gap-2 pb-5">
         {journals.slice(0, 50).map((j: any) => {
             const d = new Date(j.date + 'T12:00:00Z');
@@ -621,15 +629,15 @@ export default function JournalView({
                   </div>
                 </div>
                 <p className="text-[9px] opacity-50 line-clamp-2 leading-snug" style={{ color: theme.textoPrincipal }}>
-                  {j.notes?.replace(/<[^>]*>/g, '') || 'No notes entered.'}
+                  {j.notes?.replace(/<[^>]*>/g, '') || t('journal.noNotes')}
                 </p>
                 {/* Trash at the bottom — always visible, does NOT overlap text due to pb-10 */}
                 <div className="absolute bottom-0 left-0 right-0 flex justify-end px-2 py-1 border-t rounded-b-xl" style={{ borderColor: theme.contornoGeral, background: 'rgba(0,0,0,0.3)' }}>
                   <button
-                    onClick={(e) => { e.stopPropagation(); if (window.confirm('Delete this entry?')) deleteJournal(j.id); }}
+                    onClick={(e) => { e.stopPropagation(); if (window.confirm(t('journal.deleteConfirm'))) deleteJournal(j.id); }}
                     className="flex items-center gap-1 text-[9px] font-bold text-red-400 hover:text-red-300 transition-colors"
                   >
-                    <Trash2 size={11} /> Delete
+                    <Trash2 size={11} /> {t('dash.delete')}
                   </button>
                 </div>
               </div>

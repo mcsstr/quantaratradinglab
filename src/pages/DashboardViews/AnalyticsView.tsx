@@ -7,6 +7,7 @@ import {
   BarChart2, ChevronLeft, ChevronRight, ChevronDown, Search, ArrowDown, ArrowUp, ListIcon
 } from '../../components/Icons';
 import { hexToRgba } from '../../utils/constants';
+import { t as tFunc } from '../../utils/i18n';
 
 const SectionTitle = ({ icon: Icon, title, theme }) => (
   <div className="flex items-center gap-2 mb-4">
@@ -18,6 +19,8 @@ const SectionTitle = ({ icon: Icon, title, theme }) => (
 export default function AnalyticsView({
   theme,
   settings,
+  t: tProp,
+  lang = 'en',
   getGlassStyle,
   getFullDateString,
   activeAccountDays,
@@ -43,7 +46,8 @@ export default function AnalyticsView({
   filteredTradeValuesData,
   cumulativePnlData,
   dayOfWeekData
-}) {
+}: any) {
+  const t = tProp || ((k: string) => tFunc(k, lang));
 
   const activeInfoBlock = (
     <div className="rounded-xl px-4 py-3 md:py-4 flex flex-col md:flex-row items-center md:items-center justify-center lg:justify-between text-center shadow-sm transition-all w-full gap-3 md:gap-4 overflow-x-auto hide-scrollbar" style={getGlassStyle(theme.fundoCards)}>
@@ -54,7 +58,7 @@ export default function AnalyticsView({
       <div className="hidden md:block w-px h-4 opacity-30 shrink-0" style={{ backgroundColor: theme.contornoGeral }}></div>
       <div className="flex items-center justify-center gap-2 shrink-0 w-full md:w-auto">
         <Activity size={16} style={{ color: theme.textoSecundario }} />
-        <span className="text-xs sm:text-sm font-bold tracking-wider" style={{ color: theme.textoPrincipal }}>{activeAccountDays} {activeAccountDays === 1 ? 'day' : 'days'} active account</span>
+        <span className="text-xs sm:text-sm font-bold tracking-wider" style={{ color: theme.textoPrincipal }}>{activeAccountDays} {activeAccountDays === 1 ? t('analytics.day') : t('analytics.days')} {t('analytics.activeAccount')}</span>
       </div>
       <div className="hidden md:block w-px h-4 opacity-30 shrink-0" style={{ backgroundColor: theme.contornoGeral }}></div>
       <div className="flex items-center justify-center gap-2 shrink-0 w-full md:w-auto">
@@ -67,13 +71,13 @@ export default function AnalyticsView({
   const evaluationTableBlock = (
     <div className="w-full lg:w-1/3 flex flex-col rounded-xl overflow-hidden shadow-xl transition-all h-auto lg:max-h-[1028px]" style={getGlassStyle(theme.fundoCards)}>
       <div className="p-4 border-b shrink-0 flex justify-between items-center cursor-pointer lg:cursor-default" style={{ borderColor: theme.contornoGeral }} onClick={() => isMobile && setIsEvalTableExpanded(!isEvalTableExpanded)}>
-        <h3 className="font-bold text-sm" style={{ color: theme.textoSecundario }}>Evaluation</h3>
+        <h3 className="font-bold text-sm" style={{ color: theme.textoSecundario }}>{t('analytics.evaluation')}</h3>
         {isMobile && <ChevronDown className={`transition-transform duration-300 ${isEvalTableExpanded ? 'rotate-180' : ''}`} size={16} style={{ color: theme.textoSecundario }} />}
       </div>
       <div className={`w-full flex-1 overflow-y-auto hide-scrollbar transition-all ${isMobile && !isEvalTableExpanded ? 'hidden' : 'block'}`}>
         <table className="w-full text-left text-[10px] sm:text-[11px] md:text-xs whitespace-nowrap">
           <tbody>
-            {metricRows.map((row, idx) => (
+            {metricRows.map((row: any, idx: number) => (
               <tr key={idx} className="transition-colors hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(128, 128, 128, 0.04)' }}>
                 <td className="p-3 sm:p-4 md:p-5 font-semibold w-1/2" style={{ color: theme.textoPrincipal }}>{row.label}</td>
                 <td className="p-3 sm:p-4 md:p-5 text-right font-bold w-1/2 text-[9px] sm:text-[10px] md:text-xs" style={{ color: row.color || theme.textoPrincipal }}>{row.value}</td>
@@ -91,7 +95,7 @@ export default function AnalyticsView({
       <div className="flex items-center gap-3 shrink-0 px-2 md:px-0 mb-2">
         <BarChart2 size={26} className="text-yellow-500" />
         <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight whitespace-nowrap" style={{ color: theme.textoPrincipal }}>
-          Analytics Dashboard
+          {t('analytics.title')}
         </h1>
       </div>
 
@@ -108,7 +112,7 @@ export default function AnalyticsView({
 
             {/* CHART 1: Monthly P&L */}
             <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full" style={{ ...getGlassStyle(theme.fundoCards), height: 300 }}>
-              <SectionTitle icon={BarChart2} title="Monthly P&L" theme={theme} />
+              <SectionTitle icon={BarChart2} title={t('analytics.monthlyPnl')} theme={theme} />
               <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                 <BarChart data={monthlyPnlData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
@@ -116,7 +120,7 @@ export default function AnalyticsView({
                   <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} tickFormatter={(val) => new Intl.NumberFormat(userLocale, { notation: "compact", compactDisplay: "short", style: "currency", currency: settings.brokerCurrency, currencyDisplay: "narrowSymbol" }).format(val)} />
                   <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario }} formatter={(val) => formatCurrency(val)} />
                   <Bar dataKey="pnl" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-                    {monthlyPnlData.map((entry, index) => (
+                    {monthlyPnlData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo} />
                     ))}
                   </Bar>
@@ -126,7 +130,7 @@ export default function AnalyticsView({
 
             {/* CHART 2: Performance by Symbol */}
             <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full" style={{ ...getGlassStyle(theme.fundoCards), height: 300 }}>
-              <SectionTitle icon={ListIcon} title="Performance by Symbol" theme={theme} />
+              <SectionTitle icon={ListIcon} title={t('analytics.perfSymbol')} theme={theme} />
               <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                 <BarChart data={symbolData} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.contornoGeral} />
@@ -134,7 +138,7 @@ export default function AnalyticsView({
                   <YAxis type="category" dataKey="name" stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} width={60} />
                   <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario }} formatter={(val) => formatCurrency(val)} />
                   <Bar dataKey="pnl" radius={[0, 4, 4, 0]} isAnimationActive={false}>
-                    {symbolData.map((entry, index) => (
+                    {symbolData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? theme.linhaGrafico : theme.textoNegativo} />
                     ))}
                   </Bar>
@@ -144,28 +148,28 @@ export default function AnalyticsView({
 
 
             <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full" style={{ ...getGlassStyle(theme.fundoCards), height: 300 }}>
-              <SectionTitle icon={Target} title="Win Rate" theme={theme} />
+              <SectionTitle icon={Target} title={t('analytics.winRate')} theme={theme} />
               <div className="flex-1 relative" style={{ minHeight: 200 }}>
                 <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                   <PieChart>
                     <Pie data={winLossData} cx="50%" cy="50%" innerRadius="60%" outerRadius="80%" paddingAngle={5} dataKey="value" stroke="none" isAnimationActive={false}>
-                      {winLossData.map((entry, index) => (
+                      {winLossData.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
                     </Pie>
-                    <RechartsTooltip contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px', borderWidth: settings.borderWidthGeral }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} formatter={(val) => `${val} Trades`} />
+                    <RechartsTooltip contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px', borderWidth: settings.borderWidthGeral }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} formatter={(val) => `${val} ${t('analytics.trades')}`} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-2xl font-bold" style={{ color: theme.textoPrincipal }}>{formatPercent(metrics.winRate)}</span>
-                  <span className="text-xs" style={{ color: theme.textoSecundario }}>Win Rate</span>
+                  <span className="text-xs" style={{ color: theme.textoSecundario }}>{t('analytics.winRate')}</span>
                 </div>
               </div>
             </div>
 
             {/* CHART 4: P&L by Direction */}
             <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full" style={{ ...getGlassStyle(theme.fundoCards), height: 300 }}>
-              <SectionTitle icon={ArrowUp} title="P&L by Direction" theme={theme} />
+              <SectionTitle icon={ArrowUp} title={t('analytics.pnlDirection')} theme={theme} />
               <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                 <BarChart data={directionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.contornoGeral} />
@@ -173,7 +177,7 @@ export default function AnalyticsView({
                   <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} tickFormatter={(val) => new Intl.NumberFormat(userLocale, { notation: "compact", compactDisplay: "short", style: "currency", currency: settings.brokerCurrency, currencyDisplay: "narrowSymbol" }).format(val)} />
                   <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario }} formatter={(val) => formatCurrency(val)} />
                   <Bar dataKey="pnl" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-                    {directionData.map((entry, index) => (
+                    {directionData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.name === 'Long' ? theme.textoPositivo : theme.textoNegativo} />
                     ))}
                   </Bar>
@@ -184,22 +188,22 @@ export default function AnalyticsView({
             {/* CHART 5: Most Traded Hours */}
             <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full sm:col-span-2" style={{ ...getGlassStyle(theme.fundoCards), height: 400 }}>
               <div className="flex justify-between items-center mb-4 gap-2">
-                <SectionTitle icon={CalendarDays} title="Most Traded Hours" theme={theme} />
+                <SectionTitle icon={CalendarDays} title={t('analytics.mostTradedHours')} theme={theme} />
                 <div className="flex items-center gap-4">
                   <div className="hidden sm:flex items-center gap-3 text-[11px] font-bold" style={{ color: theme.textoSecundario }}>
-                    <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>Wins</span>
-                    <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>Losses</span>
+                    <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>{t('analytics.wins')}</span>
+                    <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>{t('analytics.losses')}</span>
                   </div>
                   <select value={timeGrouping} onChange={e => setTimeGrouping(e.target.value)} className="filter-select outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded hover:bg-white/10" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
-                    <option value="60" className="bg-gray-900">1 Hour</option>
-                    <option value="30" className="bg-gray-900">30 Mins</option>
-                    <option value="15" className="bg-gray-900">15 Mins</option>
+                    <option value="60" className="bg-gray-900">{t('analytics.hour1')}</option>
+                    <option value="30" className="bg-gray-900">{t('analytics.mins30')}</option>
+                    <option value="15" className="bg-gray-900">{t('analytics.mins15')}</option>
                   </select>
                 </div>
               </div>
               <div className="sm:hidden flex items-center gap-3 text-[10px] font-bold mb-4" style={{ color: theme.textoSecundario }}>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>Wins</span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>Losses</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>{t('analytics.wins')}</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>{t('analytics.losses')}</span>
               </div>
               <ResponsiveContainer width="100%" height="100%" minHeight={250}>
                 <BarChart data={timeDistributionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -212,9 +216,9 @@ export default function AnalyticsView({
                     itemStyle={{ fontWeight: 'bold' }}
                     labelStyle={{ color: theme.textoSecundario, marginBottom: 4 }}
                     formatter={(val, name) => {
-                      if (name === 'wins') return [`${val}`, 'Wins (Green)'];
-                      if (name === 'losses') return [`${val}`, 'Losses (Red)'];
-                      if (name === 'count') return [`${val}`, 'Total Trades'];
+                      if (name === 'wins') return [`${val}`, t('analytics.winsGreen')];
+                      if (name === 'losses') return [`${val}`, t('analytics.lossesRed')];
+                      if (name === 'count') return [`${val}`, t('analytics.totalTrades')];
                       return [val, name];
                     }}
                   />
@@ -229,16 +233,16 @@ export default function AnalyticsView({
         {/* Trade Values Chart */}
         <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full" style={{ ...getGlassStyle(theme.fundoCards), height: isMobile ? 300 : 400 }}>
           <div className="flex justify-between items-center mb-4 gap-2 shrink-0">
-            <SectionTitle icon={TrendingUp} title="Trade Values" theme={theme} />
+            <SectionTitle icon={TrendingUp} title={t('analytics.tradeValues')} theme={theme} />
             <select value={tradeValuesFilter} onChange={e => setTradeValuesFilter(e.target.value)} className="filter-select outline-none bg-transparent cursor-pointer font-bold px-2 py-1 rounded hover:bg-white/10" style={{ color: theme.linhaGrafico, border: `1px solid ${theme.linhaGrafico}40` }}>
-              <option value="all" className="bg-gray-900">All History</option>
-              <option value="today" className="bg-gray-900">Today</option>
-              <option value="yesterday" className="bg-gray-900">Yesterday</option>
-              <option value="this_week" className="bg-gray-900">This Week</option>
-              <option value="last_week" className="bg-gray-900">Last Week</option>
-              <option value="this_month" className="bg-gray-900">This Month</option>
-              <option value="last_month" className="bg-gray-900">Last Month</option>
-              {availableTradePeriods.map(p => {
+              <option value="all" className="bg-gray-900">{t('analytics.allHistory')}</option>
+              <option value="today" className="bg-gray-900">{t('analytics.today')}</option>
+              <option value="yesterday" className="bg-gray-900">{t('analytics.yesterday')}</option>
+              <option value="this_week" className="bg-gray-900">{t('analytics.thisWeek')}</option>
+              <option value="last_week" className="bg-gray-900">{t('analytics.lastWeek')}</option>
+              <option value="this_month" className="bg-gray-900">{t('analytics.thisMonth')}</option>
+              <option value="last_month" className="bg-gray-900">{t('analytics.lastMonth')}</option>
+              {availableTradePeriods.map((p: any) => {
                 const isYear = p.length === 4;
                 const label = isYear ? p : new Date(`${p}-01T00:00:00`).toLocaleString(userLocale, { month: 'long', year: 'numeric' });
                 return <option key={p} value={p} className="bg-gray-900 capitalize">{label}</option>;
@@ -253,7 +257,7 @@ export default function AnalyticsView({
                 <YAxis stroke={theme.textoSecundario} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} tickFormatter={(val) => new Intl.NumberFormat(userLocale, { notation: "compact", compactDisplay: "short", style: "currency", currency: settings.brokerCurrency, currencyDisplay: "narrowSymbol" }).format(val)} />
                 <RechartsTooltip cursor={{ fill: 'rgba(128,128,128,0.1)' }} contentStyle={{ backgroundColor: hexToRgba(theme.fundoCards, 0.9), borderColor: theme.contornoGeral, borderRadius: '8px' }} itemStyle={{ color: theme.textoPrincipal, fontWeight: 'bold' }} labelStyle={{ color: theme.textoSecundario }} formatter={(val) => formatCurrency(val)} labelFormatter={(label, entries) => (entries && entries.length) ? entries[0].payload.date : label} />
                 <Bar dataKey="pnl" radius={[2, 2, 2, 2]} isAnimationActive={false}>
-                  {filteredTradeValuesData.map((entry, index) => (
+                  {filteredTradeValuesData.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? theme.textoPositivo : theme.textoNegativo} />
                   ))}
                 </Bar>
@@ -266,7 +270,7 @@ export default function AnalyticsView({
           {/* CHART 7: Cumulative P&L (Equity Curve) */}
           <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full lg:w-1/2" style={{ ...getGlassStyle(theme.fundoCards), height: isMobile ? 300 : 400 }}>
             <div className="flex justify-between items-center mb-4 gap-2 shrink-0">
-              <SectionTitle icon={TrendingUp} title="Cumulative P&L" theme={theme} />
+              <SectionTitle icon={TrendingUp} title={t('analytics.cumulativePnl')} theme={theme} />
             </div>
             <div className="w-full flex-1" style={{ minHeight: 0, height: '100%' }}>
               <ResponsiveContainer width="100%" height="100%" minHeight={200}>
@@ -291,10 +295,10 @@ export default function AnalyticsView({
           {/* CHART 8: Performance by Day of Week */}
           <div className="rounded-xl p-4 md:p-6 shadow-sm flex flex-col transition-all w-full lg:w-1/2" style={{ ...getGlassStyle(theme.fundoCards), height: isMobile ? 300 : 400 }}>
             <div className="flex justify-between items-center mb-4 gap-2 shrink-0">
-              <SectionTitle icon={BarChart2} title="Performance by Day of Week" theme={theme} />
+              <SectionTitle icon={BarChart2} title={t('analytics.perfDayOfWeek')} theme={theme} />
               <div className="flex items-center gap-3 text-[11px] font-bold" style={{ color: theme.textoSecundario }}>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>Wins</span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>Losses</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoPositivo }}></span>{t('analytics.wins')}</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: theme.textoNegativo }}></span>{t('analytics.losses')}</span>
               </div>
             </div>
             <div className="w-full flex-1" style={{ minHeight: 0, height: '100%' }}>
@@ -309,9 +313,9 @@ export default function AnalyticsView({
                     itemStyle={{ fontWeight: 'bold' }}
                     labelStyle={{ color: theme.textoSecundario, marginBottom: 4 }}
                     formatter={(val, name) => {
-                      if (name === 'wins') return [`${val}`, 'Wins (Green)'];
-                      if (name === 'losses') return [`${val}`, 'Losses (Red)'];
-                      if (name === 'count') return [`${val}`, 'Total Trades'];
+                      if (name === 'wins') return [`${val}`, t('analytics.winsGreen')];
+                      if (name === 'losses') return [`${val}`, t('analytics.lossesRed')];
+                      if (name === 'count') return [`${val}`, t('analytics.totalTrades')];
                       return [val, name];
                     }}
                   />
