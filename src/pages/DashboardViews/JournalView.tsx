@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CalendarDays, Flame, Scale, Snowflake, Tornado, Plus, 
-  Tag, Save, ChevronRight, ChevronLeft, Smile, Frown, Meh, Zap, Coffee, Trash2, ArrowUp, ArrowDown
+  Tag, Save, ChevronRight, ChevronLeft, Smile, Frown, Meh, Zap, Coffee, Trash2, ArrowUp, ArrowDown,
+  Globe, ListFilter, RefreshCw
 } from 'lucide-react';
 import RichTextEditor from '../../components/RichTextEditor';
 import { t as tFunc } from '../../utils/i18n';
+import { TradingViewEconomicCalendar, TradingViewMarketNews } from '../../components/TradingViewWidgets';
+import { fetchEconomicEvents, fetchMarketRssNews, EcoEventItem, MarketNewsItem } from '../../utils/economicData';
 
 export default function JournalView({
   theme,
@@ -26,101 +29,47 @@ export default function JournalView({
   const [leftNavSelection, setLeftNavSelection] = useState<string>('All Entries');
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [isEditing, setIsEditing] = useState(false);
-  const [rssNews, setRssNews] = useState<any[]>([]);
+  
+  // News & Calendar States
+  const [newsViewMode, setNewsViewMode] = useState<'live' | 'rss'>('live');
+  const [rssNews, setRssNews] = useState<MarketNewsItem[]>([]);
+  const [ecoViewMode, setEcoViewMode] = useState<'live' | 'list'>('live');
   const [ecoDate, setEcoDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
-  const [ecoEvents, setEcoEvents] = useState<any[]>([]);
-  const [ecoLoading, setEcoLoading] = useState(true);
-  const [ecoError, setEcoError] = useState(false);
+  const [ecoEvents, setEcoEvents] = useState<EcoEventItem[]>([]);
+  const [ecoLoading, setEcoLoading] = useState(false);
   const [ecoFilterCurrency, setEcoFilterCurrency] = useState('ALL');
   const [ecoFilterImpact, setEcoFilterImpact] = useState('ALL');
   const [keyTradesSort, setKeyTradesSort] = useState<'asc' | 'desc'>('desc');
 
-  const fetchEconPulse = async (targetDate?: string) => {
+  // Load In-App Events with robust fallback
+  const loadEcoEvents = async (targetDate?: string) => {
+    setEcoLoading(true);
     try {
-      setEcoLoading(true);
-      setEcoError(false);
-      const dateStr = targetDate || ecoDate || new Date().toLocaleDateString('en-CA');
-      
-      const urls = [
-        'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
-        'https://nfs.faireconomy.media/ff_calendar_nextweek.json',
-      ];
-
-      let allEvents: any[] = [];
-      for (const url of urls) {
-        try {
-          const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
-          if (!res.ok) continue;
-          const data = await res.json();
-          if (Array.isArray(data)) allEvents = [...allEvents, ...data];
-        } catch { /* skip if a week fails */ }
-      }
-
-      const dayEvents = allEvents.filter((e: any) => e.date && e.date.startsWith(dateStr));
-      
-      const formatted = dayEvents.map((e: any) => {
-        const dateObj = new Date(e.date);
-        const nyTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York' });
-        return {
-           title: e.title,
-           currency: e.country,
-           impact: e.impact ? e.impact.toUpperCase() : 'LOW',
-           time: nyTime,
-           forecast: e.forecast || '-'
-        };
-      });
-      setEcoEvents(formatted);
-      if (formatted.length === 0) setEcoError(true);
-    } catch (err) {
-      console.warn("EconPulse API Error:", err);
-      setEcoEvents([]);
-      setEcoError(true);
+      const data = await fetchEconomicEvents(targetDate || ecoDate);
+      setEcoEvents(data);
+    } catch {
+      // Handled gracefully in economicData.ts
     } finally {
       setEcoLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchEconPulse(ecoDate);
-    const interval = setInterval(() => fetchEconPulse(ecoDate), 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [ecoDate]);
-  useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const sources = [
-      'https://feeds.cnbc.com/rss/section/100727362',
-      'https://feeds.cnbc.com/rss/section/10000664',
-      'https://www.marketwatch.com/rss/topstories',
-    ];
-    const fetches = sources.map(rss =>
-      fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rss)}`)
-        .then(response => response.text())
-        .then(str => new window.DOMParser().parseFromString(str, 'text/xml'))
-        .catch(() => null)
-    );
+  // Load In-App RSS News with robust fallback
+  const loadRssNews = async () => {
+    try {
+      const data = await fetchMarketRssNews();
+      setRssNews(data);
+    } catch {
+      // Handled gracefully
+    }
+  };
 
-    Promise.all(fetches).then(results => {
-      let combined: any[] = [];
-      results.forEach(xmlDoc => {
-        if (!xmlDoc) return;
-        const items = xmlDoc.querySelectorAll('item');
-        items.forEach(item => {
-          const title = item.querySelector('title')?.textContent || '';
-          const description = item.querySelector('description')?.textContent || '';
-          const link = item.querySelector('link')?.textContent || '';
-          const pubDate = item.querySelector('pubDate')?.textContent || '';
-          const author = item.querySelector('creator')?.textContent || item.querySelector('author')?.textContent || 'Financial News';
-          
-          if (!pubDate) return;
-          const pubDateObj = new Date(pubDate);
-          if (pubDateObj.toISOString().split('T')[0] === today) {
-            combined.push({ title, description, link, pubDate, author });
-          }
-        });
-      });
-      combined.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-      setRssNews(combined.slice(0, 8)); // Top 8 today
-    });
+  useEffect(() => {
+    loadEcoEvents(ecoDate);
+  }, [ecoDate]);
+
+  useEffect(() => {
+    loadRssNews();
   }, []);
 
   const currentJournal = useMemo(() => {
@@ -184,13 +133,6 @@ export default function JournalView({
     return acc + (parseFloat(cur.pnl) || 0) - fee;
   }, 0);
 
-  const winRate = dayTrades.length > 0
-    ? (dayTrades.filter((t: any) => {
-        const fee = Math.abs(parseFloat(t.commission) || 0);
-        return (parseFloat(t.pnl) || 0) - fee > 0;
-      }).length / dayTrades.length) * 100
-    : 0;
-
   const handleSave = () => {
     saveJournal({
       id: currentJournal?.id || crypto.randomUUID(),
@@ -198,121 +140,126 @@ export default function JournalView({
       date: selectedDate,
       sentiment: marketSentiment,
       trader_mood: traderMood,
-      notes,
-      tags,
-      screenshot_url: currentJournal?.screenshot_url || ''
+      notes: notes,
+      tags: tags
     });
-    if (!isEditing) {
-      setNotes('');
-      setMarketSentiment('');
-      setTraderMood('');
-      setTags('');
-    }
+    setIsEditing(true);
+  };
+
+  // Nav Items
+  const navItems = ['All Entries', 'Recap', 'Setups', 'Emotional', 'Reports'];
+  const navLabels: Record<string, string> = {
+    'All Entries': t('journal.allEntries'),
+    'Recap': t('journal.recap'),
+    'Setups': t('journal.setups'),
+    'Emotional': t('journal.emotional'),
+    'Reports': t('journal.reports')
   };
 
   const marketSentiments = [
-    { id: 'Bullish', icon: Flame, color: '#f97316' },
-    { id: 'Neutral', icon: Scale, color: '#60a5fa' },
-    { id: 'Bearish', icon: Snowflake, color: '#38bdf8' },
-    { id: 'Volatile', icon: Tornado, color: '#9ca3af' }
+    { id: 'Bullish', icon: Flame, color: '#22c55e', label: t('journal.bullish') },
+    { id: 'Neutral', icon: Scale, color: '#eab308', label: t('journal.neutral') },
+    { id: 'Bearish', icon: Snowflake, color: '#ef4444', label: t('journal.bearish') },
+    { id: 'Volatile', icon: Tornado, color: '#a855f7', label: t('journal.volatile') }
   ];
 
   const traderMoods = [
-    { id: 'Focused', icon: Zap, color: '#eab308' },
-    { id: 'Calm', icon: Coffee, color: '#10b981' },
-    { id: 'Good', icon: Smile, color: '#22c55e' },
-    { id: 'Neutral', icon: Meh, color: '#94a3b8' },
-    { id: 'Bad', icon: Frown, color: '#ef4444' },
+    { id: 'Focused', icon: Zap, color: '#3b82f6', label: t('journal.focused') },
+    { id: 'Calm', icon: Coffee, color: '#06b6d4', label: t('journal.calm') },
+    { id: 'Good', icon: Smile, color: '#22c55e', label: t('journal.good') },
+    { id: 'Bad', icon: Frown, color: '#ef4444', label: t('journal.bad') }
   ];
 
-  const getMarketSentimentIcon = (sentId: string, size: number = 14) => {
-    const s = marketSentiments.find(x => x.id === sentId);
+  const getMarketSentimentIcon = (id: string, size = 12) => {
+    const s = marketSentiments.find(x => x.id === id);
     if (!s) return null;
     const Icon = s.icon;
     return <Icon size={size} color={s.color} />;
   };
 
-  const getTraderMoodIcon = (moodId: string, size: number = 14) => {
-    const m = traderMoods.find(x => x.id === moodId);
+  const getTraderMoodIcon = (id: string, size = 12) => {
+    const m = traderMoods.find(x => x.id === id);
     if (!m) return null;
     const Icon = m.icon;
     return <Icon size={size} color={m.color} />;
   };
-
-  const navLabels: Record<string,string> = { 
-    'All Entries': t('journal.entries'), 
-    'Daily Recap': t('journal.recap'), 
-    'Strategies': t('journal.setups'), 
-    'Emotional Stats': t('journal.emotional'), 
-    'Reports': t('journal.reports') 
-  };
-  const navItems = ['All Entries', 'Daily Recap', 'Strategies', 'Emotional Stats', 'Reports'];
 
   const renderCalendar = () => {
     const year = calendarMonth.getFullYear();
     const month = calendarMonth.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-
     const days = [];
-    for (let i = 0; i < firstDay; i++) days.push(null);
-    for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+
+    const weekDays = lang === 'pt' 
+      ? ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+      : lang === 'es'
+      ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`empty-${i}`} className="h-6 w-full" />);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const isSelected = selectedDate === dateStr;
+      const jEntry = journals.find((j: any) => j.date === dateStr);
+      const isToday = new Date().toISOString().split('T')[0] === dateStr;
+
+      days.push(
+        <button
+          key={d}
+          onClick={() => handleCalendarClick(dateStr)}
+          className={`h-6 w-full rounded-md text-[10px] font-bold flex flex-col items-center justify-center transition-all relative ${
+            isSelected 
+              ? 'bg-yellow-500 text-black shadow-md scale-105 z-10' 
+              : isToday 
+              ? 'border border-yellow-500/50 text-yellow-400 hover:bg-white/10' 
+              : jEntry 
+              ? 'bg-white/10 hover:bg-white/20' 
+              : 'hover:bg-white/5 opacity-60'
+          }`}
+          style={{ color: isSelected ? '#000' : isToday ? '#eab308' : theme.textoPrincipal }}
+        >
+          <span>{d}</span>
+          {jEntry && !isSelected && (
+            <span className="w-1 h-1 rounded-full bg-yellow-500 absolute bottom-0.5" />
+          )}
+        </button>
+      );
+    }
 
     return (
-      <div className="flex flex-col h-full w-full">
-        <div className="flex items-center justify-between mb-2">
-          <button onClick={() => setCalendarMonth(new Date(year, month - 1, 1))} className="opacity-50 hover:opacity-100 p-0.5">
-            <ChevronLeft size={13} style={{ color: theme.textoPrincipal }} />
-          </button>
-          <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: theme.textoPrincipal }}>
-            {calendarMonth.toLocaleDateString(lang, { month: 'long', year: 'numeric' })}
+      <div className="flex flex-col h-full">
+        <div className="flex justify-between items-center mb-1.5 px-1">
+          <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: theme.textoPrincipal }}>
+            {calendarMonth.toLocaleDateString(lang, { month: 'short', year: 'numeric' })}
           </span>
-          <button onClick={() => setCalendarMonth(new Date(year, month + 1, 1))} className="opacity-50 hover:opacity-100 p-0.5">
-            <ChevronRight size={13} style={{ color: theme.textoPrincipal }} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setCalendarMonth(new Date(year, month - 1, 1))}
+              className="p-1 rounded hover:bg-white/10 opacity-70 hover:opacity-100"
+              style={{ color: theme.textoPrincipal }}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button 
+              onClick={() => setCalendarMonth(new Date(year, month + 1, 1))}
+              className="p-1 rounded hover:bg-white/10 opacity-70 hover:opacity-100"
+              style={{ color: theme.textoPrincipal }}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
-        <div className="grid grid-cols-7 gap-0.5 flex-1">
-          {['S','M','T','W','T','F','S'].map((d, i) => (
-            <div key={i} className="text-center text-[9px] font-bold opacity-30 pb-0.5" style={{ color: theme.textoPrincipal }}>{d}</div>
+        <div className="grid grid-cols-7 gap-1 text-center mb-1">
+          {weekDays.map(w => (
+            <span key={w} className="text-[8px] font-bold opacity-40 uppercase" style={{ color: theme.textoPrincipal }}>{w}</span>
           ))}
-          {days.map((d, i) => {
-            if (!d) return <div key={i} className="min-h-[28px]" />;
-
-            const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            const isSelected = selectedDate === dateStr;
-
-            let info = null;
-            if (leftNavSelection === 'All Entries') {
-              const cnt = trades.filter((tt: any) => tt.date === dateStr && tt.accountId === activeAccountId).length;
-              if (cnt > 0) info = <span className="text-yellow-400 font-black" style={{ fontSize: '11px' }}>{cnt}</span>;
-            } else if (leftNavSelection === 'Daily Recap') {
-              const dTr = trades.filter((tt: any) => tt.date === dateStr && tt.accountId === activeAccountId);
-              const pnl = dTr.reduce((a: number, c: any) => a + (parseFloat(c.pnl) || 0) - Math.abs(parseFloat(c.commission) || 0), 0);
-              if (dTr.length > 0) info = <span className={`font-black ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`} style={{ fontSize: '10px' }}>{pnl >= 0 ? '+' : '-'}${Math.abs(pnl).toFixed(0)}</span>;
-            } else if (leftNavSelection === 'Strategies') {
-              const has = trades.some((tt: any) => tt.date === dateStr && tt.accountId === activeAccountId && tt.setup_id);
-              if (has) info = <Tag size={9} className="text-blue-400" />;
-            } else if (leftNavSelection === 'Emotional Stats') {
-              const jj = journals.find((jjj: any) => jjj.date === dateStr);
-              if (jj?.sentiment) info = getMarketSentimentIcon(jj.sentiment, 10);
-              else if (jj?.trader_mood) info = getTraderMoodIcon(jj.trader_mood, 10);
-            } else if (leftNavSelection === 'Reports') {
-              const jj = journals.find((jjj: any) => jjj.date === dateStr);
-              if (jj) info = <span className="text-yellow-500 font-bold" style={{ fontSize: '10px' }}>✓</span>;
-            }
-
-            return (
-              <div
-                key={i}
-                onClick={() => handleCalendarClick(dateStr)}
-                className="flex flex-col items-center justify-start pt-1 pb-0.5 rounded cursor-pointer border transition-all min-h-[28px] hover:bg-white/5"
-                style={{ borderColor: isSelected ? '#eab308' : 'transparent', background: isSelected ? 'rgba(234,179,8,0.07)' : 'transparent' }}
-              >
-                <div className="text-[11px] font-bold leading-none" style={{ color: isSelected ? '#eab308' : theme.textoPrincipal }}>{d.getDate()}</div>
-                <div className="flex items-center justify-center mt-0.5 h-3.5">{info}</div>
-              </div>
-            );
-          })}
+        </div>
+        <div className="grid grid-cols-7 gap-1 flex-1 items-center">
+          {days}
         </div>
       </div>
     );
@@ -321,42 +268,70 @@ export default function JournalView({
   return (
     <div className="flex w-full min-h-[calc(100vh-140px)] animate-tab-enter relative" style={{ background: theme.fundoGeral }}>
 
+      {/* LEFT SIDEBAR: Market News */}
       <div className="w-16 md:w-64 self-stretch border-r shrink-0 hidden sm:flex flex-col pt-5 pb-0 px-2 md:px-4" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
         <button
           onClick={handleNewEntry}
-          className="w-full flex items-center justify-center gap-2 py-3 md:px-4 mb-5 rounded-xl font-bold text-black transition-transform active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+          className="w-full flex items-center justify-center gap-2 py-3 md:px-4 mb-4 rounded-xl font-bold text-black transition-transform active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.3)] shrink-0"
           style={{ background: '#eab308' }}
         >
           <Plus size={18} />
           <span className="hidden md:block uppercase tracking-wider text-xs text-center">{t('journal.newEntry')}</span>
         </button>
 
-        <h3 className="text-[9px] font-bold tracking-widest uppercase mb-3 px-2 opacity-40 mt-4" style={{ color: theme.textoPrincipal }}>{t('journal.marketNews')}</h3>
-        <div className="flex-1 overflow-y-auto hide-scrollbar px-2 flex flex-col gap-2 pb-5">
-          {rssNews.length === 0 ? (
-             <div className="text-[10px] opacity-40 italic text-center mt-5" style={{ color: theme.textoPrincipal }}>{t('journal.loadingNews')}</div>
+        {/* Sidebar Header & Mode Switcher */}
+        <div className="flex items-center justify-between mb-2 px-1 shrink-0">
+          <h3 className="text-[9px] font-bold tracking-widest uppercase opacity-60" style={{ color: theme.textoPrincipal }}>
+            {t('journal.marketNews')}
+          </h3>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setNewsViewMode(m => m === 'live' ? 'rss' : 'live')}
+              className="p-1 rounded bg-black/20 hover:bg-white/10 text-[9px] font-bold flex items-center gap-1 opacity-70 hover:opacity-100"
+              style={{ color: theme.textoSecundario }}
+              title={newsViewMode === 'live' ? 'Feed RSS' : 'TradingView Live'}
+            >
+              {newsViewMode === 'live' ? <Globe size={11} className="text-blue-400" /> : <ListFilter size={11} />}
+              <span className="hidden md:inline text-[8px] uppercase">{newsViewMode === 'live' ? 'LIVE' : 'RSS'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* News Content Area */}
+        <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-2 pb-5 min-h-[300px]">
+          {newsViewMode === 'live' ? (
+            <TradingViewMarketNews lang={lang} height="100%" feedMode="all_symbols" />
           ) : (
-             rssNews.map((news, i) => (
-                 <a
-                 key={i}
-                 href={news.link}
-                 target="_blank"
-                 rel="noopener noreferrer"
-                 className="p-3 rounded-xl border border-l-4 cursor-pointer transition-all hover:bg-white/5 opacity-70 hover:opacity-100 flex flex-col gap-1 shrink-0"
-                 style={{ borderColor: theme.contornoGeral, borderLeftColor: '#3b82f6' }}
-               >
-                 <div className="flex items-start justify-between gap-2">
-                   <span className="text-[10px] font-bold leading-snug" style={{ color: theme.textoPrincipal }}>{news.title}</span>
-                   <span className="shrink-0 opacity-40 mt-0.5">🔍</span>
-                 </div>
-                 {news.description && <span className="text-[9px] opacity-50 line-clamp-2 leading-snug font-normal" style={{ color: theme.textoPrincipal }} dangerouslySetInnerHTML={{__html: news.description?.replace(/<[^>]*>/g,'').slice(0,120)}} />}
-                 {news.author && <span className="text-[8px] opacity-30 font-bold uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>{news.author}</span>}
-               </a>
-             ))
+            rssNews.map((news, i) => (
+              <a
+                key={i}
+                href={news.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2.5 rounded-xl border border-l-4 cursor-pointer transition-all hover:bg-white/5 opacity-80 hover:opacity-100 flex flex-col gap-1 shrink-0"
+                style={{ borderColor: theme.contornoGeral, borderLeftColor: '#3b82f6' }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[10px] font-bold leading-snug" style={{ color: theme.textoPrincipal }}>{news.title}</span>
+                  <span className="shrink-0 opacity-40 mt-0.5">🔍</span>
+                </div>
+                {news.description && (
+                  <span className="text-[9px] opacity-50 line-clamp-2 leading-snug font-normal" style={{ color: theme.textoPrincipal }}>
+                    {news.description}
+                  </span>
+                )}
+                {news.author && (
+                  <span className="text-[8px] opacity-30 font-bold uppercase tracking-widest mt-1" style={{ color: theme.textoPrincipal }}>
+                    {news.author}
+                  </span>
+                )}
+              </a>
+            ))
           )}
         </div>
       </div>
 
+      {/* MAIN VIEW */}
       <div className="flex-1 flex flex-col gap-2 p-2 md:p-4 w-full max-w-full min-w-0">
 
         <div className="flex items-center gap-3 shrink-0 mb-2 mt-1">
@@ -366,8 +341,10 @@ export default function JournalView({
           </h1>
         </div>
 
+        {/* ROW 1: 3-Column Top Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 shrink-0" style={{ height: '340px' }}>
 
+          {/* Col 1: Mini Calendar & Tabs */}
           <div className="p-3 rounded-2xl border shadow-sm flex flex-col h-full overflow-hidden" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
             <div className="flex flex-wrap items-center gap-1 border-b border-white/5 pb-2 mb-2 shrink-0">
               {navItems.map(item => (
@@ -386,6 +363,7 @@ export default function JournalView({
             </div>
           </div>
 
+          {/* Col 2: Key Trades */}
           <div className="flex flex-col p-4 rounded-2xl border shadow-sm overflow-hidden h-full" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
             <div className="flex justify-between items-center mb-2 shrink-0">
               <div className="flex items-center gap-2">
@@ -429,78 +407,121 @@ export default function JournalView({
             )}
           </div>
 
+          {/* Col 3: Economic Calendar Card */}
           <div className="flex flex-col p-3 rounded-2xl border shadow-sm overflow-hidden h-full" style={{ ...getGlassStyle(theme.fundoCards), borderColor: theme.contornoGeral }}>
             <div className="flex justify-between items-center mb-2 shrink-0 relative z-10 flex-wrap gap-1">
-              <h3 className="text-[9px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: theme.textoPrincipal }}>
-                {t('journal.economicCalendar')}
-                {ecoLoading && <span className="w-2 h-2 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin ml-1" />}
-              </h3>
-              
-              <div className="flex items-center gap-1 flex-wrap">
-                <input
-                  type="date"
-                  value={ecoDate}
-                  onChange={e => { setEcoDate(e.target.value); }}
-                  className="bg-black/20 font-bold outline-none rounded px-1 py-0.5 cursor-pointer border-none shrink-0"
-                  style={{ color: theme.textoSecundario, colorScheme: 'dark', fontSize: '9px', minWidth: '100px' }}
-                />
-                <select 
-                  value={ecoFilterCurrency} 
-                  onChange={e => setEcoFilterCurrency(e.target.value)}
-                  className="bg-black/20 font-bold outline-none rounded px-1 py-0.5 appearance-none cursor-pointer"
-                  style={{ color: theme.textoSecundario, fontSize: '9px' }}
+              <div className="flex items-center gap-2">
+                <h3 className="text-[9px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: theme.textoPrincipal }}>
+                  {t('journal.economicCalendar')}
+                </h3>
+              </div>
+
+              {/* View Switcher: Live Widget vs In-App List */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setEcoViewMode('live')}
+                  className={`px-2 py-0.5 rounded text-[8px] font-bold flex items-center gap-1 transition-all ${
+                    ecoViewMode === 'live' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-black/20 text-white/50 hover:text-white'
+                  }`}
                 >
-                  <option value="ALL">{t('news.all')}</option>
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                  <option value="JPY">JPY</option>
-                  <option value="BRL">BRL</option>
-                </select>
-                <select 
-                  value={ecoFilterImpact} 
-                  onChange={e => setEcoFilterImpact(e.target.value)}
-                  className="bg-black/20 font-bold outline-none rounded px-1 py-0.5 appearance-none cursor-pointer"
-                  style={{ color: theme.textoSecundario, fontSize: '9px' }}
+                  <Globe size={10} />
+                  <span>{t('widget.liveFeed')}</span>
+                </button>
+                <button
+                  onClick={() => setEcoViewMode('list')}
+                  className={`px-2 py-0.5 rounded text-[8px] font-bold flex items-center gap-1 transition-all ${
+                    ecoViewMode === 'list' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-black/20 text-white/50 hover:text-white'
+                  }`}
                 >
-                  <option value="ALL">{t('news.all')}</option>
-                  <option value="HIGH">{t('news.highImpact')}</option>
-                  <option value="MEDIUM">{t('news.medImpact')}</option>
-                  <option value="LOW">{t('news.lowImpact')}</option>
-                </select>
+                  <ListFilter size={10} />
+                  <span>{t('widget.customEvents')}</span>
+                </button>
               </div>
             </div>
             
-            <div className="flex-1 flex flex-col gap-1 overflow-y-auto hide-scrollbar relative z-10">
-              {(() => {
-                const filteredEvents = ecoEvents.filter(e => {
-                  if (ecoFilterCurrency !== 'ALL' && e.currency !== ecoFilterCurrency) return false;
-                  if (ecoFilterImpact !== 'ALL' && e.impact !== ecoFilterImpact) return false;
-                  return true;
-                });
-
-                if (ecoLoading && ecoEvents.length === 0) {
-                  return <div className="flex-1 flex items-center justify-center text-[10px] font-bold italic opacity-40 p-4" style={{ color: theme.textoPrincipal }}>{t('journal.loadingNews')}</div>;
-                }
-
-                if (ecoError || filteredEvents.length === 0) {
-                  return <div className="flex-1 flex items-center justify-center text-[10px] font-bold italic opacity-40 p-4 text-center" style={{ color: theme.textoPrincipal }}>{t('news.noNews')}</div>;
-                }
-
-                return filteredEvents.map((eco, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded-lg border hover:bg-white/5 transition-colors group" style={{ borderColor: theme.contornoGeral, backgroundColor: 'rgba(0,0,0,0.1)' }}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col items-center justify-center w-8 shrink-0">
-                        <span className="text-[8px] font-black uppercase opacity-60" style={{ color: theme.textoPrincipal }}>{eco.time || '-:-'}</span>
-                        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>{eco.currency || '?'}</span>
-                      </div>
-                      <span className={`w-1 h-6 rounded-full shrink-0 ${eco.impact === 'HIGH' ? 'bg-red-500' : eco.impact === 'MEDIUM' ? 'bg-yellow-500' : 'bg-blue-500'}`} title={`Impact: ${eco.impact}`} />
-                      <span className="text-[10px] sm:text-[11px] font-bold leading-tight group-hover:text-yellow-500 transition-colors line-clamp-1" style={{ color: theme.textoPrincipal }}>{eco.title || eco.name || 'Economic Event'}</span>
-                    </div>
-                    {eco.forecast && <span className="text-[9px] font-bold uppercase tracking-wider opacity-50 shrink-0 ml-2" style={{ color: theme.textoPrincipal }}>Est: {eco.forecast}</span>}
+            {/* Calendar Content Area */}
+            <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+              {ecoViewMode === 'live' ? (
+                <div className="w-full h-full min-h-[220px]">
+                  <TradingViewEconomicCalendar lang={lang} height="100%" />
+                </div>
+              ) : (
+                <div className="flex flex-col h-full gap-1.5">
+                  {/* Filters for In-App List */}
+                  <div className="flex items-center gap-1 flex-wrap mb-1 shrink-0">
+                    <input
+                      type="date"
+                      value={ecoDate}
+                      onChange={e => setEcoDate(e.target.value)}
+                      className="bg-black/20 font-bold outline-none rounded px-1 py-0.5 cursor-pointer border-none shrink-0"
+                      style={{ color: theme.textoSecundario, colorScheme: 'dark', fontSize: '9px', minWidth: '95px' }}
+                    />
+                    <select 
+                      value={ecoFilterCurrency} 
+                      onChange={e => setEcoFilterCurrency(e.target.value)}
+                      className="bg-black/20 font-bold outline-none rounded px-1 py-0.5 appearance-none cursor-pointer"
+                      style={{ color: theme.textoSecundario, fontSize: '9px' }}
+                    >
+                      <option value="ALL">{t('news.all')}</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="JPY">JPY</option>
+                      <option value="BRL">BRL</option>
+                    </select>
+                    <select 
+                      value={ecoFilterImpact} 
+                      onChange={e => setEcoFilterImpact(e.target.value)}
+                      className="bg-black/20 font-bold outline-none rounded px-1 py-0.5 appearance-none cursor-pointer"
+                      style={{ color: theme.textoSecundario, fontSize: '9px' }}
+                    >
+                      <option value="ALL">{t('news.all')}</option>
+                      <option value="HIGH">{t('news.highImpact')}</option>
+                      <option value="MEDIUM">{t('news.medImpact')}</option>
+                      <option value="LOW">{t('news.lowImpact')}</option>
+                    </select>
+                    <button
+                      onClick={() => loadEcoEvents(ecoDate)}
+                      className="p-1 rounded bg-black/20 hover:bg-white/10 ml-auto opacity-70 hover:opacity-100"
+                      title="Reload Events"
+                    >
+                      <RefreshCw size={10} className={ecoLoading ? 'animate-spin text-amber-400' : ''} style={{ color: theme.textoSecundario }} />
+                    </button>
                   </div>
-                ));
-              })()}
+
+                  <div className="flex-1 flex flex-col gap-1 overflow-y-auto hide-scrollbar">
+                    {(() => {
+                      const filteredEvents = ecoEvents.filter(e => {
+                        if (ecoFilterCurrency !== 'ALL' && e.currency !== ecoFilterCurrency) return false;
+                        if (ecoFilterImpact !== 'ALL' && e.impact !== ecoFilterImpact) return false;
+                        return true;
+                      });
+
+                      if (ecoLoading && ecoEvents.length === 0) {
+                        return <div className="flex-1 flex items-center justify-center text-[10px] font-bold italic opacity-40 p-4" style={{ color: theme.textoPrincipal }}>{t('journal.loadingNews')}</div>;
+                      }
+
+                      if (filteredEvents.length === 0) {
+                        return <div className="flex-1 flex items-center justify-center text-[10px] font-bold italic opacity-40 p-4 text-center" style={{ color: theme.textoPrincipal }}>{t('news.noNews')}</div>;
+                      }
+
+                      return filteredEvents.map((eco, i) => (
+                        <div key={i} className="flex items-center justify-between p-2 rounded-lg border hover:bg-white/5 transition-colors group" style={{ borderColor: theme.contornoGeral, backgroundColor: 'rgba(0,0,0,0.1)' }}>
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col items-center justify-center w-8 shrink-0">
+                              <span className="text-[8px] font-black uppercase opacity-60" style={{ color: theme.textoPrincipal }}>{eco.time || '-:-'}</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: theme.textoPrincipal }}>{eco.currency || '?'}</span>
+                            </div>
+                            <span className={`w-1 h-6 rounded-full shrink-0 ${eco.impact === 'HIGH' ? 'bg-red-500' : eco.impact === 'MEDIUM' ? 'bg-yellow-500' : 'bg-blue-500'}`} title={`Impact: ${eco.impact}`} />
+                            <span className="text-[10px] sm:text-[11px] font-bold leading-tight group-hover:text-yellow-500 transition-colors line-clamp-1" style={{ color: theme.textoPrincipal }}>{eco.title}</span>
+                          </div>
+                          {eco.forecast && <span className="text-[9px] font-bold uppercase tracking-wider opacity-50 shrink-0 ml-2" style={{ color: theme.textoPrincipal }}>Est: {eco.forecast}</span>}
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -525,12 +546,12 @@ export default function JournalView({
               <span className="text-[8px] font-bold tracking-widest uppercase opacity-40" style={{ color: theme.textoPrincipal }}>{t('journal.market')}</span>
               <div className="flex flex-wrap gap-2">
                 {marketSentiments.map(s => (
-                  <button key={s.id} onClick={() => setMarketSentiment(v => v === s.id ? '' : s.id)} title={s.id}
+                  <button key={s.id} onClick={() => setMarketSentiment(v => v === s.id ? '' : s.id)} title={s.label}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${marketSentiment === s.id ? 'bg-white/10 opacity-100' : 'bg-black/20 opacity-40 hover:opacity-80'}`}
                     style={{ borderColor: marketSentiment === s.id ? s.color : theme.contornoGeral }}
                   >
                     <s.icon size={15} color={s.color} />
-                    <span className="text-[9px] sm:text-[10px] font-bold uppercase hidden sm:block" style={{ color: theme.textoPrincipal }}>{s.id}</span>
+                    <span className="text-[9px] sm:text-[10px] font-bold uppercase hidden sm:block" style={{ color: theme.textoPrincipal }}>{s.label}</span>
                   </button>
                  ))}
               </div>
@@ -542,12 +563,12 @@ export default function JournalView({
               <span className="text-[8px] font-bold tracking-widest uppercase opacity-40" style={{ color: theme.textoPrincipal }}>{t('journal.emotionalState')}</span>
               <div className="flex flex-wrap gap-2">
                 {traderMoods.map(m => (
-                  <button key={m.id} onClick={() => setTraderMood(v => v === m.id ? '' : m.id)} title={m.id}
+                  <button key={m.id} onClick={() => setTraderMood(v => v === m.id ? '' : m.id)} title={m.label}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${traderMood === m.id ? 'bg-white/10 opacity-100' : 'bg-black/20 opacity-40 hover:opacity-80'}`}
                     style={{ borderColor: traderMood === m.id ? m.color : theme.contornoGeral }}
                   >
                     <m.icon size={15} color={m.color} />
-                    <span className="text-[9px] sm:text-[10px] font-bold uppercase hidden sm:block" style={{ color: theme.textoPrincipal }}>{m.id}</span>
+                    <span className="text-[9px] sm:text-[10px] font-bold uppercase hidden sm:block" style={{ color: theme.textoPrincipal }}>{m.label}</span>
                   </button>
                 ))}
               </div>
@@ -631,7 +652,6 @@ export default function JournalView({
                 <p className="text-[9px] opacity-50 line-clamp-2 leading-snug" style={{ color: theme.textoPrincipal }}>
                   {j.notes?.replace(/<[^>]*>/g, '') || t('journal.noNotes')}
                 </p>
-                {/* Trash at the bottom — always visible, does NOT overlap text due to pb-10 */}
                 <div className="absolute bottom-0 left-0 right-0 flex justify-end px-2 py-1 border-t rounded-b-xl" style={{ borderColor: theme.contornoGeral, background: 'rgba(0,0,0,0.3)' }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); if (window.confirm(t('journal.deleteConfirm'))) deleteJournal(j.id); }}

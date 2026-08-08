@@ -471,11 +471,17 @@ export default function SetupPreviewPage() {
     );
   }
 
+  const userLang = (payload?.settings?.appLanguage) || localStorage.getItem('quantara_language') || 'en';
+  const isPt = userLang === 'pt';
+  const isEs = userLang === 'es';
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
         <div className="text-center space-y-3">
-          <p className="text-2xl font-bold opacity-60">Carregando preview...</p>
+          <p className="text-2xl font-bold opacity-60">
+            {isPt ? 'Carregando preview...' : isEs ? 'Cargando vista previa...' : 'Loading preview...'}
+          </p>
         </div>
       </div>
     );
@@ -485,8 +491,12 @@ export default function SetupPreviewPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
         <div className="text-center space-y-3">
-          <p className="text-2xl font-bold opacity-60">Nenhum dado de preview encontrado.</p>
-          <p className="text-sm opacity-40">A chave expirou ou a aba foi aberta sem dados.</p>
+          <p className="text-2xl font-bold opacity-60">
+            {isPt ? 'Nenhum dado de preview encontrado.' : isEs ? 'No se encontraron datos de vista previa.' : 'No preview data found.'}
+          </p>
+          <p className="text-sm opacity-40">
+            {isPt ? 'A chave expirou ou a aba foi aberta sem dados.' : isEs ? 'La clave expiró o la pestaña se abrió sin datos.' : 'The key expired or the tab was opened without data.'}
+          </p>
         </div>
       </div>
     );

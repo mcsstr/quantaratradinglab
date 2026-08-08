@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Import, Edit2, FileText, Building2 } from '../../components/Icons';
-import { Zap, CheckCircle2, Shield } from 'lucide-react';
+import { Zap } from 'lucide-react';
 
 const SectionTitle = ({ icon: Icon, title, theme, badge }: any) => (
   <div className="flex items-center justify-between mb-4">
@@ -47,16 +47,42 @@ export default function ImportView({
 
   const hasAccount = !!selectedImportAccountId;
 
-  // Detect whether the selected active account uses the simplified mode
-  const isSimplifiedMode = Boolean(
+  // Bulletproof detection: File import (CSV / Paste) is only shown if explicitly enabled AND not in simplified mode
+  const isAccountSimplified = Boolean(
     activeAccount && (
       activeAccount.isSimplified === true ||
       activeAccount.is_simplified === true ||
-      activeAccount.enableCsv === false ||
-      (activeAccount.name && activeAccount.name.toLowerCase().includes('simplif')) ||
-      (activeAccount.csvMapping && typeof activeAccount.csvMapping === 'object' && Object.keys(activeAccount.csvMapping).length > 0 && !Object.values(activeAccount.csvMapping).includes('buy_price') && !Object.values(activeAccount.csvMapping).includes('sell_price'))
+      activeAccount.is_simplified === 'true' ||
+      (!activeAccount.enableCsv && !activeAccount.enablePaste)
     )
   );
+  const showFileImport = !isAccountSimplified && Boolean(activeAccount?.enableCsv || activeAccount?.enablePaste);
+
+  const [selectedFileName, setSelectedFileName] = React.useState<string>('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFileName(e.target.files[0].name);
+    } else {
+      setSelectedFileName('');
+    }
+    handleCSVUpload(e);
+  };
+
+  // Dynamic detection of which fields are configured in the account's mapping
+  const mappedValues = React.useMemo(() => {
+    if (!activeAccount?.csvMapping || typeof activeAccount.csvMapping !== 'object') {
+      return [];
+    }
+    return Object.values(activeAccount.csvMapping);
+  }, [activeAccount?.csvMapping]);
+
+  const hasBuyPrice = mappedValues.includes('buy_price') || (showFileImport && true);
+  const hasSellPrice = mappedValues.includes('sell_price') || (showFileImport && true);
+  const hasTimes = (mappedValues.includes('buy_time') && mappedValues.includes('sell_time')) || (showFileImport && true);
+  const hasDuration = mappedValues.includes('duration');
+  const hasStrategy = mappedValues.includes('strategy') || Boolean(activeAccount?.showStrategyCol);
 
   const CustomDateTimeInput = ({ value, onChange }: any) => {
     const [dateStr, timeStr] = value ? value.split('T') : ['', ''];
@@ -114,15 +140,15 @@ export default function ImportView({
           </h1>
         </div>
 
-        {isSimplifiedMode && (
+        {!showFileImport && (
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold shadow-sm">
             <Zap size={14} className="text-amber-400" />
-            <span>{isPt ? 'Modo Simplificado' : isEs ? 'Modo Simplificado' : 'Simplified Mode'}</span>
+            <span>{t('import.simplifiedMode', lang)}</span>
           </div>
         )}
       </div>
 
-      {/* Step 1: Account — Read-only (usa conta ativa global) */}
+      {/* Step 1: Account Info Header */}
       <div className="rounded-xl p-4 md:p-5 shadow-xl transition-all" style={getGlassStyle(theme.fundoCards)}>
         <div className="flex items-center gap-2 mb-3">
           <Building2 size={16} style={{ color: theme.textoAlerta }} />
@@ -138,17 +164,19 @@ export default function ImportView({
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold" style={{ color: '#fde68a' }}>{activeAccount.name}</span>
-                {isSimplifiedMode && (
-                  <span className="text-[9px] font-black uppercase px-2 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    {isPt ? 'Manual Simplificado' : 'Simplified Manual'}
+                {!showFileImport && (
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    {t('import.simplifiedManual', lang)}
                   </span>
                 )}
               </div>
               <span className="text-[10px] font-medium opacity-70" style={{ color: theme.textoSecundario }}>
-                {isPt ? 'Os dados serão adicionados diretamente à conta ativa selecionada.' : 'Trades will be logged directly into this active global account.'}
+                {t('import.tradesWillBeAdded', lang)}
               </span>
             </div>
-            <div className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(251,191,36,0.2)', color: '#fde68a' }}>ACTIVE</div>
+            <div className="ml-auto text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase" style={{ backgroundColor: 'rgba(251,191,36,0.2)', color: '#fde68a' }}>
+              {t('import.activeBadge', lang)}
+            </div>
           </div>
         ) : (
           <div className="text-center py-6 opacity-50 text-sm" style={{ color: theme.textoSecundario }}>
@@ -157,27 +185,29 @@ export default function ImportView({
         )}
       </div>
 
-      {/* Step 2: Import Options */}
+      {/* Step 2: Trade Entry & Import Area */}
       {hasAccount && (
-        <div className={isSimplifiedMode ? "max-w-2xl mx-auto pb-20 w-full" : "grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20"}>
+        <div className={!showFileImport ? "max-w-2xl mx-auto pb-20 w-full" : "grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20"}>
           
           {/* Manual Trade Entry Card */}
           <div className="rounded-xl p-4 md:p-6 shadow-xl transition-all flex flex-col" style={getGlassStyle(theme.fundoCards)}>
             <SectionTitle 
               icon={Edit2} 
-              title={isSimplifiedMode ? (isPt ? 'Entrada Manual Simplificada' : isEs ? 'Entrada Manual Simplificada' : 'Simplified Manual Entry') : t('import.manualEntry', lang)} 
+              title={!showFileImport ? t('import.simplifiedManualEntry', lang) : t('import.manualEntry', lang)} 
               theme={theme}
-              badge={isSimplifiedMode ? 'Rápido & Direto' : undefined}
+              badge={!showFileImport ? t('import.quickDirectBadge', lang) : undefined}
             />
 
-            {isSimplifiedMode ? (
-              /* SIMPLIFIED MANUAL FORM: No Buy/Sell Price or Complex Duration needed */
-              <div className="space-y-4 flex-1 flex flex-col">
+            <div className="space-y-4 flex-1 flex flex-col">
+              {!showFileImport && (
                 <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300/90 leading-relaxed flex items-center gap-2">
                   <Zap size={16} className="text-amber-400 shrink-0" />
-                  <span>{isPt ? 'Preencha apenas o ativo, data, direção e o resultado líquido (P&L).' : 'Fill in only the symbol, date, side, and net P&L.'}</span>
+                  <span>{t('import.simplifiedDesc', lang)}</span>
                 </div>
+              )}
 
+              {/* Row 1: Symbol & (Side when !hasTimes) OR (Qty when hasTimes) */}
+              {!hasTimes ? (
                 <div className="grid grid-cols-2 gap-3 min-w-0">
                   <div className="space-y-1 min-w-0">
                     <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
@@ -185,7 +215,7 @@ export default function ImportView({
                     </label>
                     <input 
                       type="text" 
-                      placeholder="Ex: MNQ, NQ, ES" 
+                      placeholder={t('import.placeholderSymbol', lang)} 
                       className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent uppercase font-bold tracking-wider" 
                       style={inputStyle} 
                       value={manualTrade.symbol} 
@@ -195,7 +225,7 @@ export default function ImportView({
 
                   <div className="space-y-1 min-w-0">
                     <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
-                      {isPt ? 'Lado (Compra / Venda)' : isEs ? 'Lado (Compra / Venta)' : 'Side (Buy / Sell)'} *
+                      {t('field.side', lang)} *
                     </label>
                     <select
                       className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent cursor-pointer font-bold"
@@ -204,19 +234,52 @@ export default function ImportView({
                       onChange={e => setManualTrade({ ...manualTrade, direction: e.target.value })}
                     >
                       <option value="Long" className="bg-gray-800 text-green-400 font-bold">
-                        🟢 {isPt ? 'Compra (Long)' : isEs ? 'Compra (Long)' : 'Buy (Long)'}
+                        🟢 {t('field.buyLong', lang)}
                       </option>
                       <option value="Short" className="bg-gray-800 text-red-400 font-bold">
-                        🔴 {isPt ? 'Venda (Short)' : isEs ? 'Venta (Short)' : 'Sell (Short)'}
+                        🔴 {t('field.sellShort', lang)}
                       </option>
                     </select>
                   </div>
                 </div>
-
+              ) : (
                 <div className="grid grid-cols-2 gap-3 min-w-0">
                   <div className="space-y-1 min-w-0">
                     <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
-                      {isPt ? 'Data da Operação' : isEs ? 'Fecha de Operación' : 'Trade Date'} *
+                      {t('field.symbol', lang)} *
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder={t('import.placeholderSymbol', lang)} 
+                      className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent uppercase font-bold tracking-wider" 
+                      style={inputStyle} 
+                      value={manualTrade.symbol} 
+                      onChange={e => setManualTrade({ ...manualTrade, symbol: e.target.value.toUpperCase() })} 
+                    />
+                  </div>
+
+                  <div className="space-y-1 min-w-0">
+                    <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
+                      {t('field.qty', lang)}
+                    </label>
+                    <input 
+                      type="number" 
+                      placeholder={t('import.placeholderQty', lang)} 
+                      className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" 
+                      style={inputStyle} 
+                      value={manualTrade.qty === 0 ? '' : (manualTrade.qty || '1')} 
+                      onChange={e => setManualTrade({ ...manualTrade, qty: e.target.value === '' ? '' : e.target.value })} 
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Row 2: Date & Qty (when !hasTimes) OR Buy Time & Sell Time (when hasTimes) */}
+              {!hasTimes ? (
+                <div className="grid grid-cols-2 gap-3 min-w-0">
+                  <div className="space-y-1 min-w-0">
+                    <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
+                      {t('field.tradeDate', lang)} *
                     </label>
                     <input 
                       type="date" 
@@ -240,7 +303,7 @@ export default function ImportView({
                     </label>
                     <input 
                       type="number" 
-                      placeholder="Ex: 1" 
+                      placeholder={t('import.placeholderQty', lang)} 
                       className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" 
                       style={inputStyle} 
                       value={manualTrade.qty === 0 ? '' : (manualTrade.qty || '1')} 
@@ -248,98 +311,125 @@ export default function ImportView({
                     />
                   </div>
                 </div>
-
-                <div className="space-y-1 min-w-0">
-                  <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
-                    {isPt ? 'Resultado Líquido P&L ($)' : isEs ? 'Resultado Neto P&L ($)' : 'Net P&L ($)'} *
-                  </label>
-                  <div className="relative">
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      placeholder="Ex: +150.00 ou -75.50" 
-                      className={`w-full rounded-lg p-3 outline-none text-sm bg-transparent font-bold ${
-                        Number(manualTrade.pnl) > 0 ? 'text-green-400' : Number(manualTrade.pnl) < 0 ? 'text-red-400' : ''
-                      }`} 
-                      style={inputStyle} 
-                      value={manualTrade.pnl === 0 ? '' : manualTrade.pnl} 
-                      onChange={e => setManualTrade({ ...manualTrade, pnl: e.target.value === '' ? '' : e.target.value })} 
-                    />
-                  </div>
-                </div>
-
-                <button 
-                  onClick={handleManualTradeAdd} 
-                  className="w-full py-3.5 rounded-xl font-extrabold transition-all hover:brightness-110 active:scale-[0.98] shadow-lg mt-4 bg-gradient-to-r from-amber-500 to-yellow-400 text-black flex items-center justify-center gap-2"
-                >
-                  <Zap size={16} />
-                  {t('import.addTrade', lang)}
-                </button>
-              </div>
-            ) : (
-              /* FULL MANUAL ENTRY FORM */
-              <div className="space-y-4 flex-1 flex flex-col overflow-hidden">
+              ) : (
                 <div className="grid grid-cols-2 gap-3 min-w-0">
-                  <div className="space-y-1 min-w-0">
-                    <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.symbol', lang)}</label>
-                    <input type="text" placeholder="Ex: MNQ" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent uppercase font-bold" style={inputStyle} value={manualTrade.symbol} onChange={e => setManualTrade({ ...manualTrade, symbol: e.target.value.toUpperCase() })} />
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.qty', lang)}</label>
-                    <input type="number" placeholder="Ex: 1" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.qty === 0 ? '' : manualTrade.qty} onChange={e => setManualTrade({ ...manualTrade, qty: e.target.value === '' ? '' : e.target.value })} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 min-w-0">
-                  <div className="space-y-1 min-w-0">
-                    <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.buyPrice', lang)}</label>
-                    <input type="number" step="0.01" placeholder="Ex: 25393.50" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.buyPrice === 0 ? '' : manualTrade.buyPrice} onChange={e => setManualTrade({ ...manualTrade, buyPrice: e.target.value === '' ? '' : e.target.value })} />
-                  </div>
                   <div className="space-y-1 min-w-0">
                     <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.buyTime', lang)}</label>
                     <CustomDateTimeInput value={manualTrade.buyTime} onChange={(val: string) => setManualTrade({ ...manualTrade, buyTime: val })} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 min-w-0">
-                  <div className="space-y-1 min-w-0">
-                    <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
-                      {isPt ? 'Lado (Compra / Venda)' : isEs ? 'Lado (Compra / Venta)' : 'Side (Buy / Sell)'}
-                    </label>
-                    <select
-                      className="w-full rounded-lg p-2 outline-none text-xs bg-transparent cursor-pointer font-bold"
-                      style={inputStyle}
-                      value={manualTrade.direction || 'Long'}
-                      onChange={e => setManualTrade({ ...manualTrade, direction: e.target.value })}
-                    >
-                      <option value="Long" className="bg-gray-800 text-green-400">
-                        🟢 {isPt ? 'Compra (Long)' : isEs ? 'Compra (Long)' : 'Buy (Long)'}
-                      </option>
-                      <option value="Short" className="bg-gray-800 text-red-400">
-                        🔴 {isPt ? 'Venda (Short)' : isEs ? 'Venta (Short)' : 'Sell (Short)'}
-                      </option>
-                    </select>
                   </div>
                   <div className="space-y-1 min-w-0">
                     <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.sellTime', lang)}</label>
                     <CustomDateTimeInput value={manualTrade.sellTime} onChange={(val: string) => setManualTrade({ ...manualTrade, sellTime: val })} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 min-w-0">
-                  <div className="space-y-1 min-w-0">
-                    <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.sellPrice', lang)}</label>
-                    <input type="number" step="0.01" placeholder="Ex: 25354.25" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.sellPrice === 0 ? '' : manualTrade.sellPrice} onChange={e => setManualTrade({ ...manualTrade, sellPrice: e.target.value === '' ? '' : e.target.value })} />
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>{t('field.pnl', lang)}</label>
-                    <input type="number" step="0.01" placeholder="Ex: -78.50" className="w-full rounded-lg p-2 outline-none text-xs bg-transparent" style={inputStyle} value={manualTrade.pnl === 0 ? '' : manualTrade.pnl} onChange={e => setManualTrade({ ...manualTrade, pnl: e.target.value === '' ? '' : e.target.value })} />
-                  </div>
+              )}
+
+              {/* Row 3: Prices (Buy Price / Sell Price) when configured */}
+              {(hasBuyPrice || hasSellPrice) && (
+                <div className={`grid ${hasBuyPrice && hasSellPrice ? 'grid-cols-2' : 'grid-cols-1'} gap-3 min-w-0`}>
+                  {hasBuyPrice && (
+                    <div className="space-y-1 min-w-0">
+                      <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
+                        {t('field.buyPrice', lang)}
+                      </label>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        placeholder={t('import.placeholderBuyPrice', lang)} 
+                        className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" 
+                        style={inputStyle} 
+                        value={manualTrade.buyPrice === 0 ? '' : (manualTrade.buyPrice ?? '')} 
+                        onChange={e => setManualTrade({ ...manualTrade, buyPrice: e.target.value === '' ? '' : e.target.value })} 
+                      />
+                    </div>
+                  )}
+
+                  {hasSellPrice && (
+                    <div className="space-y-1 min-w-0">
+                      <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
+                        {t('field.sellPrice', lang)}
+                      </label>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        placeholder={t('import.placeholderSellPrice', lang)} 
+                        className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" 
+                        style={inputStyle} 
+                        value={manualTrade.sellPrice === 0 ? '' : (manualTrade.sellPrice ?? '')} 
+                        onChange={e => setManualTrade({ ...manualTrade, sellPrice: e.target.value === '' ? '' : e.target.value })} 
+                      />
+                    </div>
+                  )}
                 </div>
-                <button onClick={handleManualTradeAdd} className="w-full py-3 rounded-lg font-bold transition-opacity hover:opacity-80 shadow-md mt-auto" style={{ backgroundColor: theme.linhaGrafico, color: '#fff' }}>{t('import.addTrade', lang)}</button>
+              )}
+
+              {/* Row 4: Duration (if configured) */}
+              {hasDuration && (
+                <div className="space-y-1 min-w-0">
+                  <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
+                    {t('field.duration', lang)}
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder="00:05:30" 
+                    className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent font-mono" 
+                    style={inputStyle} 
+                    value={manualTrade.duration || ''} 
+                    onChange={e => setManualTrade({ ...manualTrade, duration: e.target.value })} 
+                  />
+                </div>
+              )}
+
+              {/* Row 5: Strategy (Optional if configured) */}
+              {hasStrategy && (
+                <div className="space-y-1 min-w-0">
+                  <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
+                    {t('field.strategy', lang)}
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder={isPt ? 'Ex: Scalp, Rompimento, VWAP...' : isEs ? 'Ej: Scalp, Ruptura, VWAP...' : 'e.g. Scalp, Breakout, VWAP...'} 
+                    className="w-full rounded-lg p-2.5 outline-none text-xs bg-transparent" 
+                    style={inputStyle} 
+                    value={manualTrade.strategy || ''} 
+                    onChange={e => setManualTrade({ ...manualTrade, strategy: e.target.value })} 
+                  />
+                </div>
+              )}
+
+              {/* Row 6: Net P&L ($) */}
+              <div className="space-y-1 min-w-0">
+                <label className="text-[10px] md:text-xs font-bold" style={{ color: theme.textoSecundario }}>
+                  {t('field.netPnl', lang)} *
+                </label>
+                <div className="relative">
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    placeholder={t('import.placeholderNetPnl', lang)} 
+                    className={`w-full rounded-lg p-3 outline-none text-sm bg-transparent font-bold ${
+                      Number(manualTrade.pnl) > 0 ? 'text-green-400' : Number(manualTrade.pnl) < 0 ? 'text-red-400' : ''
+                    }`} 
+                    style={inputStyle} 
+                    value={manualTrade.pnl === 0 ? '' : manualTrade.pnl} 
+                    onChange={e => setManualTrade({ ...manualTrade, pnl: e.target.value === '' ? '' : e.target.value })} 
+                  />
+                </div>
               </div>
-            )}
+
+              {/* Submit Button */}
+              <button 
+                onClick={handleManualTradeAdd} 
+                className="w-full py-3.5 rounded-xl font-extrabold transition-all hover:brightness-110 active:scale-[0.98] shadow-lg mt-4 bg-gradient-to-r from-amber-500 to-yellow-400 text-black flex items-center justify-center gap-2"
+              >
+                <Zap size={16} />
+                {t('import.addTrade', lang)}
+              </button>
+            </div>
           </div>
 
-          {/* CSV & Bulk Import (ONLY shown in Full Mode, hidden in Simplified Mode) */}
-          {!isSimplifiedMode && (
+          {/* CSV & Bulk Import (ONLY rendered when showFileImport is true) */}
+          {showFileImport && (
             <div className="rounded-xl p-4 md:p-6 shadow-xl transition-all flex flex-col" style={getGlassStyle(theme.fundoCards)}>
               <SectionTitle icon={FileText} title={t('import.csvBulk', lang)} theme={theme} />
               <div className="space-y-6 flex-1 flex flex-col">
@@ -349,7 +439,26 @@ export default function ImportView({
                     <span className="text-[10px] font-bold uppercase tracking-widest">{t('import.csvUpload', lang)}</span>
                   </div>
                   <p className="text-[10px] opacity-60 mb-4" style={{ color: theme.textoSecundario }}>{t('import.csvDesc', lang)}</p>
-                  <input type="file" accept=".csv" onChange={handleCSVUpload} className="w-full rounded-lg p-2 outline-none text-xs md:text-sm bg-transparent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600" style={inputStyle} />
+                  
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    accept=".csv" 
+                    onChange={onFileInputChange} 
+                    className="hidden" 
+                  />
+                  <div className="flex items-center gap-3 p-2 rounded-xl border" style={inputStyle}>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-4 py-2 rounded-lg text-xs font-bold transition-all bg-white/10 hover:bg-white/20 text-white shrink-0 shadow-sm"
+                    >
+                      {t('import.chooseFile', lang)}
+                    </button>
+                    <span className="text-xs truncate opacity-70" style={{ color: theme.textoPrincipal }}>
+                      {selectedFileName || t('import.noFileChosen', lang)}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex-1 flex flex-col">
                   <div className="flex items-center gap-2 mb-2 opacity-60">

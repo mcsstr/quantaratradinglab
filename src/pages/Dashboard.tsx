@@ -433,6 +433,7 @@ export default function Dashboard() {
           dailyLossLimitType: a.daily_loss_limit_type,
           totalStopLoss: Number(a.total_stop_loss),
           totalStopLossType: a.total_stop_loss_type,
+          isSimplified: a.is_simplified ?? false,
           enableCsv: a.enable_csv ?? true,
           enablePaste: a.enable_paste ?? false,
           csvMapping: (a.csv_mapping && !Array.isArray(a.csv_mapping) ? a.csv_mapping : {}),
@@ -1374,7 +1375,13 @@ export default function Dashboard() {
       if (importSource === 'csv') {
         const csvMap: Record<string, string> = activeAccount.csvMapping;
         if (!csvMap || typeof csvMap !== 'object' || Object.keys(csvMap).length === 0) {
-          setToastMessage(`Sem mapeamento CSV para a conta "${activeAccount.name}". Configure em Editar Conta → Aba CSV.`);
+          const lang = settings.appLanguage;
+          const msg = lang === 'pt'
+            ? `Sem mapeamento CSV para a conta "${activeAccount.name}". Configure em Editar Conta → Aba CSV.`
+            : lang === 'es'
+            ? `Sin mapeo CSV para la cuenta "${activeAccount.name}". Configure en Editar Cuenta → Pestaña CSV.`
+            : `No CSV mapping for account "${activeAccount.name}". Configure in Edit Account → CSV tab.`;
+          setToastMessage(msg);
           setTimeout(() => setToastMessage(''), 5000);
           return;
         }
@@ -1431,7 +1438,13 @@ export default function Dashboard() {
       else {
         const pasteMap: PasteRule[] = activeAccount.pasteMapping;
         if (!pasteMap || !Array.isArray(pasteMap) || pasteMap.length === 0) {
-          setToastMessage(`Sem mapeamento Paste para a conta "${activeAccount.name}". Configure em Editar Conta → Aba Copiar/Colar.`);
+          const lang = settings.appLanguage;
+          const msg = lang === 'pt'
+            ? `Sem mapeamento Copiar/Colar para a conta "${activeAccount.name}". Configure em Editar Conta → Aba Copiar/Colar.`
+            : lang === 'es'
+            ? `Sin mapeo Copiar/Pegar para la cuenta "${activeAccount.name}". Configure en Editar Cuenta → Pestaña Copiar/Pegar.`
+            : `No Paste mapping for account "${activeAccount.name}". Configure in Edit Account → Paste tab.`;
+          setToastMessage(msg);
           setTimeout(() => setToastMessage(''), 5000);
           return;
         }
@@ -1532,19 +1545,34 @@ export default function Dashboard() {
             }
           }
           const isPt = settings?.appLanguage === 'pt';
-          setToastMessage(isPt ? `${imported.length} trade(s) adicionado(s) com sucesso!` : `${imported.length} trade(s) added successfully!`);
+          const isEs = settings?.appLanguage === 'es';
+          setToastMessage(
+            isPt ? `${imported.length} trade(s) adicionado(s) com sucesso!` :
+            isEs ? `¡${imported.length} operación(es) agregada(s) con éxito!` :
+            `${imported.length} trade(s) added successfully!`
+          );
           setActiveTab('dashboard');
         }
       } else {
         const isPt = settings?.appLanguage === 'pt';
-        setToastMessage(isPt ? 'Nenhum trade válido encontrado. Verifique as linhas.' : 'Could not parse any valid trades. Check rows or headers.');
+        const isEs = settings?.appLanguage === 'es';
+        setToastMessage(
+          isPt ? 'Nenhum trade válido encontrado. Verifique as linhas.' :
+          isEs ? 'No se encontraron operaciones válidas. Verifique las filas.' :
+          'Could not parse any valid trades. Check rows or headers.'
+        );
       }
       setTimeout(() => setToastMessage(''), 3000);
 
     } catch (err: any) {
       console.error('Import Error:', err);
       const isPt = settings?.appLanguage === 'pt';
-      setToastMessage(isPt ? `Erro ao importar trades: ${err.message}` : `Error importing trades: ${err.message}`);
+      const isEs = settings?.appLanguage === 'es';
+      setToastMessage(
+        isPt ? `Erro ao importar trades: ${err.message}` :
+        isEs ? `Error al importar operaciones: ${err.message}` :
+        `Error importing trades: ${err.message}`
+      );
     } finally {
       setIsSyncing(false);
       setTimeout(() => setToastMessage(''), 4000);
@@ -1633,7 +1661,26 @@ export default function Dashboard() {
       const sellPrice = parseFloat(manualTrade.sellPrice) || 0;
       let pnl = parseFloat(manualTrade.pnl);
 
-      const direction = (manualTrade as any).direction || (pnl >= 0 ? 'Long' : 'Short');
+      let direction = (manualTrade as any).direction;
+      if (!direction) {
+        if (buyPrice > 0 && sellPrice > 0 && !isNaN(pnl) && pnl !== 0) {
+          const diff = sellPrice - buyPrice;
+          if (pnl > 0) {
+            direction = diff >= 0 ? 'Long' : 'Short';
+          } else {
+            direction = diff <= 0 ? 'Long' : 'Short';
+          }
+        } else if (manualTrade.buyTime && manualTrade.sellTime) {
+          const bt = new Date(manualTrade.buyTime).getTime();
+          const st = new Date(manualTrade.sellTime).getTime();
+          if (!isNaN(bt) && !isNaN(st) && bt !== st) {
+            direction = bt <= st ? 'Long' : 'Short';
+          }
+        }
+        if (!direction) {
+          direction = pnl >= 0 ? 'Long' : 'Short';
+        }
+      }
 
       if (isNaN(pnl)) {
         if (buyPrice > 0 || sellPrice > 0) {
@@ -1665,6 +1712,7 @@ export default function Dashboard() {
           sell_time: dbSellTime,
           sell_price: sellPrice,
           commission: 0,
+          strategy: (manualTrade as any).strategy || '',
           raw_metadata: {}
         }])
         .select()
@@ -1687,6 +1735,7 @@ export default function Dashboard() {
         sellTime: data.sell_time,
         sellPrice: Number(data.sell_price),
         commission: data.commission !== null ? Number(data.commission) : null,
+        strategy: data.strategy || '',
         rawMetadata: data.raw_metadata || {}
       };
 
@@ -2008,14 +2057,17 @@ export default function Dashboard() {
       return;
     }
     setEditingAccount(null);
-    setAccountFormData({ name: '', ...DEFAULT_ACCOUNT_SETTINGS });
+    setAccountFormData({ name: '', isSimplified: false, ...DEFAULT_ACCOUNT_SETTINGS });
     setAccountFormError('');
     setIsAccountFormOpen(true);
   };
 
   const openEditAccountForm = (account) => {
     setEditingAccount(account);
-    setAccountFormData({ ...account });
+    setAccountFormData({
+      ...account,
+      isSimplified: account.isSimplified ?? account.is_simplified ?? false,
+    });
     setAccountFormError('');
     setIsAccountFormOpen(true);
   };
@@ -2046,6 +2098,7 @@ export default function Dashboard() {
         daily_loss_limit_type: accountFormData.dailyLossLimitType,
         total_stop_loss: Number(accountFormData.totalStopLoss),
         total_stop_loss_type: accountFormData.totalStopLossType,
+        is_simplified: Boolean(accountFormData.isSimplified),
         enable_csv: accountFormData.enableCsv,
         enable_paste: accountFormData.enablePaste,
         csv_mapping: (accountFormData.enableCsv && accountFormData.csvMapping && Object.keys(accountFormData.csvMapping).length > 0)
@@ -2059,8 +2112,14 @@ export default function Dashboard() {
         show_strategy_col: accountFormData.showStrategyCol ?? true
       };
 
-      if (!dbAccount.enable_csv && !dbAccount.enable_paste) {
-        setAccountFormError('You must enable at least one import method (CSV or Paste).');
+      if (!dbAccount.is_simplified && !dbAccount.enable_csv && !dbAccount.enable_paste) {
+        setAccountFormError(
+          settings?.appLanguage === 'pt'
+            ? 'No Modo Completo, habilite ao menos um método de importação (CSV ou Copiar/Colar).'
+            : settings?.appLanguage === 'es'
+            ? 'En el Modo Completo, habilite al menos un método de importación (CSV o Copiar/Pegar).'
+            : 'In Full Mode, you must enable at least one import method (CSV or Paste).'
+        );
         return;
       }
 
@@ -2086,6 +2145,7 @@ export default function Dashboard() {
           dailyLossLimitType: data.daily_loss_limit_type,
           totalStopLoss: Number(data.total_stop_loss),
           totalStopLossType: data.total_stop_loss_type,
+          isSimplified: data.is_simplified ?? false,
           enableCsv: data.enable_csv ?? true,
           enablePaste: data.enable_paste ?? false,
           csvMapping: (data.csv_mapping && !Array.isArray(data.csv_mapping) ? data.csv_mapping : {}),
@@ -3457,7 +3517,7 @@ export default function Dashboard() {
                     <input
                       className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
                       style={{ color: '#fff' }}
-                      placeholder="e.g. Apex Prop, Personal"
+                      placeholder={t('accountForm.placeholderName', settings.appLanguage)}
                       value={accountFormData.name}
                       onChange={e => setAccountFormData(p => ({ ...p, name: e.target.value }))}
                       autoFocus
@@ -3582,12 +3642,12 @@ export default function Dashboard() {
                         onChange={e => setAccountFormData(p => ({ ...p, isFixedFee: e.target.checked }))}
                         className="w-4 h-4 rounded appearance-none border border-white/20 bg-white/5 checked:bg-[#00B0F0] checked:border-transparent transition-all outline-none"
                       />
-                      <span className="text-sm font-semibold text-white/80">Corretagem Fixa por Contrato/Lote</span>
+                      <span className="text-sm font-semibold text-white/80">{t('accountForm.fixedFeePerContract', settings.appLanguage)}</span>
                     </label>
                     {(accountFormData.isFixedFee) && (
                       <div className="space-y-1.5 mb-3">
                         <div className="flex justify-between items-end">
-                          <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Valor da Taxa (Fee) por Contrato</label>
+                          <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{t('accountForm.feeAmountPerContract', settings.appLanguage)}</label>
                           <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/10">
                             <button
                               type="button"
@@ -3604,17 +3664,19 @@ export default function Dashboard() {
                         <input
                           type="number"
                           step="0.01"
-                          placeholder="ex: 2.50"
+                          placeholder={t('accountForm.placeholderFee', settings.appLanguage)}
                           className="w-full px-4 py-3 rounded-xl border-0 bg-white/5 text-sm font-semibold outline-none focus:bg-white/10 transition-all"
                           style={{ color: '#fff' }}
                           value={accountFormData.feePerContract || ''}
                           onChange={e => setAccountFormData(p => ({ ...p, feePerContract: e.target.value === '' ? 0 : Number(e.target.value) }))}
                         />
-                        <p className="text-[10px] text-white/30">Este valor será multiplicado pela quantidade (qty) automaticamente ao importar.</p>
+                        <p className="text-[10px] text-white/30">{t('accountForm.feePerContractDesc', settings.appLanguage)}</p>
                       </div>
                     )}
                   </div>
                   <AccountMappingPanel
+                    isSimplified={accountFormData.isSimplified ?? false}
+                    onIsSimplifiedChange={v => setAccountFormData(p => ({ ...p, isSimplified: v }))}
                     enableCsv={accountFormData.enableCsv}
                     onEnableCsvChange={v => setAccountFormData(p => ({ ...p, enableCsv: v }))}
                     csvMapping={typeof accountFormData.csvMapping === 'object' && !Array.isArray(accountFormData.csvMapping) ? accountFormData.csvMapping : {}}

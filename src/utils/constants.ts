@@ -56,6 +56,7 @@ export const DEFAULT_ACCOUNT_SETTINGS = {
   feeType: '$',
   dailyLossLimitType: '$',
   totalStopLossType: '$',
+  isSimplified: false,
   enableCsv: true,
   enablePaste: false,
   csvMapping: '', // kept as string for the textarea state, converted to array on save

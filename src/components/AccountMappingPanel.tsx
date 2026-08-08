@@ -1,6 +1,5 @@
 // AccountMappingPanel.tsx
-// Visual UI for configuring CSV and Paste import mappings.
-// CSV: column name mapping (dictionary) — Paste: index mapping (array).
+// Visual UI for configuring CSV and Paste import mappings and trade entry inputs.
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Plus, Download } from './Icons';
@@ -49,14 +48,44 @@ const getCsvPresets = (lang: string = 'en') => {
     return [
         {
             id: 'simple',
-            label: isPt ? '⚡ Simplificado' : isEs ? '⚡ Simplificado' : '⚡ Simplified',
-            desc: isPt ? 'Data, Ativo, Compra/Venda, Qtd, P&L' : isEs ? 'Fecha, Símbolo, Lado, Cant, P&L' : 'Date, Symbol, Side, Qty, P&L',
+            label: isPt ? '⚡ Simples Básico' : isEs ? '⚡ Simple Básico' : '⚡ Basic Simple',
+            desc: isPt ? 'Data, Ativo, Lado, Qtd, P&L' : isEs ? 'Fecha, Símbolo, Lado, Cant, P&L' : 'Date, Symbol, Side, Qty, P&L',
             mapping: {
                 'Date': 'buy_time',
                 'Symbol': 'symbol',
                 'Side': 'direction',
                 'Qty': 'qty',
                 'P&L': 'pnl',
+            }
+        },
+        {
+            id: 'simple_prices',
+            label: isPt ? '⚡ Simples c/ Preços' : isEs ? '⚡ Simple c/ Precios' : '⚡ Simple w/ Prices',
+            desc: isPt ? 'Data, Ativo, Lado, Preço Compra, Preço Venda, Qtd, P&L' : isEs ? 'Fecha, Símbolo, Lado, Precio Compra, Precio Venta, Cant, P&L' : 'Date, Symbol, Side, Buy Price, Sell Price, Qty, P&L',
+            mapping: {
+                'Date': 'buy_time',
+                'Symbol': 'symbol',
+                'Side': 'direction',
+                'Buy Price': 'buy_price',
+                'Sell Price': 'sell_price',
+                'Qty': 'qty',
+                'P&L': 'pnl',
+            }
+        },
+        {
+            id: 'b3',
+            label: isPt ? '⚡ B3 / Profitchart' : isEs ? '⚡ B3 / Profitchart' : '⚡ B3 / Profitchart',
+            desc: isPt ? 'Data, Ativo, Preços, Qtd, Estratégia, Resultado' : isEs ? 'Fecha, Símbolo, Precios, Cant, Estrategia, Resultado' : 'Date, Symbol, Prices, Qty, Strategy, Result',
+            mapping: {
+                'Data': 'buy_time',
+                'Ativo': 'symbol',
+                'Lado': 'direction',
+                'Preço Compra': 'buy_price',
+                'Preço Venda': 'sell_price',
+                'Quantidade': 'qty',
+                'Estratégia': 'strategy',
+                'Resultado Líquido': 'pnl',
+                'Taxas': 'commission',
             }
         },
         {
@@ -76,22 +105,6 @@ const getCsvPresets = (lang: string = 'en') => {
                 'Strategy': 'strategy',
                 'P&L': 'pnl',
                 'Commission': 'commission',
-            }
-        },
-        {
-            id: 'b3',
-            label: isPt ? '⚡ B3 / Profitchart' : isEs ? '⚡ B3 / Profitchart' : '⚡ B3 / Profitchart',
-            desc: isPt ? 'Mapeamento padrão das plataformas BR' : isEs ? 'Mapeo estándar de plataformas BR' : 'Default mapping for BR platforms',
-            mapping: {
-                'Data': 'buy_time',
-                'Ativo': 'symbol',
-                'Lado': 'direction',
-                'Preço Compra': 'buy_price',
-                'Preço Venda': 'sell_price',
-                'Quantidade': 'qty',
-                'Estratégia': 'strategy',
-                'Resultado Líquido': 'pnl',
-                'Taxas': 'commission',
             }
         }
     ];
@@ -119,15 +132,16 @@ function MapToSelect({ value, onChange, isFixedFee, lang = 'en', selectedValues 
     );
 }
 
-// ─── CSV Tab ─────────────────────────────────────────────────────────────────
+// ─── CSV / Input Mapping Editor ──────────────────────────────────────────────
 interface CsvMappingEditorProps {
     value: Record<string, string>;
     onChange: (v: Record<string, string>) => void;
     isFixedFee: boolean;
     lang?: string;
+    allowFileUpload?: boolean;
 }
 
-function CsvMappingEditor({ value, onChange, isFixedFee, lang = 'en' }: CsvMappingEditorProps) {
+function CsvMappingEditor({ value, onChange, isFixedFee, lang = 'en', allowFileUpload = true }: CsvMappingEditorProps) {
     const fileRef = useRef<HTMLInputElement>(null);
     const [headers, setHeaders] = useState<string[]>(Object.keys(value));
     const [newColName, setNewColName] = useState('');
@@ -148,60 +162,70 @@ function CsvMappingEditor({ value, onChange, isFixedFee, lang = 'en' }: CsvMappi
             const firstLine = text.split(/\r?\n/)[0] || '';
             const delimiter = firstLine.includes('\t') ? /\t/ : /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
             const cols = firstLine.split(delimiter).map(h => h.replace(/(^"|"$)/g, '').trim()).filter(Boolean);
-            setHeaders(cols);
-            const newMap: Record<string, string> = {};
-            cols.forEach(col => { newMap[col] = value[col] || 'ignore'; });
-            onChange(newMap);
+
+            if (cols.length === 0) return;
+
+            const newMapping: Record<string, string> = { ...value };
+            cols.forEach(col => {
+                if (!newMapping[col]) {
+                    const lower = col.toLowerCase();
+                    if (lower.includes('symbol') || lower.includes('ativo') || lower.includes('instrument') || lower.includes('contrato')) newMapping[col] = 'symbol';
+                    else if (lower.includes('buy price') || lower.includes('preco compra') || lower.includes('preço compra') || lower.includes('entry price')) newMapping[col] = 'buy_price';
+                    else if (lower.includes('sell price') || lower.includes('preco venda') || lower.includes('preço venda') || lower.includes('exit price')) newMapping[col] = 'sell_price';
+                    else if (lower.includes('buy time') || lower.includes('hora compra') || lower.includes('hora entrada') || lower.includes('entry time') || lower.includes('data') || lower.includes('date')) newMapping[col] = 'buy_time';
+                    else if (lower.includes('sell time') || lower.includes('hora venda') || lower.includes('hora saida') || lower.includes('hora saída') || lower.includes('exit time')) newMapping[col] = 'sell_time';
+                    else if (lower.includes('duration') || lower.includes('duracao') || lower.includes('duração') || lower.includes('tempo')) newMapping[col] = 'duration';
+                    else if (lower.includes('qty') || lower.includes('quantidade') || lower.includes('size') || lower.includes('lots') || lower.includes('contratos')) newMapping[col] = 'qty';
+                    else if (lower.includes('p&l') || lower.includes('pnl') || lower.includes('profit') || lower.includes('lucro') || lower.includes('resultado') || lower.includes('liquid')) newMapping[col] = 'pnl';
+                    else if (lower.includes('commis') || lower.includes('taxa') || lower.includes('fee')) newMapping[col] = isFixedFee ? 'ignore' : 'commission';
+                    else if (lower.includes('strategy') || lower.includes('estrategia') || lower.includes('estratégia') || lower.includes('setup')) newMapping[col] = 'strategy';
+                    else if (lower.includes('type') || lower.includes('side') || lower.includes('lado') || lower.includes('direction') || lower.includes('direcao') || lower.includes('direção')) newMapping[col] = 'direction';
+                    else newMapping[col] = 'ignore';
+                }
+            });
+            onChange(newMapping);
         };
         reader.readAsText(file);
-        e.target.value = '';
     };
 
     const handleApplyPreset = (presetMapping: Record<string, string>) => {
-        const adjustedMap = { ...presetMapping };
-        if (isFixedFee && adjustedMap['Commission']) {
-            delete adjustedMap['Commission'];
-        }
-        if (isFixedFee && adjustedMap['Taxas']) {
-            delete adjustedMap['Taxas'];
-        }
-        setHeaders(Object.keys(adjustedMap));
-        onChange(adjustedMap);
-    };
-
-    const handleAddManualColumn = (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-        const trimmed = newColName.trim();
-        if (!trimmed || headers.includes(trimmed)) return;
-        
-        const newHeaders = [...headers, trimmed];
-        setHeaders(newHeaders);
-        onChange({ ...value, [trimmed]: 'ignore' });
-        setNewColName('');
-    };
-
-    const handleRemoveColumn = (col: string) => {
-        const newMap = { ...value };
-        delete newMap[col];
-        setHeaders(Object.keys(newMap));
-        onChange(newMap);
+        onChange({ ...presetMapping });
     };
 
     const handleSetMap = (col: string, mapTo: string) => {
         onChange({ ...value, [col]: mapTo });
     };
 
+    const handleRemoveColumn = (col: string) => {
+        const next = { ...value };
+        delete next[col];
+        onChange(next);
+    };
+
+    const handleAddManualColumn = (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = newColName.trim();
+        if (!trimmed || value[trimmed]) return;
+        onChange({ ...value, [trimmed]: 'ignore' });
+        setNewColName('');
+    };
+
     const handleDownloadTemplate = () => {
-        const activeHeaders = headers.length > 0 ? headers : ['Date', 'Symbol', 'Buy Price', 'Sell Price', 'Qty', 'P&L'];
+        const activeHeaders = headers.filter(h => value[h] && value[h] !== 'ignore');
+        if (activeHeaders.length === 0) return;
+
         const sampleRow = activeHeaders.map(h => {
-            const lower = h.toLowerCase();
-            if (lower.includes('date') || lower.includes('data')) return '2026-08-01 10:00:00';
-            if (lower.includes('symbol') || lower.includes('ativo')) return 'NQ';
-            if (lower.includes('buy') || lower.includes('compra')) return '20500.00';
-            if (lower.includes('sell') || lower.includes('venda')) return '20550.00';
-            if (lower.includes('qty') || lower.includes('qtd') || lower.includes('quantidade')) return '1';
-            if (lower.includes('p&l') || lower.includes('pnl') || lower.includes('resultado')) return '100.00';
-            if (lower.includes('commis') || lower.includes('taxa')) return '2.50';
+            const mapTo = value[h];
+            if (mapTo === 'symbol') return 'MNQ';
+            if (mapTo === 'direction') return 'Long';
+            if (mapTo === 'buy_time') return '2025-01-15 09:30:00';
+            if (mapTo === 'sell_time') return '2025-01-15 09:45:00';
+            if (mapTo === 'buy_price') return '20500.00';
+            if (mapTo === 'sell_price') return '20550.00';
+            if (mapTo === 'qty') return '1';
+            if (mapTo === 'pnl') return '100.00';
+            if (mapTo === 'commission') return '2.50';
+            if (mapTo === 'strategy') return 'Scalp';
             return '100';
         }).join(',');
 
@@ -221,15 +245,15 @@ function CsvMappingEditor({ value, onChange, isFixedFee, lang = 'en' }: CsvMappi
             {/* Fast Presets */}
             <div>
                 <label className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1.5 block">
-                    {isPt ? 'Modelos de Mapeamento Rápido (1-Clique)' : isEs ? 'Plantillas de Mapeo Rápido (1-Clic)' : 'Quick Mapping Templates (1-Click)'}
+                    {isPt ? 'Modelos Rápidos de Inputs (1-Clique)' : isEs ? 'Plantillas Rápidas de Inputs (1-Clic)' : 'Quick Input Templates (1-Click)'}
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                     {presets.map(preset => (
                         <button
                             key={preset.id}
                             type="button"
                             onClick={() => handleApplyPreset(preset.mapping)}
-                            className="p-2 rounded-xl bg-white/5 border border-white/10 hover:border-[#00B0F0]/50 hover:bg-[#00B0F0]/10 text-left transition-all group"
+                            className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-[#00B0F0]/50 hover:bg-[#00B0F0]/10 text-left transition-all group"
                         >
                             <span className="text-[11px] font-bold text-white group-hover:text-[#00B0F0] transition-colors block truncate">
                                 {preset.label}
@@ -242,43 +266,45 @@ function CsvMappingEditor({ value, onChange, isFixedFee, lang = 'en' }: CsvMappi
                 </div>
             </div>
 
-            {/* Upload File & Download Template */}
-            <div className="flex gap-2">
-                <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleUpload} />
-                <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="flex-1 py-2 rounded-xl border border-dashed border-[#00B0F0]/40 text-xs font-bold text-[#00B0F0] hover:bg-[#00B0F0]/10 hover:border-[#00B0F0] transition-all flex items-center justify-center gap-1.5"
-                >
-                    📂 {isPt ? 'Subir CSV de Exemplo' : isEs ? 'Subir CSV de Ejemplo' : 'Upload Sample CSV'}
-                </button>
+            {/* Upload Sample File & Download Template */}
+            {allowFileUpload && (
+                <div className="flex gap-2">
+                    <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleUpload} />
+                    <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        className="flex-1 py-2 rounded-xl border border-dashed border-[#00B0F0]/40 text-xs font-bold text-[#00B0F0] hover:bg-[#00B0F0]/10 hover:border-[#00B0F0] transition-all flex items-center justify-center gap-1.5"
+                    >
+                        📂 {isPt ? 'Subir CSV de Exemplo' : isEs ? 'Subir CSV de Ejemplo' : 'Upload Sample CSV'}
+                    </button>
 
-                <button
-                    type="button"
-                    onClick={handleDownloadTemplate}
-                    className="py-2 px-3 rounded-xl border border-white/10 text-xs font-bold text-white/70 hover:bg-white/10 transition-all flex items-center justify-center gap-1.5 shrink-0"
-                    title={isPt ? 'Baixar modelo de CSV' : isEs ? 'Descargar plantilla CSV' : 'Download CSV Template'}
-                >
-                    <Download size={13} /> {isPt ? 'Modelo .CSV' : isEs ? 'Plantilla .CSV' : 'Template .CSV'}
-                </button>
-            </div>
+                    <button
+                        type="button"
+                        onClick={handleDownloadTemplate}
+                        className="py-2 px-3 rounded-xl border border-white/10 text-xs font-bold text-white/70 hover:bg-white/10 transition-all flex items-center justify-center gap-1.5 shrink-0"
+                        title={isPt ? 'Baixar modelo de CSV' : isEs ? 'Descargar plantilla CSV' : 'Download CSV Template'}
+                    >
+                        <Download size={13} /> {isPt ? 'Modelo .CSV' : isEs ? 'Plantilla .CSV' : 'Template .CSV'}
+                    </button>
+                </div>
+            )}
 
-            {/* List of Headers */}
+            {/* List of Configured Inputs / Headers */}
             {headers.length === 0 ? (
                 <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center space-y-1">
                     <p className="text-xs text-white/60 font-semibold">
-                        {isPt ? 'Nenhuma coluna configurada ainda' : isEs ? 'No hay columnas configuradas aún' : 'No columns configured yet'}
+                        {isPt ? 'Nenhum campo configurado ainda' : isEs ? 'Ningún campo configurado aún' : 'No inputs configured yet'}
                     </p>
                     <p className="text-[10px] text-white/40">
                         {isPt
-                            ? 'Escolha um Modelo Rápido acima, suba seu arquivo CSV ou crie suas colunas manualmente abaixo.'
+                            ? 'Escolha um Modelo Rápido acima ou adicione seus campos manualmente abaixo.'
                             : isEs
-                            ? 'Elija una Plantilla Rápida arriba, suba su archivo CSV o cree sus columnas manualmente a continuación.'
-                            : 'Choose a Quick Template above, upload your CSV file, or add your columns manually below.'}
+                            ? 'Elija una Plantilla Rápida arriba o agregue sus campos manualmente abajo.'
+                            : 'Choose a Quick Template above or add your fields manually below.'}
                     </p>
                 </div>
             ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 hide-scrollbar">
+                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1 hide-scrollbar">
                     {headers.map(col => (
                         <div key={col} className="flex items-center gap-2">
                             <span
@@ -293,7 +319,7 @@ function CsvMappingEditor({ value, onChange, isFixedFee, lang = 'en' }: CsvMappi
                                 type="button"
                                 onClick={() => handleRemoveColumn(col)}
                                 className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-colors shrink-0"
-                                title={isPt ? 'Remover esta coluna' : isEs ? 'Eliminar esta columna' : 'Remove this column'}
+                                title={isPt ? 'Remover este campo' : isEs ? 'Eliminar este campo' : 'Remove this field'}
                             >
                                 <Trash2 size={12} />
                             </button>
@@ -302,11 +328,11 @@ function CsvMappingEditor({ value, onChange, isFixedFee, lang = 'en' }: CsvMappi
                 </div>
             )}
 
-            {/* Manual Column Adder */}
+            {/* Manual Input / Column Adder */}
             <form onSubmit={handleAddManualColumn} className="flex items-center gap-2">
                 <input
                     type="text"
-                    placeholder={isPt ? 'Nome da coluna (ex: Data, Ativo, Lucro)...' : isEs ? 'Nombre de columna...' : 'Column name (e.g. Date, Symbol, PnL)...'}
+                    placeholder={isPt ? 'Nome do campo (ex: Preço Compra, Preço Venda, Estratégia)...' : isEs ? 'Nombre del campo...' : 'Field name (e.g. Buy Price, Sell Price, Strategy)...'}
                     value={newColName}
                     onChange={e => setNewColName(e.target.value)}
                     className="flex-1 px-3 py-1.5 rounded-lg bg-white/5 text-xs font-mono text-white outline-none border border-white/10 focus:border-[#00B0F0] transition-all"
@@ -316,15 +342,9 @@ function CsvMappingEditor({ value, onChange, isFixedFee, lang = 'en' }: CsvMappi
                     disabled={!newColName.trim()}
                     className="py-1.5 px-3 rounded-lg bg-white/10 text-xs font-bold text-white hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-1 shrink-0"
                 >
-                    <Plus size={13} /> {isPt ? 'Coluna' : isEs ? 'Columna' : 'Column'}
+                    <Plus size={13} /> {isPt ? 'Adicionar Campo' : isEs ? 'Agregar Campo' : 'Add Field'}
                 </button>
             </form>
-
-            <p className="text-[10px] text-white/30 leading-relaxed">
-                {isFixedFee
-                    ? (isPt ? 'Taxa fixa por contrato ativa — a opção "Comissão" não é necessária.' : isEs ? 'Tarifa fija activa — no es necesaria la opción "Comisión".' : 'Fixed fee per contract active — "Commission" option is not required.')
-                    : (isPt ? 'Mapeie a coluna de comissão da corretora para "💰 Comissão" para calcular o custo real.' : isEs ? 'Mapee la columna de comisión a "💰 Comisión" para calcular el costo real.' : 'Map the broker commission column to "💰 Commission" to calculate real costs.')}
-            </p>
         </div>
     );
 }
@@ -348,79 +368,63 @@ function PasteMappingEditor({ value, onChange, isFixedFee, lang = 'en' }: PasteM
 
     const add = () => onChange([...value, { name: '', mapTo: 'ignore' }]);
     const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
-    const move = (i: number, dir: -1 | 1) => {
-        const arr = [...value];
-        const swap = i + dir;
-        if (swap < 0 || swap >= arr.length) return;
-        [arr[i], arr[swap]] = [arr[swap], arr[i]];
-        onChange(arr);
-    };
-    const update = (i: number, field: keyof PasteRule, val: string) => {
-        const arr = [...value];
-        arr[i] = { ...arr[i], [field]: val };
-        onChange(arr);
+    const update = (i: number, mapTo: string) => {
+        const next = [...value];
+        next[i] = { ...next[i], mapTo };
+        onChange(next);
     };
 
     return (
         <div className="space-y-3">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">
+                    {isPt ? 'Mapeamento por Ordem de Coluna' : isEs ? 'Mapeo por Orden de Columna' : 'Column Order Mapping'}
+                </span>
+                <button
+                    type="button"
+                    onClick={add}
+                    className="text-xs font-bold text-[#00B0F0] hover:underline flex items-center gap-1"
+                >
+                    <Plus size={12} /> {isPt ? 'Adicionar Coluna' : isEs ? 'Agregar Columna' : 'Add Column'}
+                </button>
+            </div>
+
             {value.length === 0 ? (
-                <p className="text-[10px] text-white/30 text-center py-2">
-                    {isPt
-                        ? 'Adicione as colunas na ordem exata em que aparecem quando você copia da sua corretora.'
-                        : isEs
-                        ? 'Agregue las columnas en el orden exacto en que aparecen al copiar de su broker.'
-                        : 'Add columns in the exact order as they appear when copied from your broker.'}
-                </p>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center space-y-1">
+                    <p className="text-xs text-white/60 font-semibold">
+                        {isPt ? 'Nenhuma coluna de colar configurada' : isEs ? 'No hay columnas configuradas' : 'No paste columns configured'}
+                    </p>
+                    <p className="text-[10px] text-white/40">
+                        {isPt ? 'Clique em "Adicionar Coluna" para mapear os dados copiados.' : 'Click "Add Column" to map pasted data.'}
+                    </p>
+                </div>
             ) : (
-                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1 hide-scrollbar">
-                    {value.map((rule, i) => (
-                        <div key={i} className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-white/20 font-mono w-4 text-right shrink-0">{i}</span>
-                            <input
-                                type="text"
-                                placeholder={isPt ? 'Nome da coluna' : isEs ? 'Nombre columna' : 'Column name'}
-                                value={rule.name}
-                                onChange={e => update(i, 'name', e.target.value)}
-                                className="w-28 flex-shrink-0 px-2 py-1.5 rounded-lg bg-white/5 text-xs font-mono text-white/80 outline-none border border-white/10 focus:border-white/25 transition-all"
-                            />
-                            <span className="text-white/20 text-xs shrink-0">→</span>
-                            <MapToSelect value={rule.mapTo} onChange={v => update(i, 'mapTo', v)} isFixedFee={isFixedFee} lang={lang} selectedValues={value.map(r => r.mapTo)} />
-                            <div className="flex shrink-0 gap-0.5">
-                                <button type="button" onClick={() => move(i, -1)} className="p-1 text-white/20 hover:text-white/60 transition-colors" disabled={i === 0}>
-                                    <ArrowUp size={12} />
-                                </button>
-                                <button type="button" onClick={() => move(i, 1)} className="p-1 text-white/20 hover:text-white/60 transition-colors" disabled={i === value.length - 1}>
-                                    <ArrowDown size={12} />
-                                </button>
-                                <button type="button" onClick={() => remove(i)} className="p-1 text-red-400/40 hover:text-red-400 transition-colors">
-                                    <Trash2 size={12} />
-                                </button>
-                            </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 hide-scrollbar">
+                    {value.map((rule, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                            <span className="w-8 text-center text-xs font-mono text-white/40">
+                                #{idx + 1}
+                            </span>
+                            <MapToSelect value={rule.mapTo} onChange={v => update(idx, v)} isFixedFee={isFixedFee} lang={lang} selectedValues={value.map(r => r.mapTo)} />
+                            <button
+                                type="button"
+                                onClick={() => remove(idx)}
+                                className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-colors shrink-0"
+                            >
+                                <Trash2 size={12} />
+                            </button>
                         </div>
                     ))}
                 </div>
             )}
-            <button
-                type="button"
-                onClick={add}
-                className="w-full py-2 rounded-xl border border-dashed border-white/15 text-xs font-bold text-white/40 hover:bg-white/5 hover:border-white/25 transition-all flex items-center justify-center gap-1.5"
-            >
-                <Plus size={13} /> {isPt ? 'Adicionar Coluna' : isEs ? 'Agregar Columna' : 'Add Column'}
-            </button>
-            <p className="text-[10px] text-white/30 leading-relaxed">
-                {isPt
-                    ? 'A ordem é crucial. O índice à esquerda (0, 1, 2…) corresponde à posição exata das colunas no texto colado.'
-                    : isEs
-                    ? 'El orden es crucial. El índice a la izquierda corresponde a la posición exacta de las columnas en el texto pegado.'
-                    : 'The order is crucial. The index on the left corresponds to the exact position of columns in the pasted text.'}
-                {!isFixedFee && <span className="text-yellow-400/60"> {isPt ? 'Lembre de mapear a coluna de comissão.' : isEs ? 'Recuerde mapear la columna de comisión.' : 'Remember to map the commission column.'}</span>}
-            </p>
         </div>
     );
 }
 
 // ─── Main Panel ─────────────────────────────────────────────────────────────
 interface AccountMappingPanelProps {
+    isSimplified?: boolean;
+    onIsSimplifiedChange?: (v: boolean) => void;
     enableCsv: boolean;
     onEnableCsvChange: (v: boolean) => void;
     csvMapping: Record<string, string>;
@@ -439,6 +443,7 @@ interface AccountMappingPanelProps {
 }
 
 export default function AccountMappingPanel({
+    isSimplified = false, onIsSimplifiedChange,
     enableCsv, onEnableCsvChange, csvMapping, onCsvMappingChange,
     enablePaste, onEnablePasteChange, pasteMapping, onPasteMappingChange,
     isFixedFee,
@@ -449,49 +454,95 @@ export default function AccountMappingPanel({
     const isPt = lang === 'pt';
     const isEs = lang === 'es';
 
+    // Toggle between Simplified (Manual only, file modal hidden) and Full (File import allowed)
+    const handleToggleFileImport = (enabled: boolean) => {
+        if (onIsSimplifiedChange) {
+            onIsSimplifiedChange(!enabled);
+        }
+        onEnableCsvChange(enabled);
+        if (!enabled) {
+            onEnablePasteChange(false);
+        }
+    };
+
     const tabCls = (tab: 'csv' | 'paste') =>
         `flex-1 py-2 text-xs font-bold transition-all rounded-lg ${activeTab === tab
             ? 'bg-[#00B0F0]/15 text-[#00B0F0] border border-[#00B0F0]/30'
             : 'text-white/30 hover:text-white/50 border border-transparent'
         }`;
 
-    return (
-        <div className="pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-            <label className="text-[11px] text-[#00B0F0] font-black uppercase tracking-widest mb-4 block">
-                {isPt ? 'Configuração de Importação' : isEs ? 'Configuración de Importación' : 'Import Configuration'}
-            </label>
+    const isFileImportEnabled = !isSimplified && (enableCsv || enablePaste);
 
-            {/* Method Checkboxes */}
-            <div className="flex gap-4 mb-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={enableCsv}
-                        onChange={e => onEnableCsvChange(e.target.checked)}
-                        className="w-4 h-4 rounded appearance-none border border-white/20 bg-white/5 checked:bg-[#00B0F0] checked:border-transparent transition-all outline-none"
-                    />
-                    <span className="text-xs font-semibold text-white/70">CSV</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={enablePaste}
-                        onChange={e => onEnablePasteChange(e.target.checked)}
-                        className="w-4 h-4 rounded appearance-none border border-white/20 bg-white/5 checked:bg-[#00B0F0] checked:border-transparent transition-all outline-none"
-                    />
-                    <span className="text-xs font-semibold text-white/70">
-                        {isPt ? 'Copiar/Colar' : isEs ? 'Copiar/Pegar' : 'Copy/Paste'}
-                    </span>
+    return (
+        <div className="pt-4 border-t space-y-4" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+            <div className="flex items-center justify-between">
+                <label className="text-[11px] text-[#00B0F0] font-black uppercase tracking-widest block">
+                    {isPt ? 'Configuração de Inputs e Campos de Trades' : isEs ? 'Configuración de Inputs y Campos de Trades' : 'Trade Inputs & Fields Configuration'}
                 </label>
             </div>
 
-            {/* Tabs */}
-            {(enableCsv || enablePaste) && (
-                <>
+            {/* Toggle: Habilitar Importação de Arquivos */}
+            <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-2.5">
+                <label className="flex items-center justify-between cursor-pointer">
+                    <div className="flex items-center gap-2.5">
+                        <input
+                            type="checkbox"
+                            checked={isFileImportEnabled}
+                            onChange={e => handleToggleFileImport(e.target.checked)}
+                            className="w-4 h-4 rounded appearance-none border border-white/20 bg-white/5 checked:bg-[#00B0F0] checked:border-transparent transition-all outline-none cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-white">
+                            {isPt ? 'Habilitar Importação de Arquivos (CSV / Copiar & Colar)' : isEs ? 'Habilitar Importación de Archivos (CSV / Copiar y Pegar)' : 'Enable File Import (CSV / Copy & Paste)'}
+                        </span>
+                    </div>
+                    <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded-full ${
+                        !isFileImportEnabled ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-[#00B0F0]/20 text-[#00B0F0] border border-[#00B0F0]/30'
+                    }`}>
+                        {!isFileImportEnabled ? (isPt ? 'MODO MANUAL SIMPLES' : 'SIMPLE MANUAL MODE') : (isPt ? 'IMPORTAÇÃO ATIVA' : 'IMPORT ACTIVE')}
+                    </span>
+                </label>
+
+                {!isFileImportEnabled ? (
+                    <p className="text-[10px] text-amber-300/80 leading-relaxed pl-6.5">
+                        {isPt
+                            ? '⚡ A tela com modal de arquivos (CSV) ficará OCULTA no painel. O registro de trades usará apenas os campos configurados abaixo.'
+                            : isEs
+                            ? '⚡ La pantalla con modal de archivos (CSV) estará OCULTA en el panel. El registro de operaciones usará solo los campos configurados abajo.'
+                            : '⚡ The file upload modal (CSV) will be HIDDEN in the dashboard. Trade entry will use only the fields configured below.'}
+                    </p>
+                ) : (
+                    <div className="flex gap-4 pt-1 pl-6.5">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={enableCsv}
+                                onChange={e => onEnableCsvChange(e.target.checked)}
+                                className="w-3.5 h-3.5 rounded appearance-none border border-white/20 bg-white/5 checked:bg-[#00B0F0] checked:border-transparent transition-all outline-none"
+                            />
+                            <span className="text-xs font-semibold text-white/70">CSV</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={enablePaste}
+                                onChange={e => onEnablePasteChange(e.target.checked)}
+                                className="w-3.5 h-3.5 rounded appearance-none border border-white/20 bg-white/5 checked:bg-[#00B0F0] checked:border-transparent transition-all outline-none"
+                            />
+                            <span className="text-xs font-semibold text-white/70">
+                                {isPt ? 'Copiar/Colar' : isEs ? 'Copiar/Pegar' : 'Copy/Paste'}
+                            </span>
+                        </label>
+                    </div>
+                )}
+            </div>
+
+            {/* Field & Input Editor (ALWAYS AVAILABLE to customize inputs like buy price, sell price, etc.) */}
+            <div className="space-y-3 pt-1">
+                {isFileImportEnabled && enablePaste && (
                     <div className="flex gap-1.5 mb-3 p-1 rounded-xl bg-white/5">
                         {enableCsv && (
                             <button type="button" className={tabCls('csv')} onClick={() => setActiveTab('csv')}>
-                                📄 CSV
+                                📄 CSV / Inputs
                             </button>
                         )}
                         {enablePaste && (
@@ -500,19 +551,31 @@ export default function AccountMappingPanel({
                             </button>
                         )}
                     </div>
+                )}
 
-                    {activeTab === 'csv' && enableCsv && (
-                        <CsvMappingEditor value={csvMapping} onChange={onCsvMappingChange} isFixedFee={isFixedFee} lang={lang} />
-                    )}
-                    {activeTab === 'paste' && enablePaste && (
-                        <PasteMappingEditor value={pasteMapping} onChange={onPasteMappingChange} isFixedFee={isFixedFee} lang={lang} />
-                    )}
-                </>
-            )}
+                {(!isFileImportEnabled || activeTab === 'csv' || !enablePaste) && (
+                    <CsvMappingEditor
+                        value={csvMapping}
+                        onChange={onCsvMappingChange}
+                        isFixedFee={isFixedFee}
+                        lang={lang}
+                        allowFileUpload={isFileImportEnabled}
+                    />
+                )}
+
+                {isFileImportEnabled && activeTab === 'paste' && enablePaste && (
+                    <PasteMappingEditor
+                        value={pasteMapping}
+                        onChange={onPasteMappingChange}
+                        isFixedFee={isFixedFee}
+                        lang={lang}
+                    />
+                )}
+            </div>
 
             {/* Strategy / Setup Column Option */}
             {onShowStrategyColChange && (
-                <div className="pt-3 mt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                <div className="pt-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
                     <label className="flex items-center gap-2 cursor-pointer">
                         <input
                             type="checkbox"
