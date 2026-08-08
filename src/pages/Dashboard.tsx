@@ -66,6 +66,14 @@ export default function Dashboard() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [theme, setTheme] = useState(DEFAULT_THEME);
 
+  const [activeSettingsTab, setActiveSettingsTab] = useState('account');
+  const [session, setSession] = useState<any>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true); // Blocks all render until auth verified
+  const [planExpiredStatus, setPlanExpiredStatus] = useState<'Suspended' | 'Inactive' | 'Expired' | null>(null);
+  const [isReadOnlyExpired, setIsReadOnlyExpired] = useState(false);
+
+  const isFreePlan = settings?.userPlan?.toLowerCase() === 'free';
+
   // --- MULTI-ACCOUNT STATE ---
   const [accounts, setAccounts] = useState([]);
   const [activeAccountId, setActiveAccountId] = useState(null);
@@ -190,14 +198,14 @@ export default function Dashboard() {
   }, [isFabOpen]);
   const [prevTab, setPrevTab] = useState('dashboard');
 
-  // 1-minute promo timer for Free plan users
+  // 1-minute promo timer for Free or Expired plan users
   useEffect(() => {
-    if (!isFreePlan) return;
+    if (!isFreePlan && !isReadOnlyExpired) return;
     const promoTimer = setInterval(() => {
       setPromoModal({ show: true, isDailyLimit: false });
     }, 60 * 1000);
     return () => clearInterval(promoTimer);
-  }, [settings.userPlan]);
+  }, [settings.userPlan, isFreePlan, isReadOnlyExpired]);
   const scrollRef = useRef(null);
 
   const [miniHistorySort, setMiniHistorySort] = useState('recent');
@@ -224,13 +232,6 @@ export default function Dashboard() {
   const [historyPage, setHistoryPage] = useState(1);
   const historyItemsPerPage = 20;
 
-
-  const [activeSettingsTab, setActiveSettingsTab] = useState('account');
-  const [session, setSession] = useState<any>(null);
-  const [isAuthChecking, setIsAuthChecking] = useState(true); // Blocks all render until auth verified
-  const [planExpiredStatus, setPlanExpiredStatus] = useState<'Suspended' | 'Inactive' | 'Expired' | null>(null);
-
-  const isFreePlan = settings?.userPlan?.toLowerCase() === 'free';
   const { news, saveNews, deleteNews, saveNewsBulk, overrideNews } = useNewsRepository(session, isFreePlan);
   const { holidays, saveHoliday, deleteHoliday, overrideHolidays } = useHolidaysRepository(session, isFreePlan);
   const { journals, saveJournal, deleteJournal, overrideJournals, isLoading: journalsLoading } = useJournalsRepository(session, isFreePlan);
@@ -259,15 +260,14 @@ export default function Dashboard() {
           .maybeSingle();
 
         if (!profileError && profileCheck === null) {
-          // Profile deleted (never had an account or was removed) -> boot user to Auth
-          await supabase.auth.signOut();
-          navigate('/auth');
+          // Profile deleted by admin or missing -> redirect to pricing to select plan from scratch
+          navigate('/pricing');
           return;
         }
 
-        if (profileCheck && !profileCheck.plan) {
-          // Profile exists but has NO PLAN -> send to sales page (Landing "/")
-          navigate('/');
+        if (profileCheck && (!profileCheck.plan || profileCheck.plan.trim() === '' || profileCheck.plan === 'none')) {
+          // Profile exists but has NO PLAN selected -> redirect to pricing
+          navigate('/pricing');
           return;
         }
 
@@ -278,14 +278,20 @@ export default function Dashboard() {
           const now = Date.now();
           
           if (now > trialEndTime) {
-            navigate('/pricing?reason=trial_expired');
-            return;
+            setIsReadOnlyExpired(true);
+            const hasSeenPricing = sessionStorage.getItem('quantara_expired_redirect_shown') === 'true';
+            if (!hasSeenPricing) {
+              sessionStorage.setItem('quantara_expired_redirect_shown', 'true');
+              navigate('/pricing?reason=trial_expired');
+              return;
+            }
           } else {
-            // Se o trial ainda está ativo, agenda o kick automático
+            // Se o trial ainda está ativo, agenda o kick automático quando expirar
             const msUntilExpire = trialEndTime - now;
             // Limit timeout to max safe integer (~24 days) to prevent overflow
             if (msUntilExpire < 2147483647) {
               setTimeout(() => {
+                sessionStorage.setItem('quantara_expired_redirect_shown', 'true');
                 navigate('/pricing?reason=trial_expired');
               }, msUntilExpire);
             }
@@ -480,63 +486,14 @@ export default function Dashboard() {
         setActiveAccountId(prev => (prev && dbAccounts.some(a => a.id === prev)) ? prev : targetId);
         setSelectedImportAccountId(prev => (prev && dbAccounts.some(a => a.id === prev)) ? prev : targetId);
         localStorage.setItem('quantara_activeAccountId', targetId);
+      } else {
+        setActiveAccountId('');
+        setSelectedImportAccountId('');
+        localStorage.removeItem('quantara_activeAccountId');
+        localStorage.removeItem('tradeJournal_accounts');
       }
-      // Tarefa 9: Marca o carregamento de contas como finalizado
+      // Marca o carregamento de contas como finalizado
       setIsLoadingAccounts(false);
-
-      // Migration from localStorage if Supabase is empty
-      if ((!dbAccounts || dbAccounts.length === 0)) {
-        const savedAccounts = localStorage.getItem('tradeJournal_accounts');
-        if (savedAccounts) {
-          const localAccs = JSON.parse(savedAccounts);
-          const toInsert = localAccs.map(acc => ({
-            user_id: session.user.id,
-            name: acc.name,
-            initial_balance: Number(acc.initialBalance || 0),
-            broker_currency: acc.brokerCurrency || 'USD',
-            payment_currency: acc.paymentCurrency || 'USD',
-            timezone: acc.timezone || 'UTC',
-            consistency_target: Number(acc.consistencyTarget || 0),
-            profit_split: Number(acc.profitSplit || 0),
-            fee_per_trade: Number(acc.feePerTrade || 0),
-            fee_type: acc.feeType || '$',
-            daily_loss_limit: Number(acc.dailyLossLimit || 0),
-            daily_loss_limit_type: acc.dailyLossLimitType || '$',
-            total_stop_loss: Number(acc.totalStopLoss || 0),
-            total_stop_loss_type: acc.totalStopLossType || '$'
-          }));
-
-          const { data: migratedData, error: migrationError } = await supabase
-            .from('accounts')
-            .insert(toInsert)
-            .select();
-
-          if (!migrationError && migratedData) {
-            const newAccounts = migratedData.map(a => ({
-              id: a.id,
-              name: a.name,
-              initialBalance: Number(a.initial_balance),
-              brokerCurrency: a.broker_currency,
-              paymentCurrency: a.payment_currency,
-              timezone: a.timezone,
-              consistencyTarget: Number(a.consistency_target),
-              profitSplit: a.profit_split,
-              feePerTrade: Number(a.fee_per_trade),
-              feeType: a.fee_type,
-              dailyLossLimit: Number(a.daily_loss_limit),
-              dailyLossLimitType: a.daily_loss_limit_type,
-              totalStopLoss: Number(a.total_stop_loss),
-              totalStopLossType: a.total_stop_loss_type
-            }));
-            setAccounts(newAccounts);
-            if (newAccounts.length > 0) {
-              setActiveAccountId(newAccounts[0].id);
-              setSelectedImportAccountId(newAccounts[0].id);
-            }
-            localStorage.removeItem('tradeJournal_accounts');
-          }
-        }
-      }
     } catch (err) {
       console.error("Error loading data from Supabase:", err);
     } finally {
@@ -1595,12 +1552,20 @@ export default function Dashboard() {
   };
 
   const handleImport = () => {
+    if (isReadOnlyExpired) {
+      setPromoModal({ show: true, isDailyLimit: false });
+      return;
+    }
     if (!importText.trim()) return;
     parseTradesFromText(importText, 'paste');
     setImportText('');
   };
 
   const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isReadOnlyExpired) {
+      setPromoModal({ show: true, isDailyLimit: false });
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -1615,6 +1580,10 @@ export default function Dashboard() {
   };
 
   const handleManualTradeAdd = async () => {
+    if (isReadOnlyExpired) {
+      setPromoModal({ show: true, isDailyLimit: false });
+      return;
+    }
     const isPt = settings?.appLanguage === 'pt';
     const targetAccount = accounts.find(a => a.id === selectedImportAccountId)
       || accounts.find(a => a.id === activeAccountId)
@@ -2052,6 +2021,10 @@ export default function Dashboard() {
   };
 
   const handleSaveAccountForm = async () => {
+    if (isReadOnlyExpired) {
+      setPromoModal({ show: true, isDailyLimit: false });
+      return;
+    }
     const name = accountFormData.name.trim();
     if (!name) { setAccountFormError('Account name is required.'); return; }
     const duplicate = accounts.find(a => a.name.toLowerCase() === name.toLowerCase() && a.id !== editingAccount?.id);
@@ -2441,6 +2414,22 @@ export default function Dashboard() {
       className="min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden relative z-0"
       style={appBackgroundStyle}
     >
+      {/* Read-Only Mode Banner for Expired Trial */}
+      {isReadOnlyExpired && (
+        <div className="w-full bg-gradient-to-r from-amber-600/30 via-red-600/30 to-amber-600/30 border-b border-amber-500/40 px-4 py-2.5 flex items-center justify-between gap-4 text-xs font-bold text-amber-200 z-[150] sticky top-0 backdrop-blur-md shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>{settings?.appLanguage === 'pt' ? 'Modo de Apenas Visualização: Seu período de testes expirou. Assine um plano para registrar novas operações e desbloquear todas as funções.' : 'View-Only Mode: Your free trial has expired. Subscribe to a plan to log new trades and unlock all features.'}</span>
+          </div>
+          <button
+            onClick={() => navigate('/pricing')}
+            className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-lg transition-all shadow-md shrink-0 uppercase text-[11px] tracking-wider hover:scale-105 active:scale-95"
+          >
+            {settings?.appLanguage === 'pt' ? 'Escolher Plano' : 'Choose Plan'}
+          </button>
+        </div>
+      )}
+
       {/* Background Layer (Fixed Support for iOS App/Safari) */}
       {bgStyle !== 'none' && (
         <div className="fixed inset-0 z-[-1] pointer-events-none" style={backgroundLayerStyle} />
@@ -2896,18 +2885,26 @@ export default function Dashboard() {
                     <span style={{ color: theme.textoPrincipal }}>{isGeneratingPdf ? 'Generating...' : 'Generate PDF Report'}</span>
                   </button>
                   <div className="mx-1 my-1 border-t" style={{ borderColor: theme.contornoGeral }} />
-                  <button onClick={() => {
-                    if (window.confirm('Are you sure you want to sign out?')) {
-                      setIsProfileDropdownOpen(false);
-                      navigate('/');
-                    }
-                  }}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all hover:bg-white/5 group">
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsProfileDropdownOpen(false);
+                        sessionStorage.clear();
+                        localStorage.removeItem('quantara_auth_token');
+                        await supabase.auth.signOut();
+                      } catch (err) {
+                        console.error('Error signing out:', err);
+                      } finally {
+                        navigate('/');
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all hover:bg-white/5 group cursor-pointer"
+                  >
                     <LogOutIcon size={18} style={{ color: '#f87171' }} className="group-hover:scale-110 transition-transform" />
-                    <span style={{ color: theme.textoPrincipal }}>Logout</span>
+                    <span style={{ color: theme.textoPrincipal }}>{settings.appLanguage === 'pt' ? 'Sair' : 'Logout'}</span>
                   </button>
                 </div>
-              </div >
+              </div>
             </>,
             document.body
           )}

@@ -130,13 +130,13 @@ export default function Loading() {
               return;
             }
 
-            const { data: profile } = await supabase
+            const { data: profile, error: profileError } = await supabase
               .from('profiles')
               .select('plan, status, trial_end')
               .eq('id', user.id)
-              .single();
+              .maybeSingle();
 
-            if (profile) {
+            if (!profileError && profile) {
               const plan = (profile.plan || '').toLowerCase();
               const status = profile.status;
               const trialEnd = profile.trial_end;
@@ -154,29 +154,11 @@ export default function Loading() {
                   return;
                 }
               }
+
+              navigate('/dashboard');
+              return;
             } else {
-              // No profile found (e.g. first-time OAuth login)? Create default profile gracefully!
-              const { data: freePlan } = await supabase
-                .from('plans_config')
-                .select('trial_duration_value, trial_duration_unit')
-                .eq('id', 'free')
-                .maybeSingle();
-
-              let trialEndIso: string | null = null;
-              if (freePlan && freePlan.trial_duration_value) {
-                const now = new Date();
-                const val = freePlan.trial_duration_value;
-                switch (freePlan.trial_duration_unit) {
-                  case 'minutes': now.setMinutes(now.getMinutes() + val); break;
-                  case 'hours': now.setHours(now.getHours() + val); break;
-                  case 'days': now.setDate(now.getDate() + val); break;
-                  case 'months': now.setMonth(now.getMonth() + val); break;
-                  case 'years': now.setFullYear(now.getFullYear() + val); break;
-                  default: now.setDate(now.getDate() + val); break;
-                }
-                trialEndIso = now.toISOString();
-              }
-
+              // No profile found (e.g. account deleted by admin or first-time login) -> create clean profile and go to /pricing
               const firstName = user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'Trader';
               await supabase.from('profiles').upsert({
                 id: user.id,
@@ -185,7 +167,8 @@ export default function Loading() {
                 email: user.email || '',
                 plan: '',
                 status: 'active',
-                trial_end: trialEndIso,
+                trial_started_at: null,
+                trial_end: null,
                 storage_mode: 'local',
                 updated_at: new Date().toISOString()
               });
@@ -193,11 +176,9 @@ export default function Loading() {
               navigate('/pricing');
               return;
             }
-
-            navigate('/dashboard');
           } catch (err) {
-            console.error(err);
-            navigate('/dashboard'); // fallback
+            console.error('Loading routing error:', err);
+            navigate('/pricing'); // safe fallback
           }
         }
       }, intervalTime);

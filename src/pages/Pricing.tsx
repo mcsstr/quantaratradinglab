@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ArrowLeft, Zap, Shield, Crown, Loader2, AlertTriangle, CloudUpload, CloudDownload, X, Clock } from 'lucide-react';
 import { supabase } from '../utils/supabase';
@@ -127,6 +127,7 @@ export default function Pricing() {
   const [isYearly, setIsYearly] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [currentUserPlan, setCurrentUserPlan] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [trialExpired, setTrialExpired] = useState(false);
   
   // Migration modal state
@@ -158,14 +159,34 @@ export default function Pricing() {
       if (!session) return;
       supabase
         .from('profiles')
-        .select('plan, storage_mode')
+        .select('plan, storage_mode, trial_end, status, is_admin_override, admin_override_until')
         .eq('id', session.user.id)
-        .single()
+        .maybeSingle()
         .then(({ data }) => {
-          if (data?.plan) setCurrentUserPlan(data.plan.toLowerCase());
+          if (data) {
+            setUserProfile(data);
+            if (data.plan) setCurrentUserPlan(data.plan.toLowerCase());
+          }
         });
     });
   }, []);
+
+  const isFreeTrialUsed = useMemo(() => {
+    if (!userProfile) return false;
+    // If admin granted an active override gift, allow access
+    if (userProfile.is_admin_override && userProfile.admin_override_until && new Date(userProfile.admin_override_until) > new Date()) {
+      return false;
+    }
+    // If the user already had a trial_end in the past (expired)
+    if (userProfile.trial_end && new Date(userProfile.trial_end) < new Date()) {
+      return true;
+    }
+    // If user already had/has a paid plan, they cannot use the free trial
+    if (userProfile.plan && userProfile.plan.toLowerCase() !== 'free' && userProfile.plan.trim() !== '') {
+      return true;
+    }
+    return false;
+  }, [userProfile]);
 
   const initiateCheckout = async (planId: string, isYearlyPlan: boolean) => {
     try {
@@ -182,33 +203,28 @@ export default function Pricing() {
       if (!targetPlan) throw new Error('Plan configuration not found');
 
       if (planId === 'free') {
-        const trialValue = targetPlan.trial_duration_value || targetPlan.trial_days;
-        const trialUnit = targetPlan.trial_duration_unit || 'days';
-        
-        let trialEndIso = null;
-        if (trialValue) {
-          const now = new Date();
-          switch(trialUnit) {
-            case 'minutes': now.setMinutes(now.getMinutes() + trialValue); break;
-            case 'hours': now.setHours(now.getHours() + trialValue); break;
-            case 'days': now.setDate(now.getDate() + trialValue); break;
-            case 'months': now.setMonth(now.getMonth() + trialValue); break;
-            case 'years': now.setFullYear(now.getFullYear() + trialValue); break;
-            default: now.setDate(now.getDate() + trialValue); break;
-          }
-          trialEndIso = now.toISOString();
+        if (isFreeTrialUsed || trialExpired) {
+          alert('Seu período de teste gratuito (Free Trial) já foi utilizado. Por favor, escolha um plano Basic ou Premium para continuar.');
+          return;
         }
 
-        // Update profile in database
+        const trialValue = targetPlan.trial_duration_value || targetPlan.trial_days;
+        const trialUnit = targetPlan.trial_duration_unit || 'days';
+
+        // Upsert profile in database: trial_started_at and trial_end remain null until first data is inserted
         const { error: profileError } = await supabase
           .from('profiles')
-          .update({
+          .upsert({
+            id: session.user.id,
+            email: session.user.email || '',
+            first_name: session.user.email?.split('@')[0] || 'Trader',
             plan: 'free',
             status: 'active',
-            trial_end: trialEndIso,
+            trial_started_at: null,
+            trial_end: null,
+            storage_mode: 'local',
             updated_at: new Date().toISOString()
-          })
-          .eq('id', session.user.id);
+          });
           
         if (profileError) throw profileError;
 
@@ -356,8 +372,11 @@ export default function Pricing() {
 
         {/* Back button */}
         <button
-          onClick={() => navigate(-1)}
-          className="absolute top-8 left-8 text-gray-400 hover:text-yellow-500 flex items-center gap-2 transition-colors text-sm font-bold group"
+          onClick={() => {
+            sessionStorage.setItem('quantara_expired_redirect_shown', 'true');
+            navigate('/dashboard');
+          }}
+          className="absolute top-8 left-8 text-gray-400 hover:text-yellow-500 flex items-center gap-2 transition-colors text-sm font-bold group z-20"
         >
           <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> Back
         </button>
@@ -417,7 +436,8 @@ export default function Pricing() {
                 ? `$0 for the first ${trialValue} ${trialUnit}. Then choose a paid plan to continue.`
                 : (isYearly ? yearlyDesc : monthlyDesc);
 
-              let buttonText = isFree ? 'Start Free Trial' : isBasic ? 'Go Basic' : 'Go Premium';
+              const isFreeDisabled = isFree && (isFreeTrialUsed || trialExpired);
+              let buttonText = isFree ? (isFreeDisabled ? 'Trial Expired' : 'Start Free Trial') : isBasic ? 'Go Basic' : 'Go Premium';
               if (isCurrent) buttonText = 'Current Plan';
 
               return (
@@ -488,18 +508,25 @@ export default function Pricing() {
 
                   {/* CTA Button */}
                   <button
-                    onClick={() => isCurrent ? undefined : initiateCheckout(plan.id, isYearly)}
-                    disabled={loadingPlan === plan.id || isCurrent}
+                    onClick={() => (isCurrent || isFreeDisabled) ? undefined : initiateCheckout(plan.id, isYearly)}
+                    disabled={loadingPlan === plan.id || isCurrent || isFreeDisabled}
                     className={`w-full py-3.5 flex items-center justify-center gap-2 rounded-xl font-black text-center uppercase tracking-wider text-sm transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
                       ${isBasic
                         ? 'bg-yellow-500 text-black shadow-[0_0_20px_rgba(234,179,8,0.4)] hover:shadow-[0_0_30px_rgba(234,179,8,0.6)]'
                         : isCurrent
                           ? 'bg-green-500/10 text-green-400 border-2 border-green-500/30 cursor-default'
-                          : 'bg-transparent text-yellow-500 border-2 border-yellow-500/50 hover:border-yellow-500 hover:bg-yellow-500/5'
+                          : isFreeDisabled
+                            ? 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed'
+                            : 'bg-transparent text-yellow-500 border-2 border-yellow-500/50 hover:border-yellow-500 hover:bg-yellow-500/5'
                       }`}
                   >
                     {loadingPlan === plan.id ? <Loader2 size={18} className="animate-spin" /> : buttonText}
                   </button>
+                  {isFree && isFreeDisabled && (
+                    <p className="text-[11px] text-center text-gray-500 mt-2">
+                      Trial já utilizado. Escolha o Basic ou Premium.
+                    </p>
+                  )}
                 </div>
               );
             })}

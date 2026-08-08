@@ -36,17 +36,103 @@ import { usePlanConfig } from '../hooks/usePlanConfig';
 
 type Lang = 'en' | 'pt' | 'es';
 
+// Real Vector SVG Flags for 100% universal OS compatibility (Windows, Mac, iOS, Android)
+const FlagUS = ({ className = "w-5 h-3.5" }: { className?: string }) => (
+  <span className={`${className} inline-flex items-center justify-center rounded-[3px] overflow-hidden shadow-sm shrink-0 border border-white/20`}>
+    <svg className="w-full h-full object-cover" viewBox="0 0 640 480">
+      <g fillRule="evenodd">
+        <path fill="#bd3d44" d="M0 0h640v480H0z"/>
+        <path stroke="#fff" strokeWidth="37" d="M0 55.4h640M0 129.2h640M0 203h640M0 277h640M0 350.8h640M0 424.6h640"/>
+        <path fill="#192f5d" d="M0 0h260v259H0z"/>
+        <g fill="#fff">
+          <circle cx="26" cy="24" r="8"/>
+          <circle cx="78" cy="24" r="8"/>
+          <circle cx="130" cy="24" r="8"/>
+          <circle cx="182" cy="24" r="8"/>
+          <circle cx="234" cy="24" r="8"/>
+          <circle cx="52" cy="48" r="8"/>
+          <circle cx="104" cy="48" r="8"/>
+          <circle cx="156" cy="48" r="8"/>
+          <circle cx="208" cy="48" r="8"/>
+          <circle cx="26" cy="72" r="8"/>
+          <circle cx="78" cy="72" r="8"/>
+          <circle cx="130" cy="72" r="8"/>
+          <circle cx="182" cy="72" r="8"/>
+          <circle cx="234" cy="72" r="8"/>
+          <circle cx="52" cy="96" r="8"/>
+          <circle cx="104" cy="96" r="8"/>
+          <circle cx="156" cy="96" r="8"/>
+          <circle cx="208" cy="96" r="8"/>
+          <circle cx="26" cy="120" r="8"/>
+          <circle cx="78" cy="120" r="8"/>
+          <circle cx="130" cy="120" r="8"/>
+          <circle cx="182" cy="120" r="8"/>
+          <circle cx="234" cy="120" r="8"/>
+          <circle cx="52" cy="144" r="8"/>
+          <circle cx="104" cy="144" r="8"/>
+          <circle cx="156" cy="144" r="8"/>
+          <circle cx="208" cy="144" r="8"/>
+          <circle cx="26" cy="168" r="8"/>
+          <circle cx="78" cy="168" r="8"/>
+          <circle cx="130" cy="168" r="8"/>
+          <circle cx="182" cy="168" r="8"/>
+          <circle cx="234" cy="168" r="8"/>
+          <circle cx="52" cy="192" r="8"/>
+          <circle cx="104" cy="192" r="8"/>
+          <circle cx="156" cy="192" r="8"/>
+          <circle cx="208" cy="192" r="8"/>
+          <circle cx="26" cy="216" r="8"/>
+          <circle cx="78" cy="216" r="8"/>
+          <circle cx="130" cy="216" r="8"/>
+          <circle cx="182" cy="216" r="8"/>
+          <circle cx="234" cy="216" r="8"/>
+          <circle cx="52" cy="240" r="8"/>
+          <circle cx="104" cy="240" r="8"/>
+          <circle cx="156" cy="240" r="8"/>
+          <circle cx="208" cy="240" r="8"/>
+        </g>
+      </g>
+    </svg>
+  </span>
+);
+
+const FlagBR = ({ className = "w-5 h-3.5" }: { className?: string }) => (
+  <span className={`${className} inline-flex items-center justify-center rounded-[3px] overflow-hidden shadow-sm shrink-0 border border-white/20`}>
+    <svg className="w-full h-full object-cover" viewBox="0 0 640 480">
+      <path fill="#009c3b" d="M0 0h640v480H0z"/>
+      <path fill="#ffdf00" d="M320 40L600 240 320 440 40 240z"/>
+      <circle fill="#002776" cx="320" cy="240" r="115"/>
+      <path fill="#ffffff" d="M208 240c0-15 48-60 112-60s112 45 112 60c-25-10-60-20-112-20s-87 10-112 20z"/>
+    </svg>
+  </span>
+);
+
+const FlagES = ({ className = "w-5 h-3.5" }: { className?: string }) => (
+  <span className={`${className} inline-flex items-center justify-center rounded-[3px] overflow-hidden shadow-sm shrink-0 border border-white/20`}>
+    <svg className="w-full h-full object-cover" viewBox="0 0 640 480">
+      <path fill="#aa151b" d="M0 0h640v480H0z"/>
+      <path fill="#f1bf00" d="M0 120h640v240H0z"/>
+      <g transform="translate(135, 170) scale(0.65)">
+        <rect x="0" y="25" width="80" height="95" rx="8" fill="#aa151b" stroke="#ffffff" strokeWidth="5"/>
+        <path d="M0 25 L40 -15 L80 25 Z" fill="#f1bf00"/>
+        <circle cx="40" cy="65" r="18" fill="#f1bf00"/>
+        <line x1="40" y1="52" x2="40" y2="78" stroke="#aa151b" strokeWidth="5"/>
+        <line x1="27" y1="65" x2="53" y2="65" stroke="#aa151b" strokeWidth="5"/>
+      </g>
+    </svg>
+  </span>
+);
+
 interface LanguageOption {
   code: Lang;
   label: string;
-  flag: string;
-  country: string;
+  FlagComponent: React.ComponentType<{ className?: string }>;
 }
 
 const LANGUAGES: LanguageOption[] = [
-  { code: 'en', label: 'English', flag: '🇺🇸', country: 'US' },
-  { code: 'pt', label: 'Português', flag: '🇧🇷', country: 'BR' },
-  { code: 'es', label: 'Español', flag: '🇪🇸', country: 'ES' },
+  { code: 'en', label: 'English', FlagComponent: FlagUS },
+  { code: 'pt', label: 'Português', FlagComponent: FlagBR },
+  { code: 'es', label: 'Español', FlagComponent: FlagES },
 ];
 
 export default function Landing() {
@@ -552,7 +638,7 @@ export default function Landing() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white font-sans relative overflow-x-hidden selection:bg-amber-500 selection:text-black">
+    <div className="min-h-screen bg-[#070709] text-white font-sans relative overflow-x-hidden select-none cursor-default">
       
       {/* Dynamic Ambient Background Glows */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
@@ -610,40 +696,43 @@ export default function Landing() {
           {/* Right: Flag Language Selector + Auth Buttons (Aligned Far Right) */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             
-            {/* Language Selector Dropdown with Flags */}
+            {/* Language Selector Dropdown with Real Vector Flags */}
             <div className="relative" ref={langDropdownRef}>
               <button
                 type="button"
                 onClick={() => setLangDropdownOpen(!langDropdownOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-bold text-gray-200 transition-all cursor-pointer shadow-sm active:scale-95"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-bold text-gray-200 transition-all cursor-pointer shadow-sm active:scale-95 select-none"
                 title="Select Language"
               >
-                <span className="text-base leading-none">{currentLangObj.flag}</span>
-                <span className="uppercase text-[11px] font-extrabold text-gray-300">{currentLangObj.code}</span>
+                <currentLangObj.FlagComponent className="w-5 h-3.5" />
+                <span className="uppercase text-[11px] font-extrabold text-gray-200">{currentLangObj.code}</span>
                 <ChevronDown size={12} className={`text-gray-400 transition-transform ${langDropdownOpen ? 'rotate-180 text-amber-400' : ''}`} />
               </button>
 
               {langDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-36 bg-[#0e0e14]/98 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-2xl py-1.5 z-50 animate-fadeIn">
-                  {LANGUAGES.map((l) => (
-                    <button
-                      key={l.code}
-                      type="button"
-                      onClick={() => {
-                        setLang(l.code);
-                        setLangDropdownOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${
-                        lang === l.code ? 'bg-amber-500/15 text-amber-400' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-base leading-none">{l.flag}</span>
-                        <span>{l.label}</span>
-                      </div>
-                      {lang === l.code && <Check size={12} className="text-amber-400" />}
-                    </button>
-                  ))}
+                <div className="absolute right-0 mt-2 w-40 bg-[#0e0e14]/98 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-2xl py-1.5 z-50 animate-fadeIn select-none">
+                  {LANGUAGES.map((l) => {
+                    const Flag = l.FlagComponent;
+                    return (
+                      <button
+                        key={l.code}
+                        type="button"
+                        onClick={() => {
+                          setLang(l.code);
+                          setLangDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-bold transition-colors cursor-pointer ${
+                          lang === l.code ? 'bg-amber-500/15 text-amber-400' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Flag className="w-5 h-3.5" />
+                          <span>{l.label}</span>
+                        </div>
+                        {lang === l.code && <Check size={14} className="text-amber-400" />}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -651,7 +740,7 @@ export default function Landing() {
             {/* Sign In Button */}
             <button
               onClick={() => navigate('/auth')}
-              className="text-xs font-bold text-gray-300 hover:text-white px-3 py-2 transition-colors hidden sm:block cursor-pointer"
+              className="text-xs font-bold text-gray-300 hover:text-white px-3 py-2 transition-colors hidden sm:block cursor-pointer select-none"
             >
               {t.loginBtn}
             </button>
@@ -659,7 +748,7 @@ export default function Landing() {
             {/* Dynamic CTA Button (Connected to Admin Promotion) */}
             <button
               onClick={() => navigate('/auth')}
-              className="bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-xs font-extrabold px-3.5 sm:px-5 py-2.5 rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.35)] hover:shadow-[0_0_35px_rgba(245,158,11,0.5)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              className="bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-xs font-extrabold px-3.5 sm:px-5 py-2.5 rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.35)] hover:shadow-[0_0_35px_rgba(245,158,11,0.5)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer select-none"
             >
               <span>{t.ctaPrimary}</span>
               <ArrowRight size={14} />
@@ -669,7 +758,7 @@ export default function Landing() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-amber-400 hover:bg-white/10 transition-colors lg:hidden cursor-pointer"
+              className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-amber-400 hover:bg-white/10 transition-colors lg:hidden cursor-pointer select-none"
               aria-label="Toggle navigation menu"
             >
               {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -680,24 +769,27 @@ export default function Landing() {
 
         {/* Mobile Dropdown Drawer */}
         {mobileMenuOpen && (
-          <div className="lg:hidden bg-[#0a0a0e]/98 border-b border-white/10 px-6 py-6 space-y-4 backdrop-blur-2xl shadow-2xl animate-fadeIn">
+          <div className="lg:hidden bg-[#0a0a0e]/98 border-b border-white/10 px-6 py-6 space-y-4 backdrop-blur-2xl shadow-2xl animate-fadeIn select-none">
             
             {/* Language Selector in Mobile Drawer */}
             <div className="flex items-center justify-between pb-3 border-b border-white/5">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Language:</span>
-              <div className="flex items-center gap-1.5">
-                {LANGUAGES.map((l) => (
-                  <button
-                    key={l.code}
-                    onClick={() => { setLang(l.code); }}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                      lang === l.code ? 'bg-amber-500 text-black' : 'bg-white/5 text-gray-300'
-                    }`}
-                  >
-                    <span>{l.flag}</span>
-                    <span className="uppercase text-[10px]">{l.code}</span>
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                {LANGUAGES.map((l) => {
+                  const Flag = l.FlagComponent;
+                  return (
+                    <button
+                      key={l.code}
+                      onClick={() => { setLang(l.code); }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        lang === l.code ? 'bg-amber-500 text-black shadow-md' : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                      }`}
+                    >
+                      <Flag className="w-4 h-3" />
+                      <span className="uppercase text-[11px] font-extrabold">{l.code}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1369,21 +1461,21 @@ export default function Landing() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-gray-400 block mb-1">{t.simAvgWinLabel}</label>
+                <label className="text-xs font-bold text-gray-400 block mb-1 select-none">{t.simAvgWinLabel}</label>
                 <input 
                   type="number" 
                   value={simAvgWin} 
                   onChange={(e) => setSimAvgWin(Number(e.target.value))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white focus:border-amber-500 outline-none" 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white focus:border-amber-500 outline-none select-text cursor-text" 
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-400 block mb-1">{t.simAvgLossLabel}</label>
+                <label className="text-xs font-bold text-gray-400 block mb-1 select-none">{t.simAvgLossLabel}</label>
                 <input 
                   type="number" 
                   value={simAvgLoss} 
                   onChange={(e) => setSimAvgLoss(Number(e.target.value))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white focus:border-amber-500 outline-none" 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white focus:border-amber-500 outline-none select-text cursor-text" 
                 />
               </div>
             </div>

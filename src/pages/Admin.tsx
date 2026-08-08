@@ -278,17 +278,32 @@ export default function Admin() {
         }
     };
 
-    // ---------- SUPABASE: Delete profile ----------
+    // ---------- SUPABASE: Delete profile and all related data ----------
     const handleDeleteProfile = async (userId: string) => {
         try {
-            const { error } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', userId);
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-            if (error) throw error;
+            const res = await fetch(`${supabaseUrl}/functions/v1/admin-delete-user`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token || ''}`,
+                    'apikey': supabaseAnonKey
+                },
+                body: JSON.stringify({ targetUserId: userId })
+            });
+
+            const data = await res.json();
+            if (!res.ok || data._isError) {
+                throw new Error(data.error || 'Failed to delete user completely');
+            }
+
             setUsers(prev => prev.filter(u => u.id !== userId));
-            showToast('User deleted successfully.');
+            showToast('User and all associated data permanently deleted.');
         } catch (err: any) {
             console.error('Error deleting profile:', err);
             showToast(`Error deleting user: ${err.message}`);
@@ -589,11 +604,17 @@ export default function Admin() {
                         <div className="w-14 h-14 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-500/20">
                             <LogOut size={24} className="text-yellow-500" />
                         </div>
-                        <h3 className="text-xl font-bold mb-2">Leave Admin?</h3>
-                        <p className="text-sm text-gray-400 mb-6">Did you save your changes? Are you sure you want to exit?</p>
+                        <h3 className="text-xl font-bold mb-2">Logout</h3>
+                        <p className="text-sm text-gray-400 mb-6">Are you sure you want to log out of Quantara?</p>
                         <div className="flex gap-3">
                             <button onClick={() => setIsLogoutConfirmOpen(false)} className="flex-1 py-3 rounded-lg font-bold text-gray-400 bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
-                            <button onClick={() => { setIsLogoutConfirmOpen(false); navigate('/dashboard'); }} className="flex-1 py-3 rounded-lg font-bold bg-yellow-500 text-black hover:bg-yellow-400 transition-colors">Yes, Exit</button>
+                            <button onClick={async () => {
+                                setIsLogoutConfirmOpen(false);
+                                sessionStorage.clear();
+                                localStorage.removeItem('quantara_auth_token');
+                                await supabase.auth.signOut();
+                                navigate('/');
+                            }} className="flex-1 py-3 rounded-lg font-bold bg-yellow-500 text-black hover:bg-yellow-400 transition-colors">Yes, Logout</button>
                         </div>
                     </div>
                 </div>

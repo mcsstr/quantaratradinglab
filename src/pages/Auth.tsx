@@ -136,46 +136,28 @@ export default function Auth() {
           .maybeSingle();
 
         if (!profileError && profileCheck === null) {
-          // Restore profile if missing
-          const { data: freePlan } = await supabase
-            .from('plans_config')
-            .select('trial_duration_value, trial_duration_unit')
-            .eq('id', 'free')
-            .maybeSingle();
-            
-          let trialEndIso: string | null = null;
-          if (freePlan && freePlan.trial_duration_value) {
-            const now = new Date();
-            const val = freePlan.trial_duration_value;
-            switch(freePlan.trial_duration_unit) {
-              case 'minutes': now.setMinutes(now.getMinutes() + val); break;
-              case 'hours': now.setHours(now.getHours() + val); break;
-              case 'days': now.setDate(now.getDate() + val); break;
-              case 'months': now.setMonth(now.getMonth() + val); break;
-              case 'years': now.setFullYear(now.getFullYear() + val); break;
-              default: now.setDate(now.getDate() + val); break;
-            }
-            trialEndIso = now.toISOString();
-          }
-
+          // Profile was deleted by admin or missing -> recreate clean profile from scratch
           const { error: insertError } = await supabase
             .from('profiles')
-            .insert({
+            .upsert({
               id: userId,
+              first_name: email.split('@')[0],
+              last_name: '',
               email: email,
               plan: '',
               status: 'active',
-              trial_end: trialEndIso,
+              trial_started_at: null,
+              trial_end: null,
               storage_mode: 'local',
               updated_at: new Date().toISOString()
             });
 
           if (insertError) {
             await supabase.auth.signOut();
-            throw new Error('Failed to restore user profile. Please try again.');
+            throw new Error('Failed to initialize user profile. Please try again.');
           }
           
-          navigate('/loading');
+          navigate('/pricing');
           return;
         }
 
@@ -184,7 +166,7 @@ export default function Auth() {
           const status = profileCheck.status;
           const trialEnd = profileCheck.trial_end;
 
-          if (!plan || status === 'Suspended' || status === 'Inactive') {
+          if (!plan || plan === 'none' || status === 'Suspended' || status === 'Inactive') {
             navigate('/pricing');
             return;
           }

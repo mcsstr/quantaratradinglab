@@ -2,6 +2,7 @@ import React, { startTransition } from 'react';
 import {
     User, Palette, Folder, Download, LogOut, ChevronRight, Menu as MenuIcon
 } from 'lucide-react';
+import { supabase } from '../../utils/supabase';
 
 export default function MobileMenuView({
     theme,
@@ -69,6 +70,31 @@ export default function MobileMenuView({
                     </button>
                 ))}
 
+                {/* Logout Button */}
+                <button
+                    onClick={async () => {
+                        try {
+                            sessionStorage.clear();
+                            localStorage.removeItem('quantara_auth_token');
+                            await supabase.auth.signOut();
+                        } catch (err) {
+                            console.error('Error logging out:', err);
+                        } finally {
+                            window.location.href = '/';
+                        }
+                    }}
+                    className="w-full flex items-center justify-between p-4 rounded-xl shadow-xl transition-all border border-red-500/20 active:scale-[0.98] bg-red-500/10"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-red-500/20 text-red-400">
+                            <LogOut size={20} />
+                        </div>
+                        <span className="font-bold text-sm text-red-400">
+                            {settings.appLanguage === 'pt' ? 'Sair da Conta' : 'Logout'}
+                        </span>
+                    </div>
+                    <ChevronRight size={18} className="text-red-400" />
+                </button>
             </div>
         </div>
     );
